@@ -1,72 +1,81 @@
+from typing import Optional, Dict, Any
+from bson import ObjectId
 from pymongo import MongoClient
-from bson.objectid import ObjectId
-from app.core.config import settings
+from backend.app.core.config import settings
+from backend.app.db.schema import UserBase, UserRead, GameBase, GameRead, ScenarioBase, ScenarioRead
 
-# Conexión a la base de datos
+# Configuración de MongoDB
 client = MongoClient(settings.MONGO_URI)
 db = client[settings.MONGO_DB_NAME]
 
-# Colecciones
-users_collection = db["users"]
-games_collection = db["games"]
-scenarios_collection = db["scenarios"]
-
-# CRUD para Usuarios
-def create_user(user_data):
-    """Crea un nuevo usuario."""
-    result = users_collection.insert_one(user_data)
+# CRUD Operaciones para Usuarios
+def create_user(user_data: Dict[str, Any]) -> str:
+    result = db.users.insert_one(user_data)
     return str(result.inserted_id)
 
-def get_user(user_id):
-    """Obtiene un usuario por su ID."""
-    return users_collection.find_one({"_id": ObjectId(user_id)})
+def get_user(user_id: str) -> Optional[Dict[str, Any]]:
+    user = db.users.find_one({"_id": ObjectId(user_id)})
+    if user:
+        user["_id"] = str(user["_id"])
+    return user
 
-def update_user(user_id, update_data):
-    """Actualiza un usuario por su ID."""
-    result = users_collection.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
+def update_user(user_id: str, update_data: Dict[str, Any]) -> bool:
+    result = db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": update_data}
+    )
     return result.modified_count > 0
 
-def delete_user(user_id):
-    """Elimina un usuario por su ID."""
-    result = users_collection.delete_one({"_id": ObjectId(user_id)})
+def delete_user(user_id: str) -> bool:
+    result = db.users.delete_one({"_id": ObjectId(user_id)})
     return result.deleted_count > 0
 
-# CRUD para Partidas
-def create_game(game_data):
-    """Crea una nueva partida."""
-    result = games_collection.insert_one(game_data)
+# CRUD Operaciones para Partidas
+def create_game(game_data: Dict[str, Any]) -> str:
+    if "user_id" in game_data and isinstance(game_data["user_id"], str):
+        game_data["user_id"] = ObjectId(game_data["user_id"])
+    result = db.games.insert_one(game_data)
     return str(result.inserted_id)
 
-def get_game(game_id):
-    """Obtiene una partida por su ID."""
-    return games_collection.find_one({"_id": ObjectId(game_id)})
+def get_game(game_id: str) -> Optional[Dict[str, Any]]:
+    game = db.games.find_one({"_id": ObjectId(game_id)})
+    if game:
+        game["_id"] = str(game["_id"])
+        if "user_id" in game:
+            game["user_id"] = str(game["user_id"])
+    return game
 
-def update_game(game_id, update_data):
-    """Actualiza una partida por su ID."""
-    result = games_collection.update_one({"_id": ObjectId(game_id)}, {"$set": update_data})
+def update_game(game_id: str, update_data: Dict[str, Any]) -> bool:
+    if "user_id" in update_data and isinstance(update_data["user_id"], str):
+        update_data["user_id"] = ObjectId(update_data["user_id"])
+    result = db.games.update_one(
+        {"_id": ObjectId(game_id)},
+        {"$set": update_data}
+    )
     return result.modified_count > 0
 
-def delete_game(game_id):
-    """Elimina una partida por su ID."""
-    result = games_collection.delete_one({"_id": ObjectId(game_id)})
+def delete_game(game_id: str) -> bool:
+    result = db.games.delete_one({"_id": ObjectId(game_id)})
     return result.deleted_count > 0
 
-# CRUD para Escenarios
-def create_scenario(scenario_data):
-    """Crea un nuevo escenario."""
-    result = scenarios_collection.insert_one(scenario_data)
+# CRUD Operaciones para Escenarios
+def create_scenario(scenario_data: Dict[str, Any]) -> str:
+    result = db.scenarios.insert_one(scenario_data)
     return str(result.inserted_id)
 
-def get_scenario(scenario_id):
-    """Obtiene un escenario por su ID."""
-    return scenarios_collection.find_one({"_id": ObjectId(scenario_id)})
+def get_scenario(scenario_id: str) -> Optional[Dict[str, Any]]:
+    scenario = db.scenarios.find_one({"_id": ObjectId(scenario_id)})
+    if scenario:
+        scenario["_id"] = str(scenario["_id"])
+    return scenario
 
-def update_scenario(scenario_id, update_data):
-    """Actualiza un escenario por su ID."""
-    result = scenarios_collection.update_one({"_id": ObjectId(scenario_id)}, {"$set": update_data})
+def update_scenario(scenario_id: str, update_data: Dict[str, Any]) -> bool:
+    result = db.scenarios.update_one(
+        {"_id": ObjectId(scenario_id)},
+        {"$set": update_data}
+    )
     return result.modified_count > 0
 
-def delete_scenario(scenario_id):
-    """Elimina un escenario por su ID."""
-    result = scenarios_collection.delete_one({"_id": ObjectId(scenario_id)})
+def delete_scenario(scenario_id: str) -> bool:
+    result = db.scenarios.delete_one({"_id": ObjectId(scenario_id)})
     return result.deleted_count > 0

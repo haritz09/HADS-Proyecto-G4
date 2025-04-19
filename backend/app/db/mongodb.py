@@ -1,18 +1,24 @@
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 from backend.app.core.config import settings
 
-class MongoDB:
-    client: AsyncIOMotorClient = None
-    database = None
+_client = None
 
-mongodb = MongoDB()
+def connect_to_mongo():
+    global _client
+    try:
+        _client = MongoClient(settings.MONGO_URI)
+        db = _client[settings.MONGO_DB_NAME]
+        # Test the connection
+        db.command('ping')
+        return db
+    except Exception as e:
+        raise Exception(f"Could not connect to MongoDB: {str(e)}")
 
-async def connect_to_mongo():
-    mongodb.client = AsyncIOMotorClient(settings.MONGO_URI)
-    mongodb.database = mongodb.client[settings.MONGO_DB_NAME]
-    print("Connected to MongoDB")
-
-async def close_mongo_connection():
-    if mongodb.client:
-        mongodb.client.close()
-        print("MongoDB connection closed")
+def disconnect_from_mongo():
+    global _client
+    if _client:
+        try:
+            _client.close()
+            _client = None
+        except Exception as e:
+            raise Exception(f"Error disconnecting from MongoDB: {str(e)}")

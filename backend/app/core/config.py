@@ -1,4 +1,5 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     MONGO_URI: str = "mongodb://localhost:27017"

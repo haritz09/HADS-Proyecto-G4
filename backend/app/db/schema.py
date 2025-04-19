@@ -1,24 +1,20 @@
-from pydantic import BaseModel, Field, EmailStr
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from bson import ObjectId
-from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict, BeforeValidator
+from typing_extensions import Annotated
 
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
+# Función para convertir ObjectId a str y viceversa
+def handle_object_id(v: Any) -> Any:
+    if isinstance(v, str):
         return ObjectId(v)
+    if isinstance(v, ObjectId):
+        return str(v)
+    return v
 
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        field_schema.update(type="string")
+# Tipo personalizado para ObjectId
+MongoId = Annotated[str, BeforeValidator(handle_object_id)]
 
-# Esquemas para Usuarios
 class UserBase(BaseModel):
     username: str
     email: str
@@ -26,23 +22,19 @@ class UserBase(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_login: Optional[datetime] = None
 
-class UserCreate(UserBase):
-    pass
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True
+    )
 
 class UserRead(UserBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    id: MongoId = Field(default_factory=lambda: str(ObjectId()), alias="_id")
 
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str, datetime: lambda x: x.isoformat()}
-
-# Esquemas para el estado del juego
 class MapSize(BaseModel):
     width: int
     height: int
 
 class Resources(BaseModel):
-    # Añade aquí los recursos específicos que necesites
     pass
 
 class Entity(BaseModel):
@@ -62,9 +54,12 @@ class GameState(BaseModel):
     map: GameMap
     current_player: str
 
-# Esquemas para Partidas
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True
+    )
+
 class GameBase(BaseModel):
-    user_id: PyObjectId
+    user_id: MongoId
     name: str
     scenario_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -73,17 +68,14 @@ class GameBase(BaseModel):
     cheats_used: List[str] = []
     game_state: GameState
 
-class GameCreate(GameBase):
-    pass
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True
+    )
 
 class GameRead(GameBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
+    id: MongoId = Field(default_factory=lambda: str(ObjectId()), alias="_id")
 
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str, datetime: lambda x: x.isoformat()}
-
-# Esquemas para Escenarios
 class ScenarioBase(BaseModel):
     name: str
     description: str
@@ -91,12 +83,10 @@ class ScenarioBase(BaseModel):
     map_size: MapSize
     initial_state: Dict[str, Any]
 
-class ScenarioCreate(ScenarioBase):
-    pass
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True
+    )
 
 class ScenarioRead(ScenarioBase):
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
-
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {ObjectId: str}
+    id: MongoId = Field(default_factory=lambda: str(ObjectId()), alias="_id")
