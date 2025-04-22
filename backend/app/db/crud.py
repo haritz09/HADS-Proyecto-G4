@@ -19,6 +19,20 @@ def get_user(user_id: str) -> Optional[Dict[str, Any]]:
         user["_id"] = str(user["_id"])
     return user
 
+# Buscar usuario por username
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    user = db.users.find_one({"username": username})
+    if user:
+        user["_id"] = str(user["_id"])
+    return user
+
+# Buscar usuario por email
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    user = db.users.find_one({"email": email})
+    if user:
+        user["_id"] = str(user["_id"])
+    return user
+
 def update_user(user_id: str, update_data: Dict[str, Any]) -> bool:
     result = db.users.update_one(
         {"_id": ObjectId(user_id)},
