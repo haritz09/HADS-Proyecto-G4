@@ -37,15 +37,62 @@ class MapSize(BaseModel):
 class Resources(BaseModel):
     pass
 
+class Position(BaseModel):
+    x: int
+    y: int
+
+class Stats(BaseModel):
+    attack: int
+    defense: int
+    power: int
+    knowledge: int
+    movement_points: int
+    movement_points_left: int
+
+class ArmyUnit(BaseModel):
+    type: str
+    count: int
+
+class Artifact(BaseModel):
+    id: str
+    name: str
+    slot: str
+
+class Heroe(BaseModel):
+    id: str
+    name: str
+    position: Position
+    stats: Stats
+    army: List[ArmyUnit]
+    artifacts: List[Artifact]
+
+class Building(BaseModel):
+    id: str
+    level: int
+
+class AvailableCreature(BaseModel):
+    type: str
+    count: int
+    growth_per_week: int
+
+class City(BaseModel):
+    id: str
+    name: str
+    position: Position
+    buildings: List[Building]
+    available_creatures: List[AvailableCreature]
+
 class Entity(BaseModel):
-    heroes: List[Any] = []
-    cities: List[Any] = []
+    heroes: List[Heroe] = []
+    cities: List[City] = []
     resources: Resources = Resources()
 
 class GameMap(BaseModel):
     size: MapSize
-    tiles: List[Any] = []
-    fog_of_war: List[Any] = []
+    tiles: Optional[List[Any]] = None
+    fog_of_war: Optional[List[Any]] = None
+    explored: Optional[List[Any]] = None
+    visible_objects: Optional[List[Any]] = None
 
 class GameState(BaseModel):
     turn: int
