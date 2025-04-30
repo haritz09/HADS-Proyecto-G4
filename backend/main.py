@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from backend.app.db.mongodb import connect_to_mongo, close_mongo_connection
-from app.api.api_v1.router import api_router
+from backend.app.db.mongodb import connect_to_mongo, disconnect_from_mongo
+from backend.app.api.api_v1.router import api_router
 
 app = FastAPI()
 app.include_router(api_router, prefix="/api")
@@ -10,5 +10,5 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    await close_mongo_connection()
+    await disconnect_from_mongo()
     
