@@ -30,19 +30,49 @@ class TestLogicFunctions(unittest.TestCase):
             artifacts=[]
         )
 
-        # Crear ciudad de prueba
+        # Crear AvailableCreature de prueba (con stats y recruit_cost)
+        self.available_archer = AvailableCreature(
+            type="archer",
+            count=20,
+            growth_per_week=4,
+            stats=Stats(attack=4, defense=2, power=1, knowledge=1, movement_points=5, movement_points_left=5),
+            recruit_cost={"gold": 100, "wood": 0, "stone": 0}
+        )
+        self.available_swordsman = AvailableCreature(
+            type="swordsman",
+            count=10,
+            growth_per_week=2,
+            stats=Stats(attack=5, defense=3, power=1, knowledge=1, movement_points=5, movement_points_left=5),
+            recruit_cost={"gold": 120, "wood": 0, "stone": 0}
+        )
+
+        # Crear edificios de prueba (con position, available_creatures, is_castle, can_recruit...)
+        self.townhall = Building(
+            id="townhall",
+            name="Town Hall",
+            position=Position(x=10, y=10),
+            available_creatures=[self.available_archer, self.available_swordsman],
+            is_castle=True,
+            has_tavern=True,
+            can_recruit=True
+        )
+        self.barracks = Building(
+            id="barracks",
+            name="Barracks",
+            position=Position(x=10, y=10),
+            available_creatures=[],
+            is_castle=False,
+            has_tavern=False,
+            can_recruit=False
+        )
+
+        # Crear ciudad de prueba (buildings debe ser lista de Building, owner opcional)
         self.city = City(
             id="city1",
             name="Test City",
             position=Position(x=10, y=10),
-            buildings=[
-                Building(id="townhall", level=1),
-                Building(id="barracks", level=1)
-            ],
-            available_creatures=[
-                AvailableCreature(type="archer", count=20, growth_per_week=4),
-                AvailableCreature(type="swordsman", count=10, growth_per_week=2)
-            ]
+            buildings=[self.townhall, self.barracks],
+            owner=None
         )
 
         # Crear estado de juego de prueba
@@ -52,7 +82,7 @@ class TestLogicFunctions(unittest.TestCase):
             player=Entity(
                 heroes=[self.hero],
                 cities=[self.city],
-                resources=Resources(gold=1000, wood=500, ore=300)
+                resources=Resources(gold=1000, wood=500, stone=300)
             ),
             ai=Entity(
                 heroes=[
@@ -72,7 +102,7 @@ class TestLogicFunctions(unittest.TestCase):
                     )
                 ],
                 cities=[],
-                resources=Resources(gold=1000, wood=500, ore=300)
+                resources=Resources(gold=1000, wood=500, stone=300)
             ),
             map=GameMap(
                 size=MapSize(width=100, height=100),
@@ -178,6 +208,7 @@ class TestLogicFunctions(unittest.TestCase):
                 "target_position": {"x": 1, "y": 1}
             })
         self.assertEqual(str(context.exception), "Héroe no encontrado")
+
     def test_process_recruitment(self):
         """Prueba el reclutamiento de unidades"""
         action = {
@@ -186,13 +217,16 @@ class TestLogicFunctions(unittest.TestCase):
             "amount": 5
         }
         initial_gold = self.game_state.player.resources.gold
-        initial_count = self.city.available_creatures[0].count
+        # Buscar cualquier building que pueda reclutar archer
+        building = next((b for b in self.city.buildings if b.can_recruit and any(c.type == "archer" for c in b.available_creatures)), None)
+        available_archer = next((c for c in building.available_creatures if c.type == "archer"), None)
+        initial_count = available_archer.count
         
         result = process_recruitment(self.game_state, action)
         
         self.assertEqual(result["recruited"], 5)
         self.assertEqual(result["type"], "archer")
-        self.assertEqual(self.city.available_creatures[0].count, initial_count - 5)
+        self.assertEqual(available_archer.count, initial_count - 5)
         self.assertEqual(self.game_state.player.resources.gold, initial_gold - 500)  # 100 gold per unit
 
     def test_process_hero_attack(self):
@@ -212,15 +246,17 @@ class TestLogicFunctions(unittest.TestCase):
         # Configurar turno inicial y crecimiento
         self.game_state.turn = 6  # El próximo será el 7
         self.game_state.current_player = "ai"  # Para que cambie de semana
-        initial_creature_count = self.city.available_creatures[0].count
-        growth_rate = self.city.available_creatures[0].growth_per_week
+        # Buscar el primer building con criaturas disponibles
+        building = next((b for b in self.city.buildings if b.available_creatures), None)
+        initial_creature_count = building.available_creatures[0].count
+        growth_rate = building.available_creatures[0].growth_per_week
         
         # Ejecutar fin de turno
         result = process_end_turn(self.game_state)
         
         # Verificar crecimiento semanal
         self.assertEqual(
-            self.city.available_creatures[0].count,
+            building.available_creatures[0].count,
             initial_creature_count + growth_rate,
             "El crecimiento semanal no se aplicó correctamente"
         )
@@ -271,14 +307,18 @@ class TestLogicFunctions(unittest.TestCase):
         """Reclutamiento con recursos exactos"""
         self.game_state.player.resources.gold = 500
         action = {"city_id": "city1", "unit_type": "archer", "amount": 5}
-        self.city.available_creatures[0].count = 10
+        building = next((b for b in self.city.buildings if b.can_recruit and any(c.type == "archer" for c in b.available_creatures)), None)
+        available_archer = next((c for c in building.available_creatures if c.type == "archer"), None)
+        available_archer.count = 10
         process_recruitment(self.game_state, action)
         self.assertEqual(self.game_state.player.resources.gold, 0)
-        self.assertEqual(self.city.available_creatures[0].count, 5)
+        self.assertEqual(available_archer.count, 5)
 
     def test_recruitment_no_units_available(self):
         """Reclutamiento sin unidades disponibles"""
-        self.city.available_creatures[0].count = 0
+        building = next((b for b in self.city.buildings if b.can_recruit and any(c.type == "archer" for c in b.available_creatures)), None)
+        available_archer = next((c for c in building.available_creatures if c.type == "archer"), None)
+        available_archer.count = 0
         action = {"city_id": "city1", "unit_type": "archer", "amount": 1}
         with self.assertRaises(ValueError):
             process_recruitment(self.game_state, action)
