@@ -261,18 +261,3 @@ This is the strategic planning and context from the current game. Use this to in
             "model_index": self.current_model_index,
             "model_name": self.default_model
         }
-
-# Example usage - keeping similar to the original code
-if __name__ == "__main__":
-    client = GroqClient()
-    
-    try:
-        chat_completion = client.send_message([
-            {
-                "role": "user",
-                "content": "Explain the importance of fast language models",
-            }
-        ])
-        print(chat_completion.choices[0].message.content)
-    except Exception as e:
-        print(f"Error during API call: {str(e)}")
