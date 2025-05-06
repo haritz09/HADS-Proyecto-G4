@@ -1,5 +1,6 @@
 import os
 import requests  # Usamos requests para manejar las solicitudes HTTP
+import json
 from groq import Groq
 from ..exceptions.rate_limit_error import RateLimitExceededError
 
@@ -26,6 +27,7 @@ class GroqClient:
         self.client = Groq(api_key=self.api_key)
         self.current_model_index = 0  # Default to first model in the list
         self.default_model = self.available_models[self.current_model_index]
+        self.actual_context = None  # Initialize context storage
         self._initialized = True
         
     def send_message(self, promt, model=None):
@@ -57,7 +59,19 @@ class GroqClient:
                     model=model or self.default_model,
                 )
                 
-                # Si la respuesta es correcta, la devolvemos
+                # Extract strategic_planning from response if available
+                try:
+                    content = response.choices[0].message.content
+                    # Try to parse content as JSON
+                    json_data = json.loads(content)
+                    if "strategic_planning" in json_data:
+                        self.actual_context = json_data["strategic_planning"]
+                        print("Updated strategic planning context")
+                except (json.JSONDecodeError, KeyError, AttributeError, IndexError):
+                    # If not valid JSON or missing the expected structure, ignore
+                    pass
+                
+                # Return the original response
                 return response
             except requests.exceptions.HTTPError as e:
                 # Si es un error HTTP 429, analizamos el contenido
@@ -81,6 +95,12 @@ class GroqClient:
                     model_info = self.switch_to_next_model()
                     model = None  # Reset para usar el modelo actualizado
                     print(f"Rate limit reached. Switching to model: {model_info['model_name']}")
+    
+    def get_actual_context(self):
+        """
+        Returns the current strategic planning context
+        """
+        return self.actual_context
         
     def switch_to_next_model(self):
         """
