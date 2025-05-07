@@ -1,8 +1,13 @@
 import os
+from dotenv import load_dotenv
 import requests  # Usamos requests para manejar las solicitudes HTTP
 import json
 from groq import Groq
+from groq import RateLimitError, APIError
 from ..exceptions.rate_limit_error import RateLimitExceededError
+
+# Load environment variables from .env file
+load_dotenv()
 
 class GroqClient:
     _instance = None
@@ -21,9 +26,16 @@ class GroqClient:
         return cls._instance
     
     def __init__(self):
+        """Initialize the GroqClient with the API key and default model"""
         if getattr(self, '_initialized', False):
             return
-        self.api_key = os.environ.get("API_KEY")
+        # Get the API key from environment variables
+        self.api_key = os.environ.get("GROQ_API_KEY")
+        
+        # Verify API key is available
+        if not self.api_key:
+            raise ValueError("GROQ_API_KEY not found. Please set it in your .env file or pass it directly.")
+            
         self.client = Groq(api_key=self.api_key)
         self.current_model_index = 0  # Default to first model in the list
         self.default_model = self.available_models[self.current_model_index]
@@ -216,6 +228,29 @@ This is the strategic planning and context from the current game. Use this to in
                 
                 # Return the original response
                 return response
+            except RateLimitError as e:
+                # Handle Groq specific rate limit error
+                print(f"Groq Rate Limit Error: {str(e)}")
+                
+                # Decrease remaining attempts
+                remaining_models -= 1
+            
+                # Si no quedan modelos, lanzamos un error
+                if remaining_models <= 0:
+                    raise RateLimitExceededError(
+                        "Rate limit reached on all available models",
+                        retry_after=getattr(e, 'retry_after', None),
+                        model=self.default_model,
+                        original_exception=e
+                    ) from e
+                
+                # Cambiar al siguiente modelo
+                model_info = self.switch_to_next_model()
+                model = None  # Reset para usar el modelo actualizado
+                print(f"Rate limit reached. Switching to model: {model_info['model_name']}")
+                
+                # Mark that we're switching models
+                is_model_switch = True
             except requests.exceptions.HTTPError as e:
                 # Si es un error HTTP 429, analizamos el contenido
                 if e.response.status_code == 429:
@@ -241,6 +276,36 @@ This is the strategic planning and context from the current game. Use this to in
                     
                     # Mark that we're switching models
                     is_model_switch = True
+                else:
+                    # Re-raise other HTTP errors
+                    raise
+            except APIError as e:
+                # Check if this is a rate limit error (status code 429)
+                if getattr(e, 'status_code', 0) == 429 or "rate limit" in str(e).lower():
+                    print(f"Groq API Error (Rate Limit): {str(e)}")
+                    
+                    # Decrease remaining attempts
+                    remaining_models -= 1
+                
+                    # Si no quedan modelos, lanzamos un error
+                    if remaining_models <= 0:
+                        raise RateLimitExceededError(
+                            "Rate limit reached on all available models",
+                            retry_after=getattr(e, 'retry_after', None),
+                            model=self.default_model,
+                            original_exception=e
+                        ) from e
+                    
+                    # Cambiar al siguiente modelo
+                    model_info = self.switch_to_next_model()
+                    model = None  # Reset para usar el modelo actualizado
+                    print(f"Rate limit reached. Switching to model: {model_info['model_name']}")
+                    
+                    # Mark that we're switching models
+                    is_model_switch = True
+                else:
+                    # Re-raise other API errors
+                    raise
     
     def get_actual_context(self):
         """
