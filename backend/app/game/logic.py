@@ -168,8 +168,9 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
         # Procesar crecimiento semanal si estamos en múltiplo de 7
         if game_state.turn % 7 == 0:
             for city in game_state.player.cities + game_state.ai.cities:
-                for creature in city.available_creatures:
-                    creature.count += creature.growth_per_week
+                for building in getattr(city, 'buildings', []):
+                    for creature in getattr(building, 'available_creatures', []):
+                        creature.count += getattr(creature, 'growth_per_week', 0)
     
     return {
         "next_player": game_state.current_player,
