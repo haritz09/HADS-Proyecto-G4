@@ -1,0 +1,90 @@
+/* Estilos globales de la aplicación */
+@import url('https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap');
+
+:root {
+  /* Colores principales */
+  --primary-dark: #1a2a4a;
+  --primary: #2a3f6a;
+  --primary-light: #4a5f8a;
+  --secondary-dark: #8B4513;
+  --secondary: #DAA520;
+  --secondary-light: #FFD700;
+  
+  /* Colores de terreno */
+  --terrain-grass: #bbf7d0;
+  --terrain-forest: #15803d;
+  --terrain-mountain: #9ca3af;
+  --terrain-water: #60a5fa;
+  --terrain-desert: #fde68a;
+  --terrain-snow: #f9fafb;
+  
+  /* Colores UI */
+  --ui-background: #0a1129;
+  --ui-panel: #1f2937;
+  --ui-text: #e5e7eb;
+  --ui-border: #4b5563;
+  
+  /* Colores de jugadores */
+  --player-red: #ef4444;
+  --player-blue: #3b82f6;
+  --player-green: #22c55e;
+  --player-yellow: #eab308;
+  
+  /* Dimensiones */
+  --header-height: 64px;
+  --sidebar-width: 320px;
+  --tile-size: 48px;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'MedievalSharp', serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--ui-background);
+  color: var(--ui-text);
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+.App {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  font-weight: bold;
+}
+
+button, input, select {
+  font-family: 'MedievalSharp', serif;
+}
+
+/* Estilos comunes para contenedores */
+.container {
+  padding: 16px;
+}
+
+/* Estilos para pantallas de carga y error */
+.loading-screen, .error-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  text-align: center;
+}
+
+.error-screen {
+  color: #ef4444;
+}
