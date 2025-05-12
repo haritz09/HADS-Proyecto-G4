@@ -48,13 +48,7 @@
 }
 
 .register-button {
-  padding: 12px;
-  background-color: #4a4a6a;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  margin-top: 15px;
-  cursor: pointer;
+  margin-top: 16px;
 }
 
 .login-link {

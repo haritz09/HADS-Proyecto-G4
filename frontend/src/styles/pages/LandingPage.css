@@ -38,19 +38,21 @@
 
 .title-container {
   margin-top: 20px;
+  width: 1000px; /* Ajusta el tamaño según sea necesario */
+  height: 1000px; /* Ajusta el tamaño según sea necesario */
   background-image: url('../../assets/images/background/titleBase.png');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  padding: 15px 30px;
-  border-radius: 8px;
-  /* Borde amarillo eliminado */
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  position: relative; /* Necesario para superponer el texto */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .game-title {
   font-family: 'MedievalSharp', serif;
-  font-size: 64px;
+  font-size: 48px; /* Ajusta el tamaño del texto */
   color: #FFD700;
   text-shadow: 
     0 0 5px #000,
@@ -59,6 +61,10 @@
     0 0 20px #000;
   text-align: center;
   letter-spacing: 2px;
+  position: absolute; /* Superpone el texto sobre la imagen */
+  top: 39%;
+  left: 31,5%;
+  z-index: 2; /* Asegura que el texto esté encima de la imagen */
 }
 
 .buttons-container {
@@ -114,7 +120,7 @@
   background-image: url('../../assets/images/background/buttonLoginRegisterBase.png');
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  background-color: transparent; /* Ensures no gray background */
+  
 }
 
 .button-text {
