@@ -83,7 +83,21 @@ the actions for your current turn. Follow these steps:
    - Hero improvement through experience and artifacts
    - Balancing economy and military strength
 3. Generate a set of actions for this turn. You can perform multiple actions 
-until you run out of movement points. Possible action types include:- moveHero: Move a hero to a new location- buildStructure: Construct a building in a city- recruitUnits: Recruit new units in a city- collectResource: Collect a resource on the map- attackEnemy: Initiate combat with an enemy- castSpell: Use a hero's spell- pickupArtifact: Equip a hero with an artifact
+until you run out of movement points. Possible action types include:- moveHero: Move a hero to a new location- buildStructure: Construct a building in a city- recruitUnits: Recruit new units in a city- collectResource: Collect a resource on the map- attackEnemy: Initiate combat with an enemy (you have to be in the same position as the enemy on the map)- transer: Transfer troops between the heroe and the castle (you have to be in the castle to do this)- pickupArtifact: Equip a hero with an artifact
+ You can recruit these units based on your buildings and available resources (to recruit a unit you have to be in the city and building which generates it): 
+- soldado (cost: 50 gold, health: 100, attack: 10, speed: 8) -It's generated in the barracks
+- arquero: (cost: 50 gold, health: 100, attack: 8, speed: 12) -It's generated in the archery
+- caballero: (cost: 100 gold, health: 150, attack: 15, speed: 10) -It's generated in the knigths_tower
+- mago: (cost: 200 gold, health: 80, attack: 20, speed: 12) -It's generated in the mage_tower
+- dragon: (cost: 400 gold, heath: 100, attack: 30, speed: 15) -It's generated in the dragons_lair
+You can also build these structures in your cities with buildStructure (to build a structure you have to be in the castle):
+-"barracks": {"gold": 1000, "wood": 50, "stone": 50},
+-"archery": {"gold": 1200, "wood": 70, "stone": 30},
+-"knigths_tower": {"gold": 1500, "wood": 100, "stone": 100},
+-"mage_tower": {"gold": 2000, "wood": 100, "stone": 100},
+-"dragons_lair": {"gold": 5000, "wood": 200, "stone": 200}
+You can also build a tavern in the castle to increase the maximum number of heroes you can have (so you don't lose when a hero dies):
+-"tavern": {"gold": 1000, "wood": 200, "stone": 200} 
  Before providing your final response, wrap your thought process and 
 strategic considerations inside <strategic_planning> tags. In this section:
  1. Summarize the current game state, including hero positions, resources, 
@@ -143,6 +157,23 @@ for success in the game.
         "heroId": "hero1",
         "resourceType": "gold",
         "location": { "x": 4, "y": 2 }
+      }
+    },
+    {
+      "type": "buildStructure",
+      "details": {
+      "cityId": "city1",
+      "structureType": "barracks"
+      }
+    },
+    {
+      "type": "recruitUnits",
+      "details": {
+        "heroId": "hero1",
+        "cityId": "city1",
+        "buildingId": "barracks",
+        "unitType": "archer",
+        "quantity": 5
       }
     },
     {

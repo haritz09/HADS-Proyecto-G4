@@ -1,5 +1,6 @@
-from backend.app.game.logic import process_end_turn, process_hero_attack, process_hero_movement, process_recruitment
-from fastapi import APIRouter, HTTPException, status, Query, Depends
+from backend.app.game.logic import process_end_turn, process_hero_attack, process_hero_movement, process_recruitment, transfer_troops_between_hero_and_castle
+from backend.app.game.cheats import process_cheat
+from fastapi import APIRouter, HTTPException, status, Query, Depends, Body
 from typing import List
 from backend.app.db.schema import GameRead, GameState
 from backend.app.api.api_v1.endpoints.auth import get_current_user
@@ -12,6 +13,8 @@ from backend.app.db.crud import (
 )
 from bson import ObjectId
 from datetime import datetime, UTC
+
+from ai_service.client.groq_client import GroqClient
 
 router = APIRouter()
 
@@ -99,13 +102,17 @@ async def process_action(
 
     # 3. Validar y procesar la acción según su tipo
     try:
-        if action["type"] == "MOVE_HERO":
+        if action["type"] == "moveHero":
             result = process_hero_movement(game_state, action)
-        elif action["type"] == "HERO_ATTACK":
+        elif action["type"] == "combat":
             result = process_hero_attack(game_state, action)
-        elif action["type"] == "RECRUIT_UNITS":
+        elif action["type"] == "recruitUnits":
             result = process_recruitment(game_state, action)
-        elif action["type"] == "END_TURN":
+        elif action["type"] == "buildStructure":
+            result = (game_state, action)
+        elif action["type"] == "transfer": # Transerir tropas entre heroe-castillo
+            result = transfer_troops_between_hero_and_castle(game_state, action)
+        elif action["type"] == "endTurn":
             result = process_end_turn(game_state)
         else:
             raise HTTPException(status_code=400, detail="Tipo de acción no válido")
@@ -122,3 +129,57 @@ async def process_action(
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/{game_id}/cheat")
+async def aplicar_cheat(
+    game_id: str,
+    cheat: dict = Body(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Aplica un cheat al estado de la partida.
+    El body debe incluir el cheat_code y los parámetros necesarios.
+    """
+    game = get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    if str(game["user_id"]) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="No autorizado para modificar esta partida")
+
+    game_state = GameState(**game["game_state"])
+
+    try:
+        response = process_cheat(game_state, cheat)
+        # Guardar el nuevo estado
+        game["game_state"] = game_state.model_dump()
+        update_game(game_id, game)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+
+
+@router.post("/{game_id}/ai")
+async def communicate_with_ai(
+    game_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Comunica el estado actual de la partida a la IA y devuelve la respuesta de la IA.
+    """
+    game = get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    if str(game["user_id"]) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="No autorizado para esta partida")
+    game_state = game.get("game_state")
+    if not game_state:
+        raise HTTPException(status_code=400, detail="La partida no tiene estado de juego válido")
+    # Obtener instancia singleton de GroqClient
+    groq_client = GroqClient()
+    try:
+        ai_response = groq_client.send_message(game_state)
+        # Se asume que la respuesta relevante está en ai_response.choices[0].message.content
+        return {"ai_response": ai_response.choices[0].message.content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error comunicando con la IA: {str(e)}")

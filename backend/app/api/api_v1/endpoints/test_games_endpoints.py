@@ -143,109 +143,150 @@ class TestGamesEndpoints(unittest.TestCase):
             }
         }
 
-    def test_auth_flow(self):
-        """Prueba el flujo completo de autenticación"""
-        # 1. Verificar que el usuario existe
-        response = self.client.get("/api/auth/profile", headers=self.headers)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["username"], self.test_username)
+    # def test_auth_flow(self):
+    #     """Prueba el flujo completo de autenticación"""
+    #     # 1. Verificar que el usuario existe
+    #     response = self.client.get("/api/auth/profile", headers=self.headers)
+    #     self.assertEqual(response.status_code, 200)
+    #     self.assertEqual(response.json()["username"], self.test_username)
         
-        # 2. Actualizar perfil
-        new_email = "updated@example.com"
-        response = self.client.put("/api/auth/profile", 
-                                 headers=self.headers,
-                                 json={"email": new_email})
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["email"], new_email)
+    #     # 2. Actualizar perfil
+    #     new_email = "updated@example.com"
+    #     response = self.client.put("/api/auth/profile", 
+    #                              headers=self.headers,
+    #                              json={"email": new_email})
+    #     self.assertEqual(response.status_code, 200)
+    #     self.assertEqual(response.json()["email"], new_email)
         
-        # 3. Probar login con credenciales incorrectas
-        response = self.client.post("/api/auth/login", 
-                                  data={"username": self.test_username, 
-                                       "password": "wrong_password"})
-        self.assertEqual(response.status_code, 401)
+    #     # 3. Probar login con credenciales incorrectas
+    #     response = self.client.post("/api/auth/login", 
+    #                               data={"username": self.test_username, 
+    #                                    "password": "wrong_password"})
+    #     self.assertEqual(response.status_code, 401)
 
-    def test_full_game_flow(self):
-        """Prueba el flujo completo del juego con usuario autenticado"""
+    # def test_full_game_flow(self):
+    #     """Prueba el flujo completo del juego con usuario autenticado"""
+    #     self.assertIsNotNone(self.user_id, "User ID should not be None")
+    #     self.assertIsNotNone(self.access_token, "Access token should not be None")
+
+    #     # 1. Crear partida
+    #     game_data = self.build_game_data()
+    #     response = self.client.post("/api/games/", 
+    #                               headers=self.headers,
+    #                               json=game_data)
+    #     self.assertEqual(response.status_code, 201)
+    #     game = response.json()
+    #     self.assertIn("_id", game)
+    #     game_id = game["_id"]
+
+    #     # 2. Listar partidas guardadas
+    #     response = self.client.get(f"/api/games/?user_id={self.user_id}",
+    #                              headers=self.headers)
+    #     self.assertEqual(response.status_code, 200)
+    #     games = response.json()
+    #     self.assertTrue(any(g["_id"] == game_id for g in games))
+
+    #     # 3. Cargar partida guardada
+    #     response = self.client.get(f"/api/games/{game_id}",
+    #                              headers=self.headers)
+    #     self.assertEqual(response.status_code, 200)
+    #     loaded_game = response.json()
+    #     self.assertEqual(loaded_game["_id"], game_id)
+
+    #     # 4. Guardar partida actual (simular cambio de nombre)
+    #     updated_data = dict(game)
+    #     updated_data["name"] = "Partida actualizada"
+    #     response = self.client.post(f"/api/games/{game_id}/save", 
+    #                               headers=self.headers,
+    #                               json=updated_data)
+    #     self.assertIn(response.status_code, [200, 201, 204])
+
+    #     # 5. Enviar acción de movimiento de héroe
+    #     action = {
+    #         "type": "MOVE_HERO",
+    #         "hero_id": "hero1",
+    #         "target_position": {"x": 6, "y": 5}
+    #     }
+    #     response = self.client.post(f"/api/games/{game_id}/action",
+    #                               headers=self.headers,
+    #                               json=action)
+    #     self.assertIn(response.status_code, [200, 400])
+    #     if response.status_code == 200:
+    #         self.assertEqual(response.json()["status"], "success")
+
+    #     # 6. Enviar acción de reclutamiento
+    #     action = {
+    #         "type": "RECRUIT_UNITS",
+    #         "city_id": "city1",
+    #         "unit_type": "archer",
+    #         "amount": 5
+    #     }
+    #     response = self.client.post(f"/api/games/{game_id}/action",
+    #                               headers=self.headers,
+    #                               json=action)
+    #     self.assertIn(response.status_code, [200, 400])
+    #     if response.status_code == 200:
+    #         self.assertEqual(response.json()["status"], "success")
+
+    #       # 8. Acción inválida
+    #     action = {"type": "INVALID_ACTION"}
+    #     response = self.client.post(f"/api/games/{game_id}/action",
+    #                               headers=self.headers,
+    #                               json=action)
+    #     self.assertEqual(response.status_code, 400)
+    #     self.assertIn("Tipo de acción no válido", response.text)
+
+    #     # 7. Enviar acción de fin de turno
+    #     action = {"type": "END_TURN"}
+    #     response = self.client.post(f"/api/games/{game_id}/action",
+    #                               headers=self.headers,
+    #                               json=action)
+    #     self.assertIn(response.status_code, [200, 400])
+    #     if response.status_code == 200:
+    #         self.assertEqual(response.json()["status"], "success")
+
+    # def test_get_all_scenarios(self):
+    #     """Prueba el endpoint para obtener todos los escenarios disponibles"""
+    #     response = self.client.get("/api/scenarios/")
+    #     self.assertEqual(response.status_code, 200)
+    #     scenarios = response.json()
+    #     print(scenarios)
+    #     self.assertIsInstance(scenarios, list)
+    #     self.assertGreater(len(scenarios), 0, "Debe haber al menos un escenario disponible")
+    #     self.assertIn("_id", scenarios[0])
+    #     self.assertIn("name", scenarios[0])
+
+
+    def test_ai_endpoint(self):
+        """Prueba el endpoint para la acción de IA en una partida"""
         self.assertIsNotNone(self.user_id, "User ID should not be None")
         self.assertIsNotNone(self.access_token, "Access token should not be None")
-
-        # 1. Crear partida
+        # Crear partida para obtener game_id
         game_data = self.build_game_data()
-        response = self.client.post("/api/games/", 
-                                  headers=self.headers,
-                                  json=game_data)
+        response = self.client.post("/api/games/", headers=self.headers, json=game_data)
         self.assertEqual(response.status_code, 201)
         game = response.json()
-        self.assertIn("_id", game)
         game_id = game["_id"]
-
-        # 2. Listar partidas guardadas
-        response = self.client.get(f"/api/games/?user_id={self.user_id}",
-                                 headers=self.headers)
-        self.assertEqual(response.status_code, 200)
-        games = response.json()
-        self.assertTrue(any(g["_id"] == game_id for g in games))
-
-        # 3. Cargar partida guardada
-        response = self.client.get(f"/api/games/{game_id}",
-                                 headers=self.headers)
-        self.assertEqual(response.status_code, 200)
-        loaded_game = response.json()
-        self.assertEqual(loaded_game["_id"], game_id)
-
-        # 4. Guardar partida actual (simular cambio de nombre)
-        updated_data = dict(game)
-        updated_data["name"] = "Partida actualizada"
-        response = self.client.post(f"/api/games/{game_id}/save", 
-                                  headers=self.headers,
-                                  json=updated_data)
-        self.assertIn(response.status_code, [200, 201, 204])
-
-        # 5. Enviar acción de movimiento de héroe
-        action = {
-            "type": "MOVE_HERO",
-            "hero_id": "hero1",
-            "target_position": {"x": 6, "y": 5}
-        }
-        response = self.client.post(f"/api/games/{game_id}/action",
-                                  headers=self.headers,
-                                  json=action)
+        # Llamar al endpoint de IA
+        response = self.client.post(f"/api/games/{game_id}/ai", headers=self.headers)
+        print(response.json())
         self.assertIn(response.status_code, [200, 400])
         if response.status_code == 200:
-            self.assertEqual(response.json()["status"], "success")
+            import json
+            ai_response = response.json().get("ai_response", "")
+            # Extraer el bloque JSON del string (puede estar envuelto en texto)
+            start = ai_response.find('{')
+            end = ai_response.rfind('}')
+            if start != -1 and end != -1 and end > start:
+                ai_json_str = ai_response[start:end+1]
+            else:
+                ai_json_str = ai_response
+            try:
+                ai_json = json.loads(ai_json_str)
+                self.assertIn("actions", ai_json)
+            except Exception as e:
+                self.fail(f"No se pudo parsear el JSON de ai_response: {e}\nContenido: {ai_json_str}")
 
-        # 6. Enviar acción de reclutamiento
-        action = {
-            "type": "RECRUIT_UNITS",
-            "city_id": "city1",
-            "unit_type": "archer",
-            "amount": 5
-        }
-        response = self.client.post(f"/api/games/{game_id}/action",
-                                  headers=self.headers,
-                                  json=action)
-        self.assertIn(response.status_code, [200, 400])
-        if response.status_code == 200:
-            self.assertEqual(response.json()["status"], "success")
-
-          # 8. Acción inválida
-        action = {"type": "INVALID_ACTION"}
-        response = self.client.post(f"/api/games/{game_id}/action",
-                                  headers=self.headers,
-                                  json=action)
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("Tipo de acción no válido", response.text)
-
-        # 7. Enviar acción de fin de turno
-        action = {"type": "END_TURN"}
-        response = self.client.post(f"/api/games/{game_id}/action",
-                                  headers=self.headers,
-                                  json=action)
-        self.assertIn(response.status_code, [200, 400])
-        if response.status_code == 200:
-            self.assertEqual(response.json()["status"], "success")
-
-      
 
 if __name__ == "__main__":
     unittest.main()

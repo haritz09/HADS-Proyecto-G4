@@ -32,3 +32,18 @@ def render_special_on_map(position: Position, special_type: str, game_map: GameM
         tile = game_map.tiles[idx]
         tile.object_type = special_type
         tile.object_id = None
+
+def render_artifact_on_map(artifact, game_map):
+    """Coloca la figura del artefacto en la posición actual en el mapa (modifica el objeto game_map.tiles)."""
+    idx = artifact.position.y * game_map.size.width + artifact.position.x
+    if game_map.tiles and 0 <= idx < len(game_map.tiles):
+        tile = game_map.tiles[idx]
+        tile.object_type = 'artifact'
+        tile.object_id = artifact.id
+
+def clear_artifact_from_map(artifact, game_map):
+    """Elimina la figura del artefacto de su posición en el mapa."""
+    for tile in game_map.tiles or []:
+        if getattr(tile, 'object_type', None) == 'artifact' and getattr(tile, 'object_id', None) == artifact.id:
+            tile.object_type = None
+            tile.object_id = None
