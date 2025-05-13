@@ -78,7 +78,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
     <div className="register-page">
       <div className="register-container">
         <div className="register-header">
-          <h1>Legends of the Realm</h1>
+          <h1>Heroes&Hostias</h1>
           <h2>Crear Cuenta</h2>
         </div>
         
@@ -88,7 +88,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
         
         <form onSubmit={handleSubmit} className="register-form">
           <div className="form-group">
-            <label htmlFor="username">Nombre de usuario</label>
+            <label htmlFor="username">Nombre de Usuario</label>
             <input
               type="text"
               id="username"
@@ -96,11 +96,12 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
               placeholder="Elige un nombre de usuario"
+              required
             />
           </div>
           
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Correo Electrónico</label>
             <input
               type="email"
               id="email"
@@ -108,6 +109,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
               placeholder="Ingresa tu email"
+              required
             />
           </div>
           
@@ -120,6 +122,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               placeholder="Crea una contraseña"
+              required
             />
           </div>
           
@@ -132,6 +135,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
               placeholder="Repite tu contraseña"
+              required
             />
           </div>
           

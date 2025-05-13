@@ -20,6 +20,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
   const navigate = useNavigate();
   
   // Estados
+  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -30,8 +31,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
     e.preventDefault();
     
     // Validar campos
-    if (!username.trim() || !password.trim()) {
+    if (!email.trim() || !username.trim() || !password.trim()) {
       setError('Por favor, completa todos los campos');
+      return;
+    }
+    
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Por favor, ingresa un email válido');
       return;
     }
     
@@ -39,8 +47,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
       setLoading(true);
       setError(null);
       
-      // Llamar a la API de login
-      await authService.login(username, password);
+      // Llamar a la API de login (ajustar para incluir email si es necesario)
+      await authService.login(username, password, email);
       
       // Actualizar estado de autenticación
       setAuth(true);
@@ -58,7 +66,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
     <div className="login-page">
       <div className="login-container">
         <div className="login-header">
-          <h1>Legends of the Realm</h1>
+          <h1>Heroes&Hostias</h1>
           <h2>Iniciar Sesión</h2>
         </div>
         
@@ -68,7 +76,20 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="username">Nombre de usuario</label>
+            <label htmlFor="email">Correo Electrónico</label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              placeholder="Ingresa tu correo electrónico"
+              required
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="username">Nombre de Usuario</label>
             <input
               type="text"
               id="username"
@@ -76,6 +97,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
               placeholder="Ingresa tu nombre de usuario"
+              required
             />
           </div>
           
@@ -88,6 +110,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               placeholder="Ingresa tu contraseña"
+              required
             />
           </div>
           

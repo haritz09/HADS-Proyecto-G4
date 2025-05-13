@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 
-type AudioTrack = 'landing' | 'game' | 'none';
+// Añadir un nuevo tipo para el nuevo audio
+type AudioTrack = 'landing' | 'game' | 'login' | 'none';
 
 interface AudioContextType {
   currentTrack: AudioTrack;
@@ -9,6 +10,7 @@ interface AudioContextType {
   isMuted: boolean;
   playLandingMusic: () => Promise<boolean>;
   playGameMusic: () => Promise<boolean>;
+  playLoginMusic: () => Promise<boolean>; // Nueva función para reproducir música de login
   stopMusic: () => void;
   togglePlay: () => void;
   setVolume: (volume: number) => void;
@@ -22,6 +24,7 @@ const AudioContext = createContext<AudioContextType>({
   isMuted: false,
   playLandingMusic: async () => false,
   playGameMusic: async () => false,
+  playLoginMusic: async () => false, // Nueva función para reproducir música de login
   stopMusic: () => {},
   togglePlay: () => {},
   setVolume: () => {},
@@ -39,6 +42,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   
   const landingAudioRef = useRef<HTMLAudioElement | null>(null);
   const gameAudioRef = useRef<HTMLAudioElement | null>(null);
+  const loginAudioRef = useRef<HTMLAudioElement | null>(null); // Nueva referencia para el audio de login
   const hasInteractedRef = useRef(false);
   
   // Inicializar elementos de audio
@@ -51,11 +55,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Corregimos las rutas - USAR RUTAS ABSOLUTAS, no relativas
         landingAudioRef.current = new Audio('/assets/audio/landing-theme.mp3');
         gameAudioRef.current = new Audio('/assets/audio/game-theme.mp3');
+        loginAudioRef.current = new Audio('/assets/audio/catacombs.mp3'); // Nuevo audio para login
         
         // Log para depuración
         console.log("Archivos de audio creados:");
         console.log("Landing:", landingAudioRef.current);
         console.log("Game:", gameAudioRef.current);
+        console.log("Login:", loginAudioRef.current);
         
         // Verificar si los archivos existen
         const checkAudioExistence = async () => {
@@ -63,17 +69,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Comprobamos si los archivos existen haciendo una petición fetch
             const landingResponse = await fetch('/assets/audio/landing-theme.mp3');
             const gameResponse = await fetch('/assets/audio/game-theme.mp3');
+            const loginResponse = await fetch('/assets/audio/catacombs.mp3'); // Verificar el nuevo audio
             
             console.log("Estado de la petición del audio landing:", landingResponse.status);
             console.log("Estado de la petición del audio game:", gameResponse.status);
+            console.log("Estado de la petición del audio login:", loginResponse.status);
             
-            if (!landingResponse.ok || !gameResponse.ok) {
+            if (!landingResponse.ok || !gameResponse.ok || !loginResponse.ok) {
               console.error("No se pudieron cargar los archivos de audio. Verifique las rutas.");
               setAudioLoaded(false);
               return;
             }
             
-            // Si llegamos aquí, ambos archivos existen
+            // Si llegamos aquí, todos los archivos existen
             setAudioLoaded(true);
           } catch (error) {
             console.error("Error verificando archivos de audio:", error);
@@ -117,6 +125,19 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           
           // Configurar reproducción en bucle
           gameAudioRef.current.loop = true;
+        }
+
+        if (loginAudioRef.current) {
+          loginAudioRef.current.addEventListener('canplaythrough', () => {
+            console.log("Audio de login cargado completamente");
+          });
+          
+          loginAudioRef.current.addEventListener('error', (e) => {
+            console.error("Error cargando audio de login:", e);
+          });
+          
+          // Configurar reproducción en bucle
+          loginAudioRef.current.loop = true;
         }
         
         setAudioLoaded(true);
@@ -166,6 +187,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         gameAudioRef.current.pause();
         gameAudioRef.current = null;
       }
+      if (loginAudioRef.current) {
+        loginAudioRef.current.pause();
+        loginAudioRef.current = null;
+      }
     };
   }, []);
   
@@ -176,6 +201,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     if (gameAudioRef.current) {
       gameAudioRef.current.volume = isMuted ? 0 : volume;
+    }
+    if (loginAudioRef.current) {
+      loginAudioRef.current.volume = isMuted ? 0 : volume;
     }
   }, [volume, isMuted]);
   
@@ -189,6 +217,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (gameAudioRef.current) {
       gameAudioRef.current.pause();
       console.log("Audio de juego pausado");
+    }
+    if (loginAudioRef.current) {
+      loginAudioRef.current.pause();
+      console.log("Audio de login pausado");
     }
     setIsPlaying(false);
   };
@@ -308,6 +340,82 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     console.warn("No se pudo reproducir - referencia de audio no disponible");
     return false;
   };
+
+  // Nueva función para reproducir música de login
+  const playLoginMusic = async (): Promise<boolean> => {
+    console.log("Intentando reproducir música de login...");
+    console.log("¿Usuario ha interactuado?", hasInteractedRef.current);
+    console.log("¿Audio cargado?", audioLoaded);
+    
+    if (!audioLoaded) {
+      console.warn("Audio no cargado aún");
+      return false;
+    }
+    
+    pauseAllTracks();
+    
+    if (loginAudioRef.current) {
+      try {
+        // Verificar si la fuente de audio es válida
+        console.log("Estado del audio de login:", loginAudioRef.current.readyState);
+        console.log("Duración del audio:", loginAudioRef.current.duration);
+        console.log("Ruta del audio:", loginAudioRef.current.src);
+        
+        // Si el audio no está listo, intentamos recargarlo
+        if (loginAudioRef.current.readyState === 0) {
+          console.log("Audio no listo, recargando...");
+          loginAudioRef.current.load();
+          // Esperar a que el audio se cargue
+          await new Promise<void>((resolve) => {
+            loginAudioRef.current!.addEventListener('canplaythrough', () => resolve(), { once: true });
+            loginAudioRef.current!.addEventListener('error', () => {
+              console.error("Error al recargar el audio");
+              resolve();
+            }, { once: true });
+          });
+        }
+        
+        loginAudioRef.current.currentTime = 0;
+        console.log("Iniciando reproducción...");
+        
+        // Establecer directamente el volumen deseado
+        loginAudioRef.current.volume = isMuted ? 0 : volume;
+        
+        const playPromise = loginAudioRef.current.play();
+        if (playPromise !== undefined) {
+          await playPromise;
+          
+          console.log("Reproducción iniciada con éxito");
+          setCurrentTrack('login');
+          setIsPlaying(true);
+          return true;
+        }
+      } catch (err) {
+        console.error("Error reproduciendo música de login:", err);
+        
+        // Si falla, intentamos con un enfoque alternativo
+        try {
+          console.log("Intentando método alternativo...");
+          const newAudio = new Audio('/assets/audio/catacombs.mp3');
+          newAudio.loop = true;
+          newAudio.volume = isMuted ? 0 : volume;
+          
+          await newAudio.play();
+          
+          console.log("Reproducción alternativa exitosa");
+          loginAudioRef.current = newAudio;
+          setCurrentTrack('login');
+          setIsPlaying(true);
+          return true;
+        } catch (altErr) {
+          console.error("También falló el método alternativo:", altErr);
+          return false;
+        }
+      }
+    }
+    console.warn("No se pudo reproducir - referencia de audio no disponible");
+    return false;
+  };
   
   // Detener toda la música
   const stopMusic = () => {
@@ -339,6 +447,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           gameAudioRef.current.volume = isMuted ? 0 : volume;
         }
         playGameMusic();
+      } else if (track === 'login') {
+        // Al iniciar la reproducción, asegúrate que el volumen esté configurado correctamente
+        if (loginAudioRef.current) {
+          loginAudioRef.current.volume = isMuted ? 0 : volume;
+        }
+        playLoginMusic();
       }
     }
   };
@@ -360,6 +474,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     isMuted,
     playLandingMusic,
     playGameMusic,
+    playLoginMusic, // Añadir la nueva función al contexto
     stopMusic,
     togglePlay,
     setVolume,

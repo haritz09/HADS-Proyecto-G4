@@ -30,9 +30,12 @@ API.interceptors.request.use(
 
 // Servicios de autenticación
 export const authService = {
-  login: async (username: string, password: string) => {
-    const response = await API.post('/auth/login', { username, password });
-    localStorage.setItem('authToken', response.data.token);
+  login: async (username: string, password: string, email: string) => {
+    const response = await API.post('/auth/login', { username, password, email });
+    if (response.data && response.data.token) {
+      localStorage.setItem('authToken', response.data.token);
+      API.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+    }
     return response.data;
   },
   
