@@ -84,12 +84,8 @@ export const gameService = {
     return await API.post('/games', gameData);
   },
   
-  getSavedGames: async () => {
-    // Este endpoint requiere el user_id como query param
-    // El user_id se obtendrá del token en el backend
-    const profile = await authService.getProfile();
-    const userId = profile.data._id;
-    return await API.get(`/games?user_id=${userId}`);
+  getSavedGames: () => {
+    return API.get('/games'); // El backend debería usar el token para identificar al usuario
   },
   
   loadGame: async (gameId: string) => {

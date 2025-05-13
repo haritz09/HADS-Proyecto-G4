@@ -94,9 +94,7 @@ const MainMenuPage: React.FC = () => {
           <Button 
             variant="primary" 
             size="large" 
-            onClick={() => {
-              setShowLoadGame(true);
-            }}
+            onClick={() => navigate('/load-game')}
           >
             Cargar Partida
           </Button>

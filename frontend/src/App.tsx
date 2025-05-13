@@ -24,6 +24,7 @@ import GamePage from './pages/GamePage';
 import CityPage from './pages/CityPage';
 import HeroPage from './pages/HeroPage';
 import ScenarioMenuPage from './pages/ScenarioMenuPage';
+import LoadGamePage from './pages/LoadGamePage';
 
 const App: React.FC = () => {
   const { isAuthenticated, loading, login, register } = useAuth();
@@ -74,6 +75,10 @@ const App: React.FC = () => {
         <Route 
           path="/scenarios" 
           element={isAuthenticated ? <ScenarioMenuPage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/load-game" 
+          element={isAuthenticated ? <LoadGamePage /> : <Navigate to="/login" />} 
         />
         
         {/* Fallback route */}

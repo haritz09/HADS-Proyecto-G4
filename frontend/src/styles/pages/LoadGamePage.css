@@ -1,0 +1,172 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=MedievalSharp&family=UnifrakturCook:wght@700&display=swap');
+
+/* Fondo con imagen centrada y tamaño fijo para el "cuadro" medieval */
+.load-game-page {
+  min-height: 100vh;
+  width: 100vw;
+  background: url('../../assets/images/background/menu_scenarios.png') no-repeat center center fixed;
+  background-size: contain;
+  background-color: #18120a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  /* Reutilizamos la mayoría de los estilos de scenario-menu-page */
+}
+
+/* Eliminar el recuadro grande y dejar solo espaciado */
+.load-game-selection {
+  background: none;
+  border: none;
+  box-shadow: none;
+  max-width: 520px;
+  width: 90vw;
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.load-game-header {
+  color: #e9d8a6;
+  text-shadow: 2px 2px 8px #3a2c0f, 0 0 2px #fff8;
+  font-size: 2.7rem; /* Más grande */
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  margin-top: 130px; /* Más abajo */
+  margin-bottom: 12px; /* Separación con el subtítulo */
+  letter-spacing: 1px;
+}
+
+.load-game-selection h3 {
+  color: #e9d8a6;
+  font-size: 1.05rem; /* Más pequeño */
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif; /* Tipografía medieval */
+  margin-bottom: 18px;
+  margin-top: 0;
+  text-shadow: 1px 1px 6px #3a2c0f;
+  text-align: center;
+  font-weight: normal;
+}
+
+.load-game-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* Estilo para el selector de partidas */
+.game-select {
+  background: linear-gradient(135deg, #3a2c0f 80%, #bfa76f 100%);
+  border: 3px solid #bfa76f;
+  border-radius: 12px;
+  padding: 10px;
+  color: #f5e9c6;
+  font-family: 'MedievalSharp', serif;
+  font-size: 1rem;
+  width: 100%;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #0007, 0 0 0 3px #6b4f1d inset;
+}
+
+.game-select:focus {
+  border: 3px solid #e9d8a6;
+  outline: none;
+}
+
+.game-select option {
+  background-color: #3a2c0f;
+  color: #f5e9c6;
+  padding: 5px;
+}
+
+/* Botones medievales */
+.load-game-buttons {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 170px;
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  z-index: 2;
+}
+
+.load-game-btn {
+  background: linear-gradient(90deg, #bfa76f 0%, #6b4f1d 100%);
+  color: #3a2c0f;
+  border: 3px solid #bfa76f;
+  border-radius: 12px;
+  padding: 10px 32px;
+  font-size: 1.08rem;
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #0007;
+  transition: background 0.2s, color 0.2s, transform 0.1s;
+}
+
+.load-game-btn:disabled {
+  background: #6b4f1d;
+  color: #bfa76f;
+  cursor: not-allowed;
+}
+
+.load-game-btn:hover:not(:disabled) {
+  background: linear-gradient(90deg, #e9d8a6 0%, #bfa76f 100%);
+  color: #3a2c0f;
+  transform: translateY(-2px) scale(1.04);
+}
+
+.saved-games-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 20px;
+  background-color: rgba(0, 0, 0, 0.4);
+  padding: 20px;
+  border-radius: 5px;
+}
+
+.saved-game-select {
+  background-color: rgba(30, 30, 47, 0.8);
+  color: white;
+  border: 1px solid var(--ui-border);
+  padding: 12px 15px;
+  font-size: 16px;
+  border-radius: 5px;
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+  font-family: 'MedievalSharp', serif;
+}
+
+.saved-game-select:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5);
+}
+
+.selected-game-details {
+  background-color: rgba(30, 30, 47, 0.5);
+  margin-top: 15px;
+  padding: 15px;
+  border-radius: 5px;
+  border-left: 3px solid var(--player-blue);
+}
+
+.selected-game-details h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #f9fafb;
+  font-size: 18px;
+}
+
+.selected-game-details p {
+  margin: 5px 0;
+  color: #e5e7eb;
+  font-size: 14px;
+}
