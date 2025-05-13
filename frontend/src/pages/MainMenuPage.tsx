@@ -97,17 +97,11 @@ const MainMenuPage: React.FC = () => {
   return (
     <div className="main-menu-page">
       <div className="menu-header">
-        <h1>Legends of the Realm</h1>
-        <div className="user-info">
-          <span>Bienvenido, {userName}</span>
-          <Button variant="secondary" size="small" onClick={handleLogout}>
-            Cerrar Sesión
-          </Button>
-        </div>
+        <h1>Heroes&Hostias</h1>
       </div>
       
       <div className="menu-content">
-        <div className="menu-sidebar">
+        <div className="menu-buttons">
           <Button 
             variant="primary" 
             size="large" 
@@ -130,12 +124,26 @@ const MainMenuPage: React.FC = () => {
             Cargar Partida
           </Button>
           
-          <Button variant="secondary" size="large">
+          <Button 
+            variant="primary" 
+            size="large"
+          >
             Opciones
           </Button>
           
-          <Button variant="secondary" size="large">
+          <Button 
+            variant="primary" 
+            size="large"
+          >
             Créditos
+          </Button>
+          
+          <Button 
+            variant="primary" 
+            size="large" 
+            onClick={handleLogout}
+          >
+            Cerrar Sesión
           </Button>
         </div>
         
@@ -199,24 +207,11 @@ const MainMenuPage: React.FC = () => {
               )}
             </div>
           )}
-          
-          {!showNewGame && !showLoadGame && (
-            <div className="welcome-section">
-              <h2>¡Bienvenido a Legends of the Realm!</h2>
-              <p>Selecciona una opción del menú para comenzar.</p>
-              
-              <div className="game-info">
-                <h3>Sobre el juego</h3>
-                <p>Legends of the Realm es un juego de estrategia por turnos inspirado en clásicos como Heroes of Might and Magic.</p>
-                <p>Recluta héroes, construye tu ejército, conquista ciudades y derrota a tus enemigos en emocionantes batallas tácticas.</p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
       
       <div className="menu-footer">
-        <p>Legends of the Realm v0.1 - Proyecto Educativo</p>
+        <p>v.1.0.0 - Proyecto educativo</p>
       </div>
     </div>
   );
