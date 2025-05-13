@@ -170,3 +170,51 @@
   color: #e5e7eb;
   font-size: 14px;
 }
+
+/* Estilos específicos para los detalles de la partida */
+.game-details {
+  background: linear-gradient(135deg, #3a2c0f80 0%, #6b4f1d80 100%);
+  border: 2px solid #bfa76f;
+  border-radius: 10px;
+  padding: 15px;
+  margin-top: 15px;
+  width: 100%;
+  text-align: left;
+}
+
+.game-details h4 {
+  color: #e9d8a6;
+  font-size: 1.2rem;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.game-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.turn-badge, .scenario-badge {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.turn-badge {
+  background-color: #5D4037;
+  color: #FFCC80;
+}
+
+.scenario-badge {
+  background-color: #455A64;
+  color: #B2DFDB;
+}
+
+.game-details p {
+  color: #e9d8a6;
+  font-size: 0.9rem;
+  margin: 5px 0;
+}

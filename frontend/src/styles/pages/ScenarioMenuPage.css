@@ -73,7 +73,6 @@
   text-align: center;
   min-width: 180px;
   max-width: 320px;
-  margin: 0 auto;
 }
 .scenario-item.selected {
   border: 3px solid #e9d8a6;
@@ -96,6 +95,63 @@
 .scenario-item p {
   margin: 0 0 2px 0;
   font-size: 0.92rem;
+}
+
+/* Añadir estilos para las insignias de dificultad */
+.scenario-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.difficulty-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.difficulty-badge.easy {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.difficulty-badge.medium {
+  background-color: #FF9800;
+  color: white;
+}
+
+.difficulty-badge.hard {
+  background-color: #F44336;
+  color: white;
+}
+
+/* Si decides usar el combobox, aquí están los estilos para él */
+.scenario-select {
+  background: linear-gradient(135deg, #3a2c0f 80%, #bfa76f 100%);
+  border: 3px solid #bfa76f;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #0007, 0 0 0 3px #6b4f1d inset;
+  color: #f5e9c6;
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-size: 1rem;
+  padding: 10px;
+  width: 100%;
+  margin-bottom: 15px;
+  cursor: pointer;
+}
+
+.scenario-select:focus {
+  border: 3px solid #e9d8a6;
+  outline: none;
+}
+
+.scenario-select option {
+  background-color: #3a2c0f;
+  color: #f5e9c6;
+  padding: 8px;
 }
 
 /* Botones medievales más arriba */

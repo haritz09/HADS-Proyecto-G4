@@ -7,6 +7,7 @@ interface Scenario {
   id: string;
   name: string;
   description: string;
+  difficulty: 'easy' | 'medium' | 'hard'; // Asegurarse de que esta propiedad esté definida
   mapSize: {
     width: number;
     height: number;
@@ -65,11 +66,17 @@ const ScenarioMenuPage: React.FC = () => {
                 onClick={() => setSelectedScenario(scenario.id)}
               >
                 <h4>{scenario.name}</h4>
-                {scenario.mapSize && typeof scenario.mapSize.width === 'number' && typeof scenario.mapSize.height === 'number' ? (
-                  <p>Tamaño: {scenario.mapSize.width}x{scenario.mapSize.height}</p>
-                ) : (
-                  <p>Tamaño: N/D</p>
-                )}
+                <div className="scenario-meta">
+                  <span className={`difficulty-badge ${scenario.difficulty}`}>
+                    {scenario.difficulty === 'easy' ? 'Fácil' : 
+                     scenario.difficulty === 'medium' ? 'Media' : 'Difícil'}
+                  </span>
+                  {scenario.mapSize && typeof scenario.mapSize.width === 'number' && typeof scenario.mapSize.height === 'number' ? (
+                    <span className="map-size">Tamaño: {scenario.mapSize.width}x{scenario.mapSize.height}</span>
+                  ) : (
+                    <span className="map-size">Tamaño: N/D</span>
+                  )}
+                </div>
                 <p>{scenario.description}</p>
               </div>
             ))}

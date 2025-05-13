@@ -1,22 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { gameService, authService } from '../services/api';
+import { gameService } from '../services/api';
 import '../styles/pages/LoadGamePage.css';
 
+// Actualizada para coincidir con la estructura real de la API y añadir campos opcionales
 interface SavedGame {
-  id: string;
+  _id: string;
   name: string;
+  user_id: string;
+  scenario_id: string;
+  created_at: string;
   last_saved: string;
-  game_state: {
-    turn: number;
-    scenario: string;
-  };
+  is_autosave: boolean;
+  cheats_used: string[];
+  game_state?: {
+    turn?: number;
+    current_player?: string;
+  }
 }
 
 const LoadGamePage: React.FC = () => {
   const navigate = useNavigate();
   const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
-  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [selectedGame, setSelectedGame] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,47 +30,60 @@ const LoadGamePage: React.FC = () => {
     const fetchSavedGames = async () => {
       try {
         setLoading(true);
-        // Obtener el usuario actual
-        const profileResponse = await authService.getProfile();
-        const userId = profileResponse.data.id;
+        console.log("Solicitando partidas guardadas...");
         
-        // Obtener las partidas guardadas
-        // La función no acepta parámetros directamente, así que usamos el endpoint adecuado
         const response = await gameService.getSavedGames();
-        setSavedGames(response.data);
-        if (response.data.length > 0) {
-          setSelectedGameId(response.data[0].id);
+        console.log("Respuesta recibida:", response);
+        
+        if (response && response.data) {
+          // Asegúrate de que los datos tengan el formato esperado
+          const games = Array.isArray(response.data) ? response.data : [response.data];
+          setSavedGames(games);
+          if (games.length > 0) {
+            setSelectedGame(games[0]._id);
+          }
+        } else {
+          throw new Error("Formato de respuesta inesperado");
         }
       } catch (err) {
+        console.error("Error al cargar partidas:", err);
         setError('No se pudieron cargar las partidas guardadas');
-        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-    
     fetchSavedGames();
   }, []);
 
   const handleLoadGame = async () => {
-    if (!selectedGameId) return;
+    if (!selectedGame) return;
     try {
-      navigate(`/game/${selectedGameId}`);
+      // Agregamos un manejo más robusto para la carga
+      setLoading(true);
+      console.log(`Intentando cargar partida con ID: ${selectedGame}`);
+      navigate(`/game/${selectedGame}`);
     } catch (err) {
+      console.error("Error al cargar la partida:", err);
       setError('No se pudo cargar la partida');
+    } finally {
+      setLoading(false);
     }
   };
 
   // Formatear fecha para mostrarla de manera legible
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    } catch (e) {
+      console.error("Error al formatear fecha:", e);
+      return "Fecha desconocida";
+    }
   };
 
   return (
-    <div className="load-game-page scenario-menu-page">
-      <div className="scenario-menu-header">Cargar Partida Guardada</div>
-      
+    <div className="scenario-menu-page">
+      <div className="scenario-menu-header">Cargar Partida</div>
       <div className="scenario-selection">
         <h3>Partidas guardadas:</h3>
         {loading ? (
@@ -74,40 +93,43 @@ const LoadGamePage: React.FC = () => {
         ) : savedGames.length === 0 ? (
           <p style={{ color: '#fff' }}>No hay partidas guardadas</p>
         ) : (
-          <div className="saved-games-list">
+          <>
             <select 
-              className="saved-game-select"
-              value={selectedGameId || ''}
-              onChange={(e) => setSelectedGameId(e.target.value)}
+              className="scenario-select"
+              value={selectedGame || ''}
+              onChange={(e) => setSelectedGame(e.target.value)}
             >
+              <option value="" disabled>Selecciona una partida</option>
               {savedGames.map(game => (
-                <option key={game.id} value={game.id}>
-                  {game.name} - Turno: {game.game_state.turn} - Guardado: {formatDate(game.last_saved)}
+                <option key={game._id} value={game._id}>
+                  {game.name} - Guardado: {formatDate(game.last_saved)}
                 </option>
               ))}
             </select>
             
-            {selectedGameId && (
-              <div className="selected-game-details">
+            {selectedGame && (
+              <div className="game-details">
                 {(() => {
-                  const selectedGame = savedGames.find(game => game.id === selectedGameId);
-                  if (!selectedGame) return null;
+                  const game = savedGames.find(g => g._id === selectedGame);
+                  if (!game) return null;
                   
                   return (
                     <>
-                      <h4>{selectedGame.name}</h4>
-                      <p>Escenario: {selectedGame.game_state.scenario}</p>
-                      <p>Turno: {selectedGame.game_state.turn}</p>
-                      <p>Última vez guardado: {formatDate(selectedGame.last_saved)}</p>
+                      <h4>{game.name}</h4>
+                      <div className="game-meta">
+                        <span className="turn-badge">Turno: {game.game_state?.turn || 1}</span>
+                        <span className="scenario-badge">Partida {game.is_autosave ? 'AutoGuardada' : 'Manual'}</span>
+                      </div>
+                      <p>Creado: {formatDate(game.created_at)}</p>
+                      <p>Guardado: {formatDate(game.last_saved)}</p>
                     </>
                   );
                 })()}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
-      
       <div className="scenario-menu-buttons">
         <button
           className="scenario-menu-btn"
@@ -118,7 +140,7 @@ const LoadGamePage: React.FC = () => {
         <button
           className="scenario-menu-btn"
           onClick={handleLoadGame}
-          disabled={!selectedGameId || loading}
+          disabled={!selectedGame || loading}
         >
           Cargar Partida
         </button>
