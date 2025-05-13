@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=MedievalSharp&family=UnifrakturCook:wght@700&display=swap');
+
+/* Fondo con imagen centrada y tamaño fijo para el "cuadro" medieval */
+.scenario-menu-page {
+  min-height: 100vh;
+  width: 100vw;
+  background: url('../../assets/images/background/menu_scenarios.png') no-repeat center center fixed;
+  background-size: contain;
+  background-color: #18120a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+}
+
+/* Eliminar el recuadro grande de .scenario-selection y dejar solo espaciado */
+.scenario-selection {
+  background: none;
+  border: none;
+  box-shadow: none;
+  max-width: 420px;
+  width: 90vw;
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.scenario-menu-header {
+  color: #e9d8a6;
+  text-shadow: 2px 2px 8px #3a2c0f, 0 0 2px #fff8;
+  font-size: 2.7rem; /* Más grande */
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  margin-top: 130px; /* Más abajo */
+  margin-bottom: 12px; /* Separación con el subtítulo */
+  letter-spacing: 1px;
+}
+
+.scenario-selection h3 {
+  color: #e9d8a6;
+  font-size: 1.05rem; /* Más pequeño */
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif; /* Tipografía medieval */
+  margin-bottom: 18px;
+  margin-top: 0;
+  text-shadow: 1px 1px 6px #3a2c0f;
+  text-align: center;
+  font-weight: normal;
+}
+
+.scenarios-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* Recuadro medieval para cada escenario, más pequeño */
+.scenario-item {
+  background: linear-gradient(135deg, #3a2c0f 80%, #bfa76f 100%);
+  border: 3px solid #bfa76f;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #0007, 0 0 0 3px #6b4f1d inset;
+  color: #f5e9c6;
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-size: 0.95rem;
+  padding: 7px 10px 6px 10px;
+  cursor: pointer;
+  transition: border 0.2s, background 0.2s, transform 0.1s;
+  text-align: center;
+  min-width: 180px;
+  max-width: 320px;
+  margin: 0 auto;
+}
+.scenario-item.selected {
+  border: 3px solid #e9d8a6;
+  background: linear-gradient(135deg, #bfa76f 80%, #3a2c0f 100%);
+  color: #3a2c0f;
+  transform: scale(1.04);
+}
+.scenario-item:hover {
+  border: 3px solid #e9d8a6;
+  background: linear-gradient(135deg, #bfa76f 80%, #3a2c0f 100%);
+  color: #3a2c0f;
+}
+
+.scenario-item h4 {
+  font-size: 1.05rem;
+  margin: 0 0 2px 0;
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  letter-spacing: 1px;
+}
+.scenario-item p {
+  margin: 0 0 2px 0;
+  font-size: 0.92rem;
+}
+
+/* Botones medievales más arriba */
+.scenario-menu-buttons {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 170px; /* Más arriba */
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  z-index: 2;
+}
+
+.scenario-menu-btn {
+  background: linear-gradient(90deg, #bfa76f 0%, #6b4f1d 100%);
+  color: #3a2c0f;
+  border: 3px solid #bfa76f;
+  border-radius: 12px;
+  padding: 10px 32px;
+  font-size: 1.08rem;
+  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px #0007;
+  transition: background 0.2s, color 0.2s, transform 0.1s;
+}
+.scenario-menu-btn:disabled {
+  background: #6b4f1d;
+  color: #bfa76f;
+  cursor: not-allowed;
+}
+.scenario-menu-btn:hover:not(:disabled) {
+  background: linear-gradient(90deg, #e9d8a6 0%, #bfa76f 100%);
+  color: #3a2c0f;
+  transform: translateY(-2px) scale(1.04);
+}
+
+.scenario-selection, .scenario-menu-header, .scenario-item, .scenario-menu-btn {
+  font-size: 0.98rem;
+}

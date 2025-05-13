@@ -181,30 +181,20 @@ for success in the game.
     }
   ],
   "strategic_planning": {
-    "summary": "Hero1 is near a gold pile in the southern region. City1 has a barracks but low unit count. No enemy heroes are currently visible.",
-    "opportunities": [
-      "Gold resource nearby",
-      "Unexplored road to the east"
-    ],
-    "threats": [
-      "Low army strength",
-      "Fog of war near eastern border"
-    ],
-    "prioritized_objectives": [
-      "Collect nearby gold",
-      "Scout east for resource nodes"
-    ],
-    "short_term_strategy": "Pick up the nearby gold and move east to explore.",
-    "long_term_strategy": "Expand visibility, build up army, and secure second city."
+    "summary": "Summarize the current game state: hero positions, city status, known enemy info.",
+    "opportunities": [ "Opportunity 1", "Opportunity 2" ],
+    "threats": [ "Threat 1", "Threat 2" ],
+    "prioritized_objectives": [ "Objective 1", "Objective 2" ],
+    "short_term_strategy": "Explain key actions for this turn.",
+    "long_term_strategy": "Plan for next few turns."
   },
-  "reasoning": "The hero has movement points and is close to valuable resources. Exploring east could reveal more opportunities.",
-  "analysis": "The player is in an early-game state with weak military but good positioning to expand economically."
+  "reasoning": "Explain the rationale behind the chosen actions.",
+  "analysis": "Brief game state analysis and implications for future."
 }
 
- Remember:- Think strategically and plan for the long term- Manage your resources efficiently- Adapt your strategy based on the game situation, including areas obscured 
-by fog of war- Balance economic development and military strength- Exploit your strengths and your opponent's weaknesses- Always end your turn with an "endTurn" action- Provide thorough reasoning for your decisions- Stay within the rules and mechanics of the game
- Now, based on the provided game state, analyze the situation, formulate your 
-strategy, and generate your actions, reasoning, and analysis for this turn."""
+Only output this JSON object. Do not wrap it in any tags or add additional explanation.
+"""
+
 
         # Convert game_state to JSON string and insert it into the prompt
         game_state_json = json.dumps(game_state, indent=2)
@@ -261,9 +251,6 @@ This is the strategic planning and context from the current game. Use this to in
                 return response
             except RateLimitError as e:
                 # Handle Groq specific rate limit error
-                print(f"Groq Rate Limit Error: {str(e)}")
-                
-                # Decrease remaining attempts
                 remaining_models -= 1
             
                 # Si no quedan modelos, lanzamos un error
@@ -278,16 +265,15 @@ This is the strategic planning and context from the current game. Use this to in
                 # Cambiar al siguiente modelo
                 model_info = self.switch_to_next_model()
                 model = None  # Reset para usar el modelo actualizado
-                print(f"Rate limit reached. Switching to model: {model_info['model_name']}")
+                print(f"Tokens máximos alcanzados, cambiando de modelo a {model_info['model_name']}")
                 
                 # Mark that we're switching models
                 is_model_switch = True
             except requests.exceptions.HTTPError as e:
                 # Si es un error HTTP 429, analizamos el contenido
                 if e.response.status_code == 429:
-                    error_message = e.response.json()  # Asumimos que la respuesta es JSON
-                    print(f"Error 429: {error_message['error']['message']}")
-
+                    # No mostrar el mensaje de error detallado, solo el mensaje simplificado
+                    
                     # Decrease remaining attempts
                     remaining_models -= 1
                 
@@ -303,7 +289,7 @@ This is the strategic planning and context from the current game. Use this to in
                     # Cambiar al siguiente modelo
                     model_info = self.switch_to_next_model()
                     model = None  # Reset para usar el modelo actualizado
-                    print(f"Rate limit reached. Switching to model: {model_info['model_name']}")
+                    print(f"Tokens máximos alcanzados, cambiando de modelo a {model_info['model_name']}")
                     
                     # Mark that we're switching models
                     is_model_switch = True
@@ -313,7 +299,7 @@ This is the strategic planning and context from the current game. Use this to in
             except APIError as e:
                 # Check if this is a rate limit error (status code 429)
                 if getattr(e, 'status_code', 0) == 429 or "rate limit" in str(e).lower():
-                    print(f"Groq API Error (Rate Limit): {str(e)}")
+                    # No mostrar el mensaje de error detallado, solo el mensaje simplificado
                     
                     # Decrease remaining attempts
                     remaining_models -= 1
@@ -330,7 +316,7 @@ This is the strategic planning and context from the current game. Use this to in
                     # Cambiar al siguiente modelo
                     model_info = self.switch_to_next_model()
                     model = None  # Reset para usar el modelo actualizado
-                    print(f"Rate limit reached. Switching to model: {model_info['model_name']}")
+                    print(f"Tokens máximos alcanzados, cambiando de modelo a {model_info['model_name']}")
                     
                     # Mark that we're switching models
                     is_model_switch = True

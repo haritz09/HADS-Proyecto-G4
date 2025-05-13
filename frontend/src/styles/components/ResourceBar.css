@@ -1,0 +1,48 @@
+.resource-bar {
+  display: flex;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px 20px;
+  border-radius: 5px;
+  justify-content: space-around;
+  margin-bottom: 20px;
+}
+
+.resource-item {
+  display: flex;
+  align-items: center;
+  color: white;
+}
+
+.resource-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+}
+
+.gold-icon {
+  background-color: gold;
+}
+
+.wood-icon {
+  background-color: brown;
+}
+
+.ore-icon {
+  background-color: gray;
+}
+
+.gems-icon {
+  background-color: purple;
+}
+
+.crystal-icon {
+  background-color: lightblue;
+}
+
+.sulfur-icon {
+  background-color: yellow;
+}
+
+.mercury-icon {
+  background-color: silver;
+}

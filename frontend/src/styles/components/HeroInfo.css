@@ -1,0 +1,51 @@
+.hero-info {
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  padding: 15px;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.hero-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.hero-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: #555;
+  margin-right: 15px;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.hero-stat {
+  display: flex;
+  align-items: center;
+}
+
+.hero-army {
+  margin-top: 15px;
+}
+
+.army-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.unit-item {
+  background-color: rgba(60, 60, 60, 0.8);
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}

@@ -1,0 +1,225 @@
+/*
+* Página principal del juego
+* Implementar:
+* - Renderizado del mapa de juego
+* - Panel de información del jugador
+* - Controles de juego
+* - Gestión de eventos del juego
+*/
+
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { gameService } from '../services/api';
+import { GameState, Hero, Position, City, Player } from '../types/game';
+import GameMap from '../components/game/GameMap';
+import ResourceBar from '../components/game/ResourceBar';
+import HeroInfo from '../components/game/HeroInfo';
+import Button from '../components/ui/Button';
+import '../styles/pages/GamePage.css';
+
+const GamePage: React.FC = () => {
+  const { gameId } = useParams<{ gameId: string }>();
+  const navigate = useNavigate();
+  
+  // Estado del juego
+  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Estado UI
+  const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
+  const [gameMessage, setGameMessage] = useState<string>('');
+  
+  // Cargar el estado del juego
+  useEffect(() => {
+    if (!gameId) return;
+    
+    const loadGame = async () => {
+      try {
+        setLoading(true);
+        const response = await gameService.loadGame(gameId);
+        setGameState(response.data);
+        setGameMessage(`¡Partida cargada! Turno ${response.data.turn}`);
+      } catch (err) {
+        setError('Error al cargar la partida');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadGame();
+  }, [gameId]);
+  
+  // Comprobar si es el turno del jugador
+  const isPlayerTurn = (): boolean => {
+    if (!gameState) return false;
+    // Suponiendo que el primer jugador siempre es el jugador humano
+    return gameState.currentPlayer === gameState.players[0].id;
+  };
+  
+  // Obtener recursos del jugador actual
+  const getCurrentPlayerResources = () => {
+    if (!gameState) return { gold: 0, wood: 0, stone: 0, gems: 0, crystal: 0 };
+    const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
+    return currentPlayer ? currentPlayer.resources : { gold: 0, wood: 0, stone: 0, gems: 0, crystal: 0 };
+  };
+  
+  // Obtener héroes del jugador actual
+  const getCurrentPlayerHeroes = () => {
+    if (!gameState) return [];
+    return Object.values(gameState.heroes).filter(h => 
+      h.id.startsWith(gameState.currentPlayer)
+    );
+  };
+  
+  // Manejar click en una casilla del mapa
+  const handleTileClick = async (position: Position) => {
+    if (!gameState || !isPlayerTurn()) return;
+    
+    // Si hay un héroe seleccionado, intentar moverlo
+    if (selectedHero) {
+      try {
+        const response = await gameService.moveHero(gameId!, selectedHero.id, position);
+        setGameState(response.data);
+        setGameMessage(`Héroe movido a (${position.x}, ${position.y})`);
+        
+        // Si el movimiento terminó los puntos del héroe, deseleccionarlo
+        const updatedHero = response.data.heroes[selectedHero.id];
+        if (updatedHero.movementPoints <= 0) {
+          setSelectedHero(null);
+        } else {
+          setSelectedHero(updatedHero);
+        }
+      } catch (err: any) {
+        setGameMessage(err.response?.data?.message || 'Error al mover héroe');
+      }
+    }
+  };
+  
+  // Manejar click en un héroe
+  const handleHeroClick = (heroId: string) => {
+    if (!gameState) return;
+    
+    const hero = gameState.heroes[heroId];
+    if (!hero) return;
+    
+    // Si es un héroe del jugador actual y es su turno, seleccionarlo
+    if (hero.id.startsWith(gameState.currentPlayer) && isPlayerTurn()) {
+      setSelectedHero(hero);
+      setGameMessage(`Héroe ${hero.name} seleccionado`);
+    } else {
+      // Mostrar información del héroe enemigo
+      setSelectedHero(hero);
+      setGameMessage(`Información del héroe ${hero.name}`);
+    }
+  };
+  
+  // Manejar click en una ciudad
+  const handleCityClick = (cityId: string) => {
+    if (!gameState) return;
+    
+    const city = gameState.cities[cityId];
+    if (!city) return;
+    
+    navigate(`/city/${cityId}?gameId=${gameId}`);
+  };
+  
+  // Finalizar turno
+  const handleEndTurn = async () => {
+    if (!gameState || !isPlayerTurn() || !gameId) return;
+    
+    try {
+      const response = await gameService.endTurn(gameId);
+      setGameState(response.data);
+      setSelectedHero(null);
+      
+      const newCurrentPlayer = response.data.players.find((p: Player) =>
+        p.id === response.data.currentPlayer
+      );
+      
+      if (newCurrentPlayer) {
+        setGameMessage(`Turno finalizado. Ahora es el turno de ${newCurrentPlayer.name}`);
+      }
+    } catch (err: any) {
+      setGameMessage(err.response?.data?.message || 'Error al finalizar turno');
+    }
+  };
+  
+  // Guardar partida
+  const handleSaveGame = async () => {
+    if (!gameState || !gameId) return;
+    
+    try {
+      await gameService.saveGame(gameId, gameState);
+      setGameMessage('Partida guardada correctamente');
+    } catch (err: any) {
+      setGameMessage(err.response?.data?.message || 'Error al guardar partida');
+    }
+  };
+  
+  if (loading) {
+    return <div className="loading-screen">Cargando partida...</div>;
+  }
+  
+  if (error || !gameState) {
+    return <div className="error-screen">
+      {error || 'Error desconocido al cargar la partida'}
+      <Button onClick={() => navigate('/menu')}>Volver al menú</Button>
+    </div>;
+  }
+
+  return (
+    <div className="game-page">
+      <div className="game-header">
+        <h1>Legends of the Realm</h1>
+        <ResourceBar resources={getCurrentPlayerResources()} />
+        <div className="game-controls">
+          <Button onClick={handleSaveGame}>Guardar</Button>
+          <Button onClick={() => navigate('/menu')}>Menú</Button>
+        </div>
+      </div>
+      
+      <div className="game-content">
+        <div className="game-sidebar">
+          <div className="game-info">
+            <h2>Turno {gameState.turn}</h2>
+            <p>Jugador: {gameState.players.find(p => p.id === gameState.currentPlayer)?.name}</p>
+            <p className="game-message">{gameMessage}</p>
+          </div>
+          
+          {selectedHero && (
+            <HeroInfo 
+              hero={selectedHero} 
+              onClose={() => setSelectedHero(null)} 
+            />
+          )}
+          
+          {isPlayerTurn() && (
+            <Button 
+              variant="primary" 
+              size="large" 
+              onClick={handleEndTurn}
+              className="end-turn-button"
+            >
+              Finalizar Turno
+            </Button>
+          )}
+        </div>
+        
+        <div className="game-map-container">
+          <GameMap 
+            gameState={gameState}
+            selectedHero={selectedHero}
+            onTileClick={handleTileClick}
+            onHeroClick={handleHeroClick}
+            onCityClick={handleCityClick}
+            isPlayerTurn={isPlayerTurn()}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default GamePage;

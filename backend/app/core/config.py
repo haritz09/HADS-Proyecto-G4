@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     groq_api_key: str = Field(default="your_api_key", env="GROQ_API_KEY")
     secret_key: str = Field(default="your_secret_key", env="SECRET_KEY")
     app_port: str = Field(default="3000", env="APP_PORT")
+    groq_api_key: str = Field(default="", env="GROQ_API_KEY")  # Added this field
     
     # Environment settings
     node_env: str = Field(default="development", env="NODE_ENV")

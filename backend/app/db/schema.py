@@ -182,4 +182,4 @@ class ScenarioBase(BaseModel):
     )
 
 class ScenarioRead(ScenarioBase):
-    id: MongoId = Field(default_factory=lambda: str(ObjectId()), alias="_id)
+    id: MongoId = Field(default_factory=lambda: str(ObjectId()), alias="_id")

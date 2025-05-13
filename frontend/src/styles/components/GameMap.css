@@ -1,0 +1,114 @@
+/* Estilos para el componente GameMap */
+.game-map {
+  display: grid;
+  gap: 0;
+  background-color: var(--ui-panel);
+  border: 2px solid var(--ui-border);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.map-tile {
+  width: var(--tile-size);
+  height: var(--tile-size);
+  position: relative;
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.map-tile:hover {
+  filter: brightness(1.2);
+}
+
+/* Tipos de terreno */
+.terrain-grass {
+  background-color: var(--terrain-grass);
+}
+
+.terrain-forest {
+  background-color: var(--terrain-forest);
+}
+
+.terrain-mountain {
+  background-color: var(--terrain-mountain);
+}
+
+.terrain-water {
+  background-color: var(--terrain-water);
+}
+
+.terrain-desert {
+  background-color: var(--terrain-desert);
+}
+
+.terrain-snow {
+  background-color: var(--terrain-snow);
+}
+
+/* Resaltado para tiles válidos para movimiento */
+.valid-path {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5);
+  animation: pulse 1.5s infinite;
+}
+
+/* Resaltado para héroe seleccionado */
+.selected-hero {
+  box-shadow: inset 0 0 0 3px gold;
+  animation: selectedPulse 1.5s infinite;
+}
+
+/* Iconos para objetos en el mapa */
+.hero-icon, .city-icon, .object-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  z-index: 10;
+}
+
+.hero-icon {
+  z-index: 20; /* Héroes siempre por encima de otros objetos */
+}
+
+.hero-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid currentColor;
+}
+
+/* Colores por jugador */
+.player-red {
+  color: var(--player-red);
+}
+
+.player-blue {
+  color: var(--player-blue);
+}
+
+.player-green {
+  color: var(--player-green);
+}
+
+.player-yellow {
+  color: var(--player-yellow);
+}
+
+/* Animaciones */
+@keyframes pulse {
+  0% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5); }
+  50% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.8); }
+  100% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5); }
+}
+
+@keyframes selectedPulse {
+  0% { box-shadow: inset 0 0 0 3px gold; }
+  50% { box-shadow: inset 0 0 0 3px rgba(255, 215, 0, 0.5); }
+  100% { box-shadow: inset 0 0 0 3px gold; }
+}
