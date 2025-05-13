@@ -47,13 +47,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
       setLoading(true);
       setError(null);
       
-      // Llamar a la API de login (ahora solo con username y password)
+      // Llamar a la API de login
       await authService.login(username, password);
       
       // Actualizar estado de autenticación
       setAuth(true);
       
-      // Redirigir a la página principal (MainMenuPage)
+      // Redirigir a la página principal (ya está correcto)
       navigate('/menu');
       
     } catch (err: any) {

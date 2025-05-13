@@ -82,8 +82,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Función para registrarse
   const register = async (username: string, email: string, password: string) => {
     const response = await authService.register(username, email, password);
-    setUser(response.data.user);
-    setIsAuthenticated(true);
+    // No establecemos el estado de autenticación después del registro
+    // Para obligar al usuario a iniciar sesión explícitamente
+    return response.data;
   };
   
   // Función para cerrar sesión

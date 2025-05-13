@@ -62,11 +62,11 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
       // Llamar a la API de registro
       await authService.register(username, email, password);
       
-      // Actualizar estado de autenticación
-      setAuth(true);
+      // No actualizamos el estado de autenticación aquí
+      // Ya que queremos que el usuario inicie sesión explícitamente
       
-      // Redirigir a la página principal
-      navigate('/menu');
+      // Redirigir a la página de login en lugar del menú
+      navigate('/login');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al registrarse. Inténtalo de nuevo más tarde.');
     } finally {
