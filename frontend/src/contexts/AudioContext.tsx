@@ -230,30 +230,15 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         landingAudioRef.current.currentTime = 0;
         console.log("Iniciando reproducción...");
         
-        // Primero intentamos reproducir con volumen 0 (silenciado)
-        const originalVolume = landingAudioRef.current.volume;
-        landingAudioRef.current.volume = 0;
+        // Establecer directamente el volumen deseado sin iniciar en 0
+        // Esto solucionará el problema del primer clic
+        landingAudioRef.current.volume = isMuted ? 0 : volume;
         
         const playPromise = landingAudioRef.current.play();
         if (playPromise !== undefined) {
           await playPromise;
           
-          // Si la reproducción tiene éxito, restauramos el volumen gradualmente
           console.log("Reproducción iniciada con éxito");
-          
-          // Restaurar volumen gradualmente para evitar saltos de sonido
-          const fadeIn = () => {
-            if (landingAudioRef.current) {
-              const newVol = Math.min(landingAudioRef.current.volume + 0.1, originalVolume);
-              landingAudioRef.current.volume = newVol;
-              
-              if (newVol < originalVolume) {
-                setTimeout(fadeIn, 50);
-              }
-            }
-          };
-          
-          fadeIn();
           setCurrentTrack('landing');
           setIsPlaying(true);
           return true;
@@ -267,7 +252,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           // Crear un nuevo elemento de audio e intentar reproducirlo con la ruta ABSOLUTA correcta
           const newAudio = new Audio('/assets/audio/landing-theme.mp3');
           newAudio.loop = true;
-          newAudio.volume = volume;
+          newAudio.volume = isMuted ? 0 : volume; // Usar volumen actual directamente
           
           await newAudio.play();
           
@@ -303,30 +288,14 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       try {
         gameAudioRef.current.currentTime = 0;
         
-        // Mismo enfoque que para landing music
-        const originalVolume = gameAudioRef.current.volume;
-        gameAudioRef.current.volume = 0;
+        // Establecer volumen directamente
+        gameAudioRef.current.volume = isMuted ? 0 : volume;
         
         const playPromise = gameAudioRef.current.play();
         if (playPromise !== undefined) {
           await playPromise;
           
-          // Si la reproducción tiene éxito, restauramos el volumen gradualmente
           console.log("Reproducción de música de juego iniciada con éxito");
-          
-          // Restaurar volumen gradualmente
-          const fadeIn = () => {
-            if (gameAudioRef.current) {
-              const newVol = Math.min(gameAudioRef.current.volume + 0.1, originalVolume);
-              gameAudioRef.current.volume = newVol;
-              
-              if (newVol < originalVolume) {
-                setTimeout(fadeIn, 50);
-              }
-            }
-          };
-          
-          fadeIn();
           setCurrentTrack('game');
           setIsPlaying(true);
           return true;
@@ -355,9 +324,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (isPlaying) {
       pauseAllTracks();
     } else {
-      if (currentTrack === 'landing') playLandingMusic();
-      else if (currentTrack === 'game') playGameMusic();
-      else playLandingMusic(); // Por defecto, reproducir landing si no hay track seleccionado
+      // Asegurarnos de que haya un valor actual del track antes de intentar reproducir
+      const track = currentTrack !== 'none' ? currentTrack : 'landing';
+      
+      if (track === 'landing') {
+        // Al iniciar la reproducción, asegúrate que el volumen esté configurado correctamente
+        if (landingAudioRef.current) {
+          landingAudioRef.current.volume = isMuted ? 0 : volume;
+        }
+        playLandingMusic();
+      } else if (track === 'game') {
+        // Al iniciar la reproducción, asegúrate que el volumen esté configurado correctamente
+        if (gameAudioRef.current) {
+          gameAudioRef.current.volume = isMuted ? 0 : volume;
+        }
+        playGameMusic();
+      }
     }
   };
   

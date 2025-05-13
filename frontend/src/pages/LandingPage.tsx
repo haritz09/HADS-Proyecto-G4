@@ -5,44 +5,9 @@ import '../styles/pages/LandingPage.css';
 
 const LandingPage: React.FC = () => {
   const { isPlaying, playLandingMusic } = useAudio();
-  const [showMusicButton, setShowMusicButton] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   
-  const handlePlayMusic = async () => {
-    try {
-      console.log("Intentando reproducir música desde el botón...");
-      
-      // Primero intentamos con el AudioContext
-      const success = await playLandingMusic();
-      
-      // Si falla, intentamos reproducir directamente desde el elemento HTML
-      if (!success && audioRef.current) {
-        console.log("Intentando reproducir desde el elemento HTML de audio");
-        try {
-          await audioRef.current.play();
-          console.log("Reproducción exitosa desde elemento HTML");
-          setShowMusicButton(false);
-          setErrorMessage(null);
-          return;
-        } catch (htmlErr) {
-          console.error("Error reproduciendo desde elemento HTML:", htmlErr);
-          setErrorMessage("No se pudo reproducir la música. Verifica los archivos de audio.");
-        }
-      } else if (success) {
-        console.log("Reproducción exitosa desde AudioContext");
-        setShowMusicButton(false);
-        setErrorMessage(null);
-      } else {
-        console.log("Reproducción fallida");
-        setErrorMessage("No se pudo reproducir la música. Por favor, verifica que los archivos de audio existan y sean compatibles.");
-      }
-    } catch (error) {
-      console.error("Error al reproducir música:", error);
-      setErrorMessage("Error al reproducir música: " + (error instanceof Error ? error.message : "Error desconocido"));
-    }
-  };
-
   // Intentar verificar si los archivos de audio existen
   useEffect(() => {
     const checkAudioFiles = async () => {
@@ -61,15 +26,6 @@ const LandingPage: React.FC = () => {
 
   return (
     <div className="landing-page">
-      {showMusicButton && (
-        <button 
-          className="music-start-button"
-          onClick={handlePlayMusic}
-        >
-          ▶ Activar Música
-        </button>
-      )}
-      
       {errorMessage && (
         <div className="error-message">
           {errorMessage}
