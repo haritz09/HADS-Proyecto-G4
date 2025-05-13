@@ -30,23 +30,36 @@ API.interceptors.request.use(
 
 // Servicios de autenticación
 export const authService = {
-  login: async (username: string, password: string, email: string) => {
-    const response = await API.post('/auth/login', { username, password, email });
-    if (response.data && response.data.token) {
-      localStorage.setItem('authToken', response.data.token);
-      API.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+  login: async (username: string, password: string) => {
+    // El endpoint de login espera un form-data, no un JSON
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
+    
+    const response = await API.post('/auth/login', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+    
+    if (response.data && response.data.access_token) {
+      localStorage.setItem('authToken', response.data.access_token);
+      API.defaults.headers.common['Authorization'] = `Bearer ${response.data.access_token}`;
     }
     return response.data;
   },
   
   register: async (username: string, email: string, password: string) => {
     const response = await API.post('/auth/register', { username, email, password });
-    localStorage.setItem('authToken', response.data.token);
+    if (response.data && response.data.access_token) {
+      localStorage.setItem('authToken', response.data.access_token);
+    }
     return response.data;
   },
   
   logout: () => {
     localStorage.removeItem('authToken');
+    delete API.defaults.headers.common['Authorization'];
   },
   
   getProfile: async () => {
@@ -61,11 +74,22 @@ export const gameService = {
   },
   
   createGame: async (scenarioId: string) => {
-    return await API.post('/games', { scenarioId });
+    // Este endpoint espera un objeto game_data completo, no solo el scenarioId
+    // Esta es una implementación simplificada
+    const gameData = {
+      name: `Nueva partida - ${new Date().toISOString()}`,
+      scenario_id: scenarioId,
+      // El backend asignará otros valores como user_id y timestamps
+    };
+    return await API.post('/games', gameData);
   },
   
   getSavedGames: async () => {
-    return await API.get('/games');
+    // Este endpoint requiere el user_id como query param
+    // El user_id se obtendrá del token en el backend
+    const profile = await authService.getProfile();
+    const userId = profile.data._id;
+    return await API.get(`/games?user_id=${userId}`);
   },
   
   loadGame: async (gameId: string) => {
@@ -77,25 +101,54 @@ export const gameService = {
   },
   
   // Acciones del juego
+  // El backend implementa un único endpoint para todas las acciones
   moveHero: async (gameId: string, heroId: string, destination: { x: number, y: number }) => {
-    return await API.post(`/games/${gameId}/actions/move`, { heroId, destination });
+    return await API.post(`/games/${gameId}/action`, {
+      type: "MOVE_HERO",
+      hero_id: heroId,
+      target_position: destination
+    });
   },
   
   interactWithObject: async (gameId: string, heroId: string, objectId: string) => {
-    return await API.post(`/games/${gameId}/actions/interact`, { heroId, objectId });
+    return await API.post(`/games/${gameId}/action`, {
+      type: "INTERACT_OBJECT",
+      hero_id: heroId,
+      object_id: objectId
+    });
   },
   
   endTurn: async (gameId: string) => {
-    return await API.post(`/games/${gameId}/actions/endTurn`);
+    return await API.post(`/games/${gameId}/action`, {
+      type: "END_TURN"
+    });
   },
   
   // Gestión de ciudades
   buildBuilding: async (gameId: string, cityId: string, buildingId: string) => {
-    return await API.post(`/games/${gameId}/cities/${cityId}/build`, { buildingId });
+    return await API.post(`/games/${gameId}/action`, {
+      type: "BUILD_BUILDING",
+      city_id: cityId,
+      building_id: buildingId
+    });
   },
   
-  recruitUnits: async (gameId: string, cityId: string, unitId: string, amount: number, heroId?: string) => {
-    return await API.post(`/games/${gameId}/cities/${cityId}/recruit`, { unitId, amount, heroId });
+  recruitUnits: async (gameId: string, cityId: string, unitType: string, amount: number, heroId?: string) => {
+    return await API.post(`/games/${gameId}/action`, {
+      type: "RECRUIT_UNITS",
+      city_id: cityId,
+      unit_type: unitType,
+      amount: amount,
+      hero_id: heroId
+    });
+  },
+  
+  heroAttack: async (gameId: string, attackerId: string, defenderId: string) => {
+    return await API.post(`/games/${gameId}/action`, {
+      type: "HERO_ATTACK",
+      attacker_id: attackerId,
+      defender_id: defenderId
+    });
   }
 };
 

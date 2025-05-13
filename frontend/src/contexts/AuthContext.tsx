@@ -61,9 +61,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
   
   // Función para iniciar sesión
-  const login = async (username: string, password: string, email: string) => {
-    const response = await authService.login(username, password, email);
-    setUser(response.data.user);
+  const login = async (username: string, password: string) => {
+    const response = await authService.login(username, password);
+    
+    // Asegurarnos de que estamos usando la estructura correcta del objeto de respuesta
+    // y actualizando el estado de usuario correctamente
+    if (response.data && response.data.user) {
+      setUser(response.data.user);
+    } else {
+      // Si la respuesta no incluye user, intentamos usar la estructura completa
+      // o realizar una solicitud adicional para obtener el perfil
+      const profileResponse = await authService.getProfile();
+      setUser(profileResponse.data);
+    }
+    
+    // Establecer isAuthenticated a true explícitamente
     setIsAuthenticated(true);
   };
   

@@ -47,14 +47,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
       setLoading(true);
       setError(null);
       
-      // Llamar a la API de login (ajustar para incluir email si es necesario)
-      await authService.login(username, password, email);
+      // Llamar a la API de login (ahora solo con username y password)
+      await authService.login(username, password);
       
       // Actualizar estado de autenticación
       setAuth(true);
       
-      // Redirigir a la página principal
+      // Redirigir a la página principal (MainMenuPage)
       navigate('/menu');
+      
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.');
     } finally {

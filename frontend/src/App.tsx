@@ -48,10 +48,7 @@ const App: React.FC = () => {
       
       <Routes>
         {/* Public routes */}
-        {/* Original root route - uncomment to revert change */}
         <Route path="/" element={<LandingPage />} />
-        {/* Temporary change - MainMenuPage as root */}
-        {/*<Route path="/" element={<MainMenuPage />} />  */}
         
         <Route path="/login" element={<LoginPage setAuth={handleLogin} />} />
         <Route path="/register" element={<RegisterPage setAuth={handleRegister} />} />
