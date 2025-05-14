@@ -1,0 +1,83 @@
+.credits-map-container {
+  width: 100%;
+  height: 500px;
+  background-color: #0a0a0a;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.loading-map {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e9d8a6;
+  font-size: 1.5rem;
+  height: 100%;
+  width: 100%;
+  text-shadow: 0 0 10px #000000;
+  background: linear-gradient(135deg, #3a2c0f 0%, #6b4f1d 100%);
+}
+
+.map-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.map-view {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+  transition: transform 0.05s ease-out;
+}
+
+.credits-map-canvas {
+  display: block;
+  cursor: grab;
+}
+
+.credits-map-canvas:active {
+  cursor: grabbing;
+}
+
+.map-controls {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  padding: 10px;
+  border-radius: 5px;
+  color: #e9d8a6;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.map-controls button {
+  background: linear-gradient(90deg, #bfa76f 0%, #6b4f1d 100%);
+  color: #3a2c0f;
+  border: 2px solid #bfa76f;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.9rem;
+  font-family: 'MedievalSharp', serif;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  margin: 2px 0;
+}
+
+.map-controls button:hover {
+  background: linear-gradient(90deg, #e9d8a6 0%, #bfa76f 100%);
+  transform: translateY(-1px);
+}
+
+.map-controls p {
+  margin: 5px 0;
+  font-size: 0.9rem;
+}

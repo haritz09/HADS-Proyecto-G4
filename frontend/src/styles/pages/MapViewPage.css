@@ -1,0 +1,119 @@
+.map-view-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--ui-background);
+  color: var(--ui-text);
+  padding: 20px;
+}
+
+.map-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.map-view-header h1 {
+  font-size: 2rem;
+  color: var(--secondary-light);
+  margin: 0;
+  font-family: 'MedievalSharp', serif;
+}
+
+.map-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.map-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-grow: 1;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.game-map-grid {
+  display: grid;
+  gap: 0;
+  border: 2px solid var(--ui-border);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.map-tile {
+  width: 48px;
+  height: 48px;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.1s ease-in-out;
+}
+
+.map-tile:hover {
+  transform: scale(1.05);
+  z-index: 2;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+.tile-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tile-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(0,0,0,0.1) 100%);
+}
+
+.map-info {
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.map-info h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: var(--secondary-light);
+  font-family: 'MedievalSharp', serif;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.loading-screen {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  font-size: 1.5rem;
+  color: var(--secondary);
+  background-color: var(--ui-background);
+}

@@ -102,6 +102,14 @@ const MainMenuPage: React.FC = () => {
           <Button 
             variant="primary" 
             size="large"
+            onClick={() => navigate('/map-view')}
+          >
+            Ver Mapa
+          </Button>
+          
+          <Button 
+            variant="primary" 
+            size="large"
           >
             Opciones
           </Button>
