@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: flex-start;
   position: relative;
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   /* Reutilizamos la mayoría de los estilos de scenario-menu-page */
 }
 
@@ -34,7 +34,7 @@
   color: #e9d8a6;
   text-shadow: 2px 2px 8px #3a2c0f, 0 0 2px #fff8;
   font-size: 2.7rem; /* Más grande */
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   margin-top: 130px; /* Más abajo */
   margin-bottom: 12px; /* Separación con el subtítulo */
   letter-spacing: 1px;
@@ -43,7 +43,7 @@
 .load-game-selection h3 {
   color: #e9d8a6;
   font-size: 1.05rem; /* Más pequeño */
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif; /* Tipografía medieval */
+  font-family: 'MedievalSharp', serif; /* Tipografía medieval */
   margin-bottom: 18px;
   margin-top: 0;
   text-shadow: 1px 1px 6px #3a2c0f;
@@ -103,7 +103,7 @@
   border-radius: 12px;
   padding: 10px 32px;
   font-size: 1.08rem;
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 2px 8px #0007;
@@ -187,6 +187,7 @@
   font-size: 1.2rem;
   margin: 0 0 8px 0;
   text-align: center;
+  font-family: 'MedievalSharp', serif;
 }
 
 .game-meta {
@@ -201,6 +202,7 @@
   border-radius: 12px;
   font-size: 0.85rem;
   font-weight: bold;
+  font-family: 'MedievalSharp', serif;
 }
 
 .turn-badge {
@@ -217,4 +219,5 @@
   color: #e9d8a6;
   font-size: 0.9rem;
   margin: 5px 0;
+  font-family: 'MedievalSharp', serif;
 }

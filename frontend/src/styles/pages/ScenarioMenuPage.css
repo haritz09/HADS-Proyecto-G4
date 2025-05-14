@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: flex-start;
   position: relative;
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
 }
 
 /* Eliminar el recuadro grande de .scenario-selection y dejar solo espaciado */
@@ -33,7 +33,7 @@
   color: #e9d8a6;
   text-shadow: 2px 2px 8px #3a2c0f, 0 0 2px #fff8;
   font-size: 2.7rem; /* Más grande */
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   margin-top: 130px; /* Más abajo */
   margin-bottom: 12px; /* Separación con el subtítulo */
   letter-spacing: 1px;
@@ -42,7 +42,7 @@
 .scenario-selection h3 {
   color: #e9d8a6;
   font-size: 1.05rem; /* Más pequeño */
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif; /* Tipografía medieval */
+  font-family: 'MedievalSharp', serif; /* Tipografía medieval */
   margin-bottom: 18px;
   margin-top: 0;
   text-shadow: 1px 1px 6px #3a2c0f;
@@ -65,7 +65,7 @@
   border-radius: 12px;
   box-shadow: 0 2px 8px #0007, 0 0 0 3px #6b4f1d inset;
   color: #f5e9c6;
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   font-size: 0.95rem;
   padding: 7px 10px 6px 10px;
   cursor: pointer;
@@ -89,7 +89,7 @@
 .scenario-item h4 {
   font-size: 1.05rem;
   margin: 0 0 2px 0;
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   letter-spacing: 1px;
 }
 .scenario-item p {
@@ -135,7 +135,7 @@
   border-radius: 12px;
   box-shadow: 0 2px 8px #0007, 0 0 0 3px #6b4f1d inset;
   color: #f5e9c6;
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   font-size: 1rem;
   padding: 10px;
   width: 100%;
@@ -173,7 +173,7 @@
   border-radius: 12px;
   padding: 10px 32px;
   font-size: 1.08rem;
-  font-family: 'UnifrakturCook', 'MedievalSharp', 'Cinzel Decorative', serif;
+  font-family: 'MedievalSharp', serif;
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 2px 8px #0007;
