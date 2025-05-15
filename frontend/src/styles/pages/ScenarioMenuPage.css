@@ -22,7 +22,7 @@
   box-shadow: none;
   max-width: 420px;
   width: 90vw;
-  margin: 0 auto;
+  margin: 0 0 0 60px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -179,12 +179,12 @@
   box-shadow: 0 2px 8px #0007;
   transition: background 0.2s, color 0.2s, transform 0.1s;
 }
-.scenario-menu-btn:disabled {
+.scenario-menu-btn {
   background: #6b4f1d;
   color: #bfa76f;
-  cursor: not-allowed;
+  /* cursor: not-allowed; */
 }
-.scenario-menu-btn:hover:not(:disabled) {
+.scenario-menu-btn:hover {
   background: linear-gradient(90deg, #e9d8a6 0%, #bfa76f 100%);
   color: #3a2c0f;
   transform: translateY(-2px) scale(1.04);

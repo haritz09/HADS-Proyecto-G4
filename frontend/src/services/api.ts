@@ -13,7 +13,10 @@ const API = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json'
   },
+  withCredentials: true,
+  timeout: 5000
 });
 
 // Interceptor para agregar el token de autenticación
@@ -23,6 +26,8 @@ API.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // Ensure headers are accessible
+    config.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000';
     return config;
   },
   (error) => Promise.reject(error)
@@ -33,6 +38,18 @@ const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
+
+// Add response interceptor for better error handling
+API.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('authToken');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Servicios de autenticación
 export const authService = {
@@ -92,45 +109,16 @@ export const gameService = {
   
   getSavedGames: async () => {
     try {
-      // Cambiando de '/api/games' a '/api/games/saved' o la ruta correcta
-      // Prueba con estas diferentes rutas según esté configurado tu backend
-      const response = await axios.get('/api/games/user', {
-        headers: getAuthHeaders()
-      });
-      console.log("getSavedGames response:", response);
-      return response;
+      console.log('DEBUG Frontend: Inicio getSavedGames');
+      const profileResponse = await API.get('/auth/profile');
+      console.log('DEBUG Frontend: Profile response:', profileResponse.data);
+      
+      const gamesResponse = await API.get('/games');
+      console.log('DEBUG Frontend: Games response:', gamesResponse.data);
+      return gamesResponse;
     } catch (error) {
-      // Si falla, intenta con una ruta alternativa
-      try {
-        const response = await axios.get('/api/saved-games', {
-          headers: getAuthHeaders()
-        });
-        console.log("getSavedGames alternate response:", response);
-        return response;
-      } catch (alternateError) {
-        console.error("Error en getSavedGames (ruta alternativa):", alternateError);
-        
-        // Como último recurso, carga datos de ejemplo para pruebas
-        console.warn("Usando datos de ejemplo para desarrollo");
-        return {
-          data: [
-            {
-              _id: "6823bf6543c82084d1b3d8e8",
-              user_id: "6823b9d8774d15c781dc092e",
-              name: "Partida de prueba automatizada",
-              scenario_id: "6823bd1f6cd2ee90c287759a",
-              is_autosave: false,
-              cheats_used: [],
-              game_state: {
-                turn: 1,
-                current_player: "player"
-              },
-              created_at: "2025-05-13T21:53:41.403+00:00",
-              last_saved: "2025-05-13T21:53:41.403+00:00"
-            }
-          ]
-        };
-      }
+      console.error('DEBUG Frontend: Error in getSavedGames:', error);
+      throw error;
     }
   },
   
@@ -142,54 +130,52 @@ export const gameService = {
     return await API.post(`/games/${gameId}/save`, gameState);
   },
   
-  // Acciones del juego
-  // El backend implementa un único endpoint para todas las acciones
-  moveHero: async (gameId: string, heroId: string, destination: { x: number, y: number }) => {
-    return await API.post(`/games/${gameId}/action`, {
-      type: "MOVE_HERO",
-      hero_id: heroId,
-      target_position: destination
-    });
-  },
-  
-  interactWithObject: async (gameId: string, heroId: string, objectId: string) => {
-    return await API.post(`/games/${gameId}/action`, {
-      type: "INTERACT_OBJECT",
-      hero_id: heroId,
-      object_id: objectId
-    });
-  },
-  
-  endTurn: async (gameId: string) => {
-    return await API.post(`/games/${gameId}/action`, {
-      type: "END_TURN"
-    });
+  // Acciones del juego usando el sistema unificado de acciones
+  executeAction: async (gameId: string, action: any) => {
+    return await API.post(`/games/${gameId}/action`, action);
   },
   
   // Gestión de ciudades
   buildBuilding: async (gameId: string, cityId: string, buildingId: string) => {
     return await API.post(`/games/${gameId}/action`, {
-      type: "BUILD_BUILDING",
-      city_id: cityId,
-      building_id: buildingId
+      type: 'buildStructure',
+      details: {
+        cityId,
+        buildingId
+      }
     });
   },
   
   recruitUnits: async (gameId: string, cityId: string, unitType: string, amount: number, heroId?: string) => {
     return await API.post(`/games/${gameId}/action`, {
-      type: "RECRUIT_UNITS",
-      city_id: cityId,
-      unit_type: unitType,
-      amount: amount,
-      hero_id: heroId
+      type: 'recruitUnits',
+      details: {
+        cityId,
+        unitType,
+        amount,
+        heroId
+      }
+    });
+  },
+
+  transferTroops: async (gameId: string, sourceId: string, targetId: string, units: any[]) => {
+    return await API.post(`/games/${gameId}/action`, {
+      type: 'transfer',
+      details: {
+        sourceId,
+        targetId,
+        units
+      }
     });
   },
   
   heroAttack: async (gameId: string, attackerId: string, defenderId: string) => {
     return await API.post(`/games/${gameId}/action`, {
-      type: "HERO_ATTACK",
-      attacker_id: attackerId,
-      defender_id: defenderId
+      type: 'combat',
+      details: {
+        attackerId,
+        defenderId
+      }
     });
   }
 };

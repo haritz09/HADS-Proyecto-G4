@@ -10,7 +10,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { gameService } from '../services/api';
-import { City, Resources, Hero, Player } from '../types/game';
+import { City, Resources, Hero } from '../types/game';
 import CityView from '../components/game/CityView';
 import Button from '../components/ui/Button';
 import '../styles/pages/CityPage.css';
@@ -24,7 +24,7 @@ const CityPage: React.FC = () => {
   // Estados
   const [city, setCity] = useState<City | null>(null);
   const [playerResources, setPlayerResources] = useState<Resources>({
-    gold: 0, wood: 0, stone: 0, gems: 0, crystal: 0
+    gold: 0, wood: 0, stone: 0
   });
   const [availableHeroes, setAvailableHeroes] = useState<Hero[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,11 +50,11 @@ const CityPage: React.FC = () => {
         
         setCity(cityData);
         
-        // Obtener recursos del jugador actual
-        const currentPlayer = gameData.players.find((p: Player) => p.id === gameData.currentPlayer);
-        if (currentPlayer) {
-          setPlayerResources(currentPlayer.resources);
-        }
+        // // Obtener recursos del jugador actual
+        // const currentPlayer = gameData.players.find((p: Player) => p.id === gameData.currentPlayer);
+        // if (currentPlayer) {
+        //   setPlayerResources(currentPlayer.resources);
+        // }
         
         // Obtener héroes del jugador que podrían recibir unidades
         const playerHeroes = (Object.values(gameData.heroes) as Hero[]).filter((h) =>

@@ -8,7 +8,7 @@
 */
 
 import { useState } from 'react';
-import { City, Resources, Unit, Building, Hero } from '../../types/game';
+import { City, Resources, Unit, Building, Hero, ArmyUnit } from '../../types/game';
 import Button from '../ui/Button';
 import '../../styles/components/CityView.css';
 
@@ -214,12 +214,12 @@ const CityView: React.FC<CityViewProps> = ({
           <h3>Guarnición</h3>
           <div className="garrison-units">
             {city.garrison.length > 0 ? (
-              city.garrison.map(unit => (
-                <div key={unit.id} className="garrison-unit">
+              city.garrison.map((unit: ArmyUnit) => (
+                <div key={`${unit.type}-${unit.count}`} className="garrison-unit">
                   <div className="unit-icon"></div>
                   <div className="unit-info">
-                    <div className="unit-name">{unit.name}</div>
-                    <div className="unit-quantity">{unit.quantity}</div>
+                    <div className="unit-name">{unit.type}</div>
+                    <div className="unit-quantity">{unit.count}</div>
                   </div>
                 </div>
               ))

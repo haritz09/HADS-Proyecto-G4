@@ -3,6 +3,78 @@ Módulo para mostrar figuras (héroes, edificios, elementos especiales) en el ma
 """
 from backend.app.db.schema import Position, GameMap, Heroe, Building
 from typing import List, Dict, Any
+import pygame
+
+class AnimatedSprite:
+    def __init__(self, sprite_sheet_path, frame_width, frame_height, num_frames, animation_speed=0.1, repeat=True):
+        """
+        sprite_sheet_path: ruta al archivo de la imagen sprite sheet
+        frame_width: ancho de cada frame
+        frame_height: alto de cada frame
+        num_frames: número de frames en la animación
+        animation_speed: tiempo (en segundos) entre frames
+        repeat: si la animación debe repetirse
+        """
+        self.sprite_sheet = pygame.image.load(sprite_sheet_path).convert_alpha()
+        self.frame_width = frame_width
+        self.frame_height = frame_height
+        self.num_frames = num_frames
+        self.frames = self._split_frames()
+        self.current_frame = 0
+        self.animation_speed = animation_speed
+        self.repeat = repeat
+        self.is_playing = True
+        self.last_update = pygame.time.get_ticks()
+
+    def _split_frames(self):
+        frames = []
+        for i in range(self.num_frames):
+            rect = pygame.Rect(i * self.frame_width, 0, self.frame_width, self.frame_height)
+            frame = self.sprite_sheet.subsurface(rect)
+            frames.append(frame)
+        return frames
+
+    def update(self, is_moving=True):
+        """
+        Debe llamarse en cada ciclo del juego. Si is_moving es True, avanza la animación.
+        Si is_moving es False, se queda en el primer frame (reposo).
+        """
+        if not self.is_playing or not is_moving:
+            self.current_frame = 0
+            return
+        now = pygame.time.get_ticks()
+        if now - self.last_update > self.animation_speed * 1000:
+            self.last_update = now
+            self.current_frame += 1
+            if self.current_frame >= self.num_frames:
+                if self.repeat:
+                    self.current_frame = 0
+                else:
+                    self.current_frame = self.num_frames - 1
+                    self.is_playing = False
+
+    def draw(self, surface, x, y):
+        """Dibuja el frame actual en la posición (x, y) sobre la surface dada."""
+        surface.blit(self.frames[self.current_frame], (x, y))
+
+    def play(self):
+        self.is_playing = True
+
+    def stop(self):
+        self.is_playing = False
+        self.current_frame = 0
+
+    def set_repeat(self, repeat: bool):
+        self.repeat = repeat
+
+# Ejemplo de integración con process_movement (pseudocódigo):
+#
+# def game_loop():
+#     ...
+#     is_moving = process_movement(hero_position, direction, ...)
+#     animated_sprite.update(is_moving)
+#     animated_sprite.draw(screen, hero_position.x, hero_position.y)
+#     ...
 
 def render_hero_on_map(hero: Heroe, game_map: GameMap) -> None:
     """Coloca la figura del héroe en la posición actual en el mapa (modifica el objeto game_map.tiles)."""

@@ -7,8 +7,9 @@
 */
 
 import React, { createContext, useState, useContext } from 'react';
-import { GameState, Hero, Position, Resources, Player } from '../types/game';
+import { GameState, Hero, Position, Resources } from '../types/game';
 import { gameService } from '../services/api';
+import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
 
 interface GameContextType {
   gameState: GameState | null;
@@ -94,17 +95,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
-      const response = await gameService.moveHero(gameId, heroId, destination);
-      setGameState(response.data);
+      const action = createMoveHeroAction(heroId, destination);
+      const response = await executeAction(gameId, action);
+      
+      setGameState(response.data.game_state);
       
       // Actualizar el héroe seleccionado si es necesario
       if (selectedHero && selectedHero.id === heroId) {
-        setSelectedHero(response.data.heroes[heroId]);
+        const updatedHero = response.data.game_state.player.heroes.find(
+          (h: Hero) => h.id === heroId
+        );
+        setSelectedHero(updatedHero || null);
       }
       
-      setGameMessage(`Héroe movido a (${destination.x}, ${destination.y})`);
+      setGameMessage(response.data.result.message || `Héroe movido a (${destination.x}, ${destination.y})`);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al mover el héroe');
+      setError(err.response?.data?.detail || 'Error al mover el héroe');
     } finally {
       setLoading(false);
     }
@@ -128,19 +134,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
-      const response = await gameService.endTurn(gameId);
-      setGameState(response.data);
+      const action = createEndTurnAction();
+      const response = await executeAction(gameId, action);
+      
+      setGameState(response.data.game_state);
       setSelectedHero(null);
       
-      const newCurrentPlayer = response.data.players.find((p: Player) =>
-        p.id === response.data.currentPlayer
-      );
-      
-      if (newCurrentPlayer) {
-        setGameMessage(`Turno finalizado. Ahora es el turno de ${newCurrentPlayer.name}`);
+      // Usa la estructura correcta del estado del juego
+      if (response.data.game_state.current_player === 'ai') {
+        setGameMessage('Turno finalizado. Ahora es el turno de la IA');
+      } else {
+        setGameMessage('Turno finalizado. Es tu turno');
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al finalizar el turno');
+      setError(err.response?.data?.detail || 'Error al finalizar el turno');
     } finally {
       setLoading(false);
     }

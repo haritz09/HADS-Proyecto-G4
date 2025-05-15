@@ -5,13 +5,20 @@ from backend.app.api.api_v1.router import api_router
 
 app = FastAPI()
 
-# Configurar CORS
+origins = [
+    "http://localhost:3000",    # React dev server
+    "http://127.0.0.1:3000",   # Alternative local address
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Origen de tu frontend
+    allow_origins=origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
-    allow_methods=["*"],  # Permitir todos los métodos HTTP
-    allow_headers=["*"],  # Permitir todos los headers
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 app.include_router(api_router, prefix="/api")

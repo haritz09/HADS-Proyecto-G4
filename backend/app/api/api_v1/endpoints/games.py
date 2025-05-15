@@ -1,7 +1,7 @@
 from backend.app.game.logic import process_end_turn, process_hero_attack, process_hero_movement, process_recruitment, transfer_troops_between_hero_and_castle
 from backend.app.game.cheats import process_cheat
 from fastapi import APIRouter, HTTPException, status, Query, Depends, Body
-from typing import List
+from typing import List, Optional
 from backend.app.db.schema import GameRead, GameState
 from backend.app.api.api_v1.endpoints.auth import get_current_user
 from backend.app.db.crud import (
@@ -9,7 +9,8 @@ from backend.app.db.crud import (
     create_game,
     save_game,
     get_game,
-    update_game
+    update_game,
+    get_db_client
 )
 from bson import ObjectId
 from datetime import datetime, UTC
@@ -20,14 +21,51 @@ router = APIRouter()
 
 @router.get("/", response_model=List[GameRead])
 async def listar_partidas_guardadas(
-    user_id: str = Query(...),
     current_user: dict = Depends(get_current_user)
 ):
     """Listar partidas guardadas del usuario actual."""
-    # Verificar que el usuario solo accede a sus propias partidas
-    if str(current_user["_id"]) != user_id:
-        raise HTTPException(status_code=403, detail="No autorizado para ver estas partidas")
-    return list_saved_games(user_id)
+    try:
+        user_id = str(current_user["_id"])
+        games = list_saved_games(user_id)
+        
+        # Asegurar que los datos cumplen con el esquema
+        for game in games:
+            if 'game_state' in game:
+                # Añadir campo speed donde falte
+                for hero in game['game_state'].get('player', {}).get('heroes', []):
+                    if 'stats' in hero:
+                        hero['stats']['speed'] = hero['stats'].get('movement_points', 5)  # Valor por defecto
+                
+                # Hacer lo mismo para las unidades en armies y available_creatures
+                for hero in game['game_state'].get('player', {}).get('heroes', []):
+                    for unit in hero.get('army', []):
+                        if not unit.get('stats'):
+                            unit['stats'] = {
+                                'attack': 1,
+                                'defense': 1,
+                                'speed': 1,
+                                'power': 1,
+                                'knowledge': 1,
+                                'movement_points': 5,
+                                'movement_points_left': 5
+                            }
+                
+                for city in game['game_state'].get('player', {}).get('cities', []):
+                    for building in city.get('buildings', []):
+                        for creature in building.get('available_creatures', []):
+                            if 'stats' in creature:
+                                creature['stats']['speed'] = creature['stats'].get('movement_points', 5)
+
+        return games
+            
+    except Exception as e:
+        print(f"ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al listar partidas: {str(e)}"
+        )
 
 @router.post("/", response_model=GameRead, status_code=201)
 async def crear_nueva_partida(

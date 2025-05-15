@@ -10,7 +10,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { gameService } from '../services/api';
-import { GameState, Hero, Position, City, Player } from '../types/game';
+import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
+import { GameState, Hero, Position } from '../types/game';
 import GameMap from '../components/game/GameMap';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
@@ -54,46 +55,48 @@ const GamePage: React.FC = () => {
   // Comprobar si es el turno del jugador
   const isPlayerTurn = (): boolean => {
     if (!gameState) return false;
-    // Suponiendo que el primer jugador siempre es el jugador humano
-    return gameState.currentPlayer === gameState.players[0].id;
+    return gameState.current_player === 'player';
   };
   
   // Obtener recursos del jugador actual
   const getCurrentPlayerResources = () => {
-    if (!gameState) return { gold: 0, wood: 0, stone: 0, gems: 0, crystal: 0 };
-    const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayer);
-    return currentPlayer ? currentPlayer.resources : { gold: 0, wood: 0, stone: 0, gems: 0, crystal: 0 };
+    if (!gameState) return { gold: 0, wood: 0, stone: 0 };
+    return gameState.current_player === 'player' ? 
+      gameState.player.resources : 
+      gameState.ai.resources;
   };
   
   // Obtener héroes del jugador actual
   const getCurrentPlayerHeroes = () => {
     if (!gameState) return [];
-    return Object.values(gameState.heroes).filter(h => 
-      h.id.startsWith(gameState.currentPlayer)
-    );
+    return gameState.current_player === 'player' ? 
+      gameState.player.heroes : 
+      gameState.ai.heroes;
   };
   
   // Manejar click en una casilla del mapa
   const handleTileClick = async (position: Position) => {
-    if (!gameState || !isPlayerTurn()) return;
+    if (!gameState || !selectedHero || !isPlayerTurn()) return;
     
-    // Si hay un héroe seleccionado, intentar moverlo
-    if (selectedHero) {
-      try {
-        const response = await gameService.moveHero(gameId!, selectedHero.id, position);
-        setGameState(response.data);
-        setGameMessage(`Héroe movido a (${position.x}, ${position.y})`);
-        
-        // Si el movimiento terminó los puntos del héroe, deseleccionarlo
-        const updatedHero = response.data.heroes[selectedHero.id];
-        if (updatedHero.movementPoints <= 0) {
-          setSelectedHero(null);
-        } else {
-          setSelectedHero(updatedHero);
-        }
-      } catch (err: any) {
-        setGameMessage(err.response?.data?.message || 'Error al mover héroe');
+    try {
+      const action = createMoveHeroAction(selectedHero.id, position);
+      const response = await executeAction(gameId!, action);
+      
+      // Actualizar estado del juego con la respuesta del backend
+      setGameState(response.data.game_state);
+      
+      // Procesar resultado específico de la acción
+      const result = response.data.result;
+      
+      // Si hay pasos de animación, puedes usarlos para animar el movimiento
+      if (result.animation_steps) {
+        // TODO: Implementar animación usando result.animation_steps
       }
+      
+      setGameMessage(result.message || 'Movimiento completado');
+      
+    } catch (err: any) {
+      setGameMessage(err.response?.data?.detail || 'Error al mover héroe');
     }
   };
   
@@ -101,15 +104,16 @@ const GamePage: React.FC = () => {
   const handleHeroClick = (heroId: string) => {
     if (!gameState) return;
     
-    const hero = gameState.heroes[heroId];
+    const hero = [...gameState.player.heroes, ...gameState.ai.heroes]
+      .find(h => h.id === heroId);
+    
     if (!hero) return;
     
     // Si es un héroe del jugador actual y es su turno, seleccionarlo
-    if (hero.id.startsWith(gameState.currentPlayer) && isPlayerTurn()) {
+    if (gameState.current_player === 'player' && hero.id.startsWith('player_')) {
       setSelectedHero(hero);
       setGameMessage(`Héroe ${hero.name} seleccionado`);
     } else {
-      // Mostrar información del héroe enemigo
       setSelectedHero(hero);
       setGameMessage(`Información del héroe ${hero.name}`);
     }
@@ -119,7 +123,9 @@ const GamePage: React.FC = () => {
   const handleCityClick = (cityId: string) => {
     if (!gameState) return;
     
-    const city = gameState.cities[cityId];
+    const city = [...gameState.player.cities, ...gameState.ai.cities]
+      .find(c => c.id === cityId);
+    
     if (!city) return;
     
     navigate(`/city/${cityId}?gameId=${gameId}`);
@@ -130,19 +136,20 @@ const GamePage: React.FC = () => {
     if (!gameState || !isPlayerTurn() || !gameId) return;
     
     try {
-      const response = await gameService.endTurn(gameId);
-      setGameState(response.data);
+      const action = createEndTurnAction();
+      const response = await executeAction(gameId, action);
+      
+      setGameState(response.data.game_state);
       setSelectedHero(null);
       
-      const newCurrentPlayer = response.data.players.find((p: Player) =>
-        p.id === response.data.currentPlayer
-      );
-      
-      if (newCurrentPlayer) {
-        setGameMessage(`Turno finalizado. Ahora es el turno de ${newCurrentPlayer.name}`);
+      // Usar la estructura correcta del estado del juego
+      if (response.data.game_state.current_player === 'ai') {
+        setGameMessage('Turno finalizado. Ahora es el turno de la IA');
+      } else {
+        setGameMessage('Turno finalizado. Es tu turno');
       }
     } catch (err: any) {
-      setGameMessage(err.response?.data?.message || 'Error al finalizar turno');
+      setGameMessage(err.response?.data?.detail || 'Error al finalizar turno');
     }
   };
   
@@ -184,7 +191,7 @@ const GamePage: React.FC = () => {
         <div className="game-sidebar">
           <div className="game-info">
             <h2>Turno {gameState.turn}</h2>
-            <p>Jugador: {gameState.players.find(p => p.id === gameState.currentPlayer)?.name}</p>
+            <p>Jugador: {gameState.current_player === 'player' ? 'Jugador' : 'IA'}</p>
             <p className="game-message">{gameMessage}</p>
           </div>
           

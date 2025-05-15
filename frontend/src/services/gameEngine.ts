@@ -7,7 +7,7 @@
 * - Cálculo de recursos
 */
 
-import { GameState, Hero, Position, MapTile, Resources, Unit } from '../types/game';
+import { GameState, Hero, Position, MapTile, Resources, ArmyUnit, ResourceMine } from '../types/game';
 
 // Calcula si un héroe puede moverse a una posición
 export const canMoveToPosition = (hero: Hero, target: Position, map: MapTile[][]): boolean => {
@@ -36,10 +36,10 @@ export const calculateMovementCost = (from: MapTile, to: MapTile): number => {
 };
 
 // Simula un combate entre dos ejércitos
-export const simulateCombat = (attackerArmy: Unit[], defenderArmy: Unit[]): {
+export const simulateCombat = (attackerArmy: ArmyUnit[], defenderArmy: ArmyUnit[]): {
   winner: 'attacker' | 'defender',
-  attackerLosses: Unit[],
-  defenderLosses: Unit[],
+  attackerLosses: ArmyUnit[],
+  defenderLosses: ArmyUnit[],
 } => {
   // Implementar algoritmo de combate que considere:
   // - Estadísticas de las unidades
@@ -54,97 +54,65 @@ export const simulateCombat = (attackerArmy: Unit[], defenderArmy: Unit[]): {
 };
 
 // Calcula los recursos generados al final del turno
-export const calculateEndTurnResources = (gameState: GameState, playerId: string): Resources => {
-  const player = gameState.players.find(p => p.id === playerId);
-  if (!player) throw new Error('Player not found');
-  
-  // Recursos base
+export const calculateEndTurnResources = (gameState: GameState): Resources => {
   const resources: Resources = {
     gold: 0,
     wood: 0,
-    stone: 0,
-    gems: 0,
-    crystal: 0,
+    stone: 0
   };
   
+  // Procesar recursos del jugador actual
+  const entity = gameState.current_player === 'player' ? gameState.player : gameState.ai;
+  
   // Recursos de ciudades
-  player.cities.forEach(cityId => {
-    const city = gameState.cities[cityId];
+  entity.cities.forEach(city => {
     city.buildings.forEach(building => {
-      if (building.built && building.produces?.resource) {
-        const resource = building.produces.resource;
-        const amount = building.produces.amount || 0;
-        resources[resource] = (resources[resource] || 0) + amount;
+      if (building.can_recruit && building.available_creatures) {
+        // Sumar recursos de producción de edificios
+        // TODO: Implementar cuando se defina la producción de recursos
       }
     });
   });
   
-  // Recursos de minas y otros objetos del mapa
-  Object.values(gameState.objects).forEach(obj => {
-    if (obj.type === 'resource' && obj.data.owner === playerId) {
-      const resource = obj.data.resourceType as keyof Resources;
-      const amount = obj.data.amount || 0;
-      resources[resource] = (resources[resource] || 0) + amount;
-    }
-  });
+  // Recursos de minas 
+  gameState.map.visible_objects
+    .filter(obj => 'resource_type' in obj && obj.owner === gameState.current_player)
+    .forEach(obj => {
+      const mine = obj as ResourceMine;
+      if (mine.resource_type in resources) {
+        resources[mine.resource_type as keyof Resources] += mine.resource_per_turn;
+      }
+    });
   
   return resources;
 };
 
 // Prepara el estado del juego para el siguiente turno
 export const prepareNextTurn = (gameState: GameState): GameState => {
-  // Crear una copia del estado para no mutar el original
   const newState = { ...gameState };
   
-  // Incrementar contador de turno si todos los jugadores han jugado
-  const playerIndex = newState.players.findIndex(p => p.id === newState.currentPlayer);
-  const nextPlayerIndex = (playerIndex + 1) % newState.players.length;
+  // Cambiar jugador actual
+  newState.current_player = newState.current_player === 'player' ? 'ai' : 'player';
   
-  if (nextPlayerIndex === 0) {
+  // Incrementar turno si volvemos al jugador
+  if (newState.current_player === 'player') {
     newState.turn += 1;
   }
   
-  // Actualizar jugador actual
-  newState.currentPlayer = newState.players[nextPlayerIndex].id;
-  
   // Restaurar puntos de movimiento de los héroes del jugador actual
-  Object.values(newState.heroes).forEach(hero => {
-    if (hero.id.startsWith(newState.currentPlayer)) {
-      hero.movementPoints = hero.maxMovementPoints;
-    }
+  const currentEntity = newState.current_player === 'player' ? newState.player : newState.ai;
+  currentEntity.heroes.forEach(hero => {
+    hero.stats.movement_points_left = hero.stats.movement_points;
   });
   
-  // Actualizar recursos del jugador que acaba de terminar su turno
-  const currentPlayer = newState.players[playerIndex];
-  const newResources = calculateEndTurnResources(gameState, currentPlayer.id);
-  
-  // Sumar los nuevos recursos a los existentes
-  newState.players[playerIndex].resources = {
-    gold: currentPlayer.resources.gold + newResources.gold,
-    wood: currentPlayer.resources.wood + newResources.wood,
-    stone: currentPlayer.resources.stone + newResources.stone,
-    gems: currentPlayer.resources.gems + newResources.gems,
-    crystal: currentPlayer.resources.crystal + newResources.crystal,
-  };
-  
-  // Actualizar unidades disponibles en ciudades (semanalmente)
+  // Crecimiento semanal de unidades (cada 7 turnos)
   if (newState.turn % 7 === 1) {
-    Object.values(newState.cities).forEach(city => {
+    [...newState.player.cities, ...newState.ai.cities].forEach(city => {
       city.buildings.forEach(building => {
-        if (building.built && building.produces?.unit) {
-          const unitId = building.produces.unit;
-          const amount = building.produces.unitPerWeek || 0;
-          
-          const existingUnitIndex = city.availableUnits.findIndex(u => u.unitId === unitId);
-          
-          if (existingUnitIndex >= 0) {
-            city.availableUnits[existingUnitIndex].amount += amount;
-          } else {
-            city.availableUnits.push({
-              unitId,
-              amount
-            });
-          }
+        if (building.can_recruit && building.available_creatures) {
+          building.available_creatures.forEach(creature => {
+            creature.count += creature.growth_per_week;
+          });
         }
       });
     });

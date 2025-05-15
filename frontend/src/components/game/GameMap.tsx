@@ -36,11 +36,7 @@ const GameMap: React.FC<GameMapProps> = ({
   // Calcular rutas válidas cuando se selecciona un héroe
   useEffect(() => {
     if (selectedHero && isPlayerTurn) {
-      // Aquí iría el cálculo de todas las posiciones válidas para moverse
-      // basado en los puntos de movimiento y terreno
       const newValidPaths: Position[] = [];
-      
-      // Placeholder: simplemente incluye las posiciones adyacentes
       const { x, y } = selectedHero.position;
       const adjacentPositions = [
         { x: x+1, y },
@@ -48,11 +44,18 @@ const GameMap: React.FC<GameMapProps> = ({
         { x, y: y+1 },
         { x, y: y-1 }
       ];
+
+      // Convertir el array plano en una matriz 2D
+      const mapWidth = gameState.map.size.width;
+      const tilesMatrix: MapTile[][] = Array.from(
+        { length: gameState.map.size.height },
+        (_, row) => gameState.map.tiles.slice(row * mapWidth, (row + 1) * mapWidth)
+      );
       
       adjacentPositions.forEach(pos => {
-        if (pos.x >= 0 && pos.x < gameState.map.width && 
-            pos.y >= 0 && pos.y < gameState.map.height &&
-            canMoveToPosition(selectedHero, pos, gameState.map.tiles)) {
+        if (pos.x >= 0 && pos.x < gameState.map.size.width && 
+            pos.y >= 0 && pos.y < gameState.map.size.height &&
+            canMoveToPosition(selectedHero, pos, tilesMatrix)) {
           newValidPaths.push(pos);
         }
       });
@@ -64,24 +67,23 @@ const GameMap: React.FC<GameMapProps> = ({
   }, [selectedHero, gameState, isPlayerTurn]);
 
   // Renderiza un tile individual
-  const renderTile = (tile: MapTile) => {
-    const { x, y } = tile.position;
-    
+  const renderTile = (tile: MapTile, x: number, y: number) => {
     // Determinar si este tile es un camino válido para el héroe seleccionado
     const isValidPath = validPaths.some(pos => pos.x === x && pos.y === y);
     
     // Determinar si hay un héroe en esta posición
-    const heroOnTile = Object.values(gameState.heroes).find(
-      h => h.position.x === x && h.position.y === y
-    );
+    const heroOnTile = [...gameState.player.heroes, ...gameState.ai.heroes]
+      .find(h => h.position.x === x && h.position.y === y);
     
     // Determinar si hay una ciudad en esta posición
-    const cityOnTile = Object.values(gameState.cities).find(
-      c => c.position.x === x && c.position.y === y
-    );
+    const cityOnTile = [...gameState.player.cities, ...gameState.ai.cities]
+      .find(c => c.position.x === x && c.position.y === y);
     
     // Determinar si hay otro objeto en esta posición
-    const objectOnTile = tile.object;
+    const objectOnTile = tile.object_type ? {
+      type: tile.object_type,
+      id: tile.object_id
+    } : undefined;
     
     // Determinar si es el héroe seleccionado
     const isSelectedHero = selectedHero && selectedHero.position.x === x && selectedHero.position.y === y;
@@ -133,10 +135,14 @@ const GameMap: React.FC<GameMapProps> = ({
 
   return (
     <div className="game-map" style={{ 
-      gridTemplateColumns: `repeat(${gameState.map.width}, 1fr)`,
-      gridTemplateRows: `repeat(${gameState.map.height}, 1fr)`
+      gridTemplateColumns: `repeat(${gameState.map.size.width}, 1fr)`,
+      gridTemplateRows: `repeat(${gameState.map.size.height}, 1fr)`
     }}>
-      {gameState.map.tiles.flat().map(renderTile)}
+      {gameState.map.tiles.map((tile, i) => {
+        const y = Math.floor(i / gameState.map.size.width);
+        const x = i % gameState.map.size.width;
+        return renderTile(tile, x, y);
+      })}
     </div>
   );
 };

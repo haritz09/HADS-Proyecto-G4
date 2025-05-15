@@ -1,6 +1,8 @@
 import React, { useRef, useEffect, useState } from 'react';
 import '../../styles/components/WorldMap.css';
 
+import heroSprite from '../game/HeroSprite'
+
 interface WorldMapProps {
   width: number;
   height: number;
