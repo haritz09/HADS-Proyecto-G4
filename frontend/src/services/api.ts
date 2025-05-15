@@ -15,7 +15,8 @@ const API = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  withCredentials: false, // Cambiar a false para desarrollo
+  // Set to false - withCredentials:true only needed for cookie auth, not token auth
+  withCredentials: false,
   timeout: 5000
 });
 
@@ -26,8 +27,6 @@ API.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // Ensure headers are accessible
-    config.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000';
     return config;
   },
   (error) => Promise.reject(error)

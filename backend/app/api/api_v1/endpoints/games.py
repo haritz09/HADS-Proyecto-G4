@@ -146,44 +146,59 @@ async def process_action(
         raise HTTPException(status_code=403, detail="No autorizado para esta acción")
     
     # 2. Validar que es el turno del jugador
-    game_state = GameState(**game["game_state"])
-    if game_state.current_player != "player":
-        raise HTTPException(status_code=400, detail="No es el turno del jugador")
-
-    # 3. Validar y procesar la acción según su tipo
     try:
-        if action["type"] == "moveHero":
-            # Verifica la estructura del action
-            hero_id = action.get("details", {}).get("hero_id")
-            if not hero_id:
-                raise HTTPException(status_code=400, detail="hero_id es requerido")
-            
-            result = process_hero_movement(game_state, action)
-        elif action["type"] == "combat":
-            result = process_hero_attack(game_state, action)
-        elif action["type"] == "recruitUnits":
-            result = process_recruitment(game_state, action)
-        elif action["type"] == "buildStructure":
-            result = (game_state, action)
-        elif action["type"] == "transfer": # Transerir tropas entre heroe-castillo
-            result = transfer_troops_between_hero_and_castle(game_state, action)
-        elif action["type"] == "endTurn":
-            result = process_end_turn(game_state)
-        else:
-            raise HTTPException(status_code=400, detail="Tipo de acción no válido")
-            
-        # 4. Guardar el nuevo estado
-        game["game_state"] = game_state.model_dump()
-        update_game(game_id, game)
+        game_state = GameState(**game["game_state"])
+        if game_state.current_player != "player":
+            raise HTTPException(status_code=400, detail="No es el turno del jugador")
+
+        # Print debug info to help diagnose structure issues
+        print(f"Acción recibida: {action}")
         
-        return {
-            "status": "success",
-            "result": result,
-            "game_state": game_state
-        }
-        
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        action_type = action.get("type")
+        if not action_type:
+            raise HTTPException(status_code=400, detail="El tipo de acción es requerido")
+            
+        # 3. Validar y procesar la acción según su tipo
+        try:
+            result = None
+            if action_type == "moveHero":
+                result = process_hero_movement(game_state, action)
+            elif action_type == "combat":
+                result = process_hero_attack(game_state, action)
+            elif action_type == "recruitUnits":
+                result = process_recruitment(game_state, action)
+            elif action_type == "buildStructure":
+                result = (game_state, action)
+            elif action_type == "transfer": # Transerir tropas entre heroe-castillo
+                result = transfer_troops_between_hero_and_castle(game_state, action)
+            elif action_type == "endTurn":
+                result = process_end_turn(game_state)
+            else:
+                raise HTTPException(status_code=400, detail=f"Tipo de acción no válido: {action_type}")
+                
+            # 4. Guardar el nuevo estado
+            game["game_state"] = game_state.model_dump()
+            update_game(game_id, game)
+            
+            return {
+                "status": "success",
+                "result": result,
+                "game_state": game_state
+            }
+            
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            print(f"Error inesperado procesando acción: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+            
+    except Exception as e:
+        print(f"Error procesando game_state: {str(e)}")
+        import traceback
+        traceback.print_exc() 
+        raise HTTPException(status_code=500, detail=f"Error del servidor: {str(e)}")
 
 @router.post("/{game_id}/cheat")
 async def aplicar_cheat(

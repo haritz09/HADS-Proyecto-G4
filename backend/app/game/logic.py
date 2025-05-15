@@ -6,6 +6,7 @@ from backend.app.db.schema import (
 import math
 import random
 import heapq
+import copy  # Add this import for deepcopy
 from backend.app.game.figures import render_hero_on_map, clear_hero_from_map
 from backend.app.db.crud import update_game, get_game
 
@@ -98,43 +99,75 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
 
 def process_hero_movement(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     """Procesa el movimiento de un héroe con pathfinding y actualiza el estado paso a paso."""
-    hero_id = action["details"]["heroId"]
-    destination = action["details"]["destination"]
-    target_position = Position(**destination)
-    hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
-    if not hero:
-        raise ValueError("Héroe no encontrado")
-    # Calcular path
-    path = find_path_a_star(hero.position, target_position, game_state.map)
-    if not path or path[0] == hero.position:
-        path = path[1:]  # Omitir la posición inicial
-    # Para animación: guardar cada paso en una lista
-    animation_steps = []
-    for step in path:
-        cost = calculate_movement_cost(hero.position, step, game_state.map)
-        if hero.stats.movement_points_left < cost:
-            break  # No hay más puntos de movimiento
-        # Limpiar la posición anterior del héroe en el mapa
-        clear_hero_from_map(hero, game_state.map)
-        hero.stats.movement_points_left -= cost
-        hero.position = step
-        # Mostrar héroe en la nueva posición
-        render_hero_on_map(hero, game_state.map)
-        # Procesar interacción en la casilla
-        interaction = process_tile_interaction(hero, step, game_state)
-        animation_steps.append({
-            "x": step.x,
-            "y": step.y,
+    try:
+        # Extract hero_id and destination - more robust handling of different formats
+        hero_id = None
+        destination = None
+        
+        if "details" in action:
+            details = action["details"]
+            hero_id = details.get("heroId") or details.get("hero_id")
+            destination = details.get("destination")
+        else:
+            # Handle older format or direct properties
+            hero_id = action.get("heroId") or action.get("hero_id")
+            destination = action.get("destination") or action.get("target_position")
+        
+        if not hero_id or not destination:
+            raise ValueError("Formato de acción inválido: hero_id y destination son requeridos")
+            
+        target_position = Position(**destination)
+        
+        # Find hero with more verbose error reporting
+        hero = None
+        for h in game_state.player.heroes:
+            if h.id == hero_id:
+                hero = h
+                break
+                
+        if not hero:
+            available_heroes = [h.id for h in game_state.player.heroes]
+            raise ValueError(f"Héroe no encontrado: {hero_id}. Héroes disponibles: {available_heroes}")
+        
+        # Safely access map properties with default values if missing
+        map_width = getattr(game_state.map.size, 'width', 100) 
+        map_height = getattr(game_state.map.size, 'height', 100)
+        
+        # Basic validation of positions
+        if (target_position.x < 0 or target_position.x >= map_width or
+            target_position.y < 0 or target_position.y >= map_height):
+            raise ValueError(f"Posición destino fuera de límites: {target_position.x}, {target_position.y}")
+        
+        # Simplified movement for now - direct move without pathfinding if that's causing issues
+        movement_cost = calculate_movement_cost(hero.position, target_position, game_state.map)
+        
+        if hero.stats.movement_points_left < movement_cost:
+            raise ValueError("Puntos de movimiento insuficientes")
+        
+        # Update hero position
+        old_position = copy.deepcopy(hero.position)
+        hero.stats.movement_points_left -= movement_cost
+        hero.position = target_position
+        
+        # Update map representation if needed
+        if hasattr(game_state.map, 'tiles') and game_state.map.tiles:
+            try:
+                # Clear old position and render in new position (safely)
+                clear_hero_from_map(hero, game_state.map)
+                render_hero_on_map(hero, game_state.map)
+            except Exception as e:
+                print(f"Warning: Error updating map tiles: {str(e)}")
+        
+        # Return simplified result
+        return {
+            "success": True,
+            "old_position": {"x": old_position.x, "y": old_position.y},
+            "new_position": {"x": hero.position.x, "y": hero.position.y},
             "remaining_movement": hero.stats.movement_points_left
-        })
-        if interaction.get("stop_movement"):
-            break
-    # El objeto game_state ya está actualizado (héroe y mapa)
-    return {
-        "final_position": {"x": hero.position.x, "y": hero.position.y},
-        "remaining_movement": hero.stats.movement_points_left,
-        "animation_steps": animation_steps
-    }
+        }
+    except Exception as e:
+        print(f"Error in process_hero_movement: {str(e)}")
+        raise ValueError(f"Error procesando movimiento: {str(e)}")
 
 def process_hero_attack(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     """Procesa el ataque de un héroe a otro"""

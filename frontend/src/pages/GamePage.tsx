@@ -108,16 +108,28 @@ const GamePage: React.FC = () => {
       };
 
       console.log("Enviando acción:", action);
-      const response = await gameService.executeAction(gameId, action);
-      
-      if (response.data && response.data.game_state) {
-        console.log("Movimiento exitoso, actualizando estado");
-        setGameState(response.data.game_state);
-        setGameMessage("Movimiento realizado");
+      try {
+        const response = await gameService.executeAction(gameId, action);
+        
+        if (response && response.data && response.data.game_state) {
+          console.log("Movimiento exitoso, actualizando estado");
+          setGameState(response.data.game_state);
+          setGameMessage("Movimiento realizado");
+        }
+      } catch (err: any) {
+        console.error("Error al mover:", err);
+        
+        // Mensaje de error más detallado para CORS o problemas de red
+        if (err.message && err.message.includes("Network Error")) {
+          setGameMessage("Error de conexión con el servidor. Posible problema de CORS.");
+          console.error("Este error puede deberse a que el backend no tiene configurados los headers CORS correctamente.");
+        } else {
+          setGameMessage(err.response?.data?.detail || 'Error al mover: ' + err.message);
+        }
       }
     } catch (err: any) {
-      console.error("Error al mover:", err);
-      setGameMessage(err.response?.data?.detail || 'Error al mover');
+      console.error("Error general:", err);
+      setGameMessage('Error inesperado: ' + err.message);
     }
   };
   
