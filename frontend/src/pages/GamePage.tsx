@@ -7,7 +7,7 @@
 * - Gestión de eventos del juego
 */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { gameService } from '../services/api';
 import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
@@ -38,12 +38,20 @@ const GamePage: React.FC = () => {
     const loadGame = async () => {
       try {
         setLoading(true);
+        console.log("Loading game with ID:", gameId);
         const response = await gameService.loadGame(gameId);
-        setGameState(response.data);
-        setGameMessage(`¡Partida cargada! Turno ${response.data.turn}`);
+        console.log("Loaded game data:", response.data);
+        
+        // Asegurarse de que el estado del juego tiene la estructura correcta
+        if (!response.data.game_state?.map) {
+          throw new Error("Game state is missing map data");
+        }
+        
+        setGameState(response.data.game_state);
+        setGameMessage(`¡Partida cargada! Turno ${response.data.game_state.turn}`);
       } catch (err) {
+        console.error("Error loading game:", err);
         setError('Error al cargar la partida');
-        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -58,9 +66,11 @@ const GamePage: React.FC = () => {
     return gameState.current_player === 'player';
   };
   
-  // Obtener recursos del jugador actual
+  // Obtener recursos del jugador actual con validación
   const getCurrentPlayerResources = () => {
-    if (!gameState) return { gold: 0, wood: 0, stone: 0 };
+    if (!gameState || !gameState.player || !gameState.ai) {
+      return { gold: 0, wood: 0, stone: 0 };
+    }
     return gameState.current_player === 'player' ? 
       gameState.player.resources : 
       gameState.ai.resources;
@@ -76,27 +86,38 @@ const GamePage: React.FC = () => {
   
   // Manejar click en una casilla del mapa
   const handleTileClick = async (position: Position) => {
-    if (!gameState || !selectedHero || !isPlayerTurn()) return;
-    
+    if (!gameState || !gameId) {
+      console.log("No hay gameState o gameId");
+      return;
+    }
+
+    if (!selectedHero) {
+      console.log("No hay héroe seleccionado");
+      setGameMessage("Selecciona un héroe primero");
+      return;
+    }
+
     try {
-      const action = createMoveHeroAction(selectedHero.id, position);
-      const response = await executeAction(gameId!, action);
+      console.log("Intentando mover héroe:", selectedHero.id, "a posición:", position);
+      const action = {
+        type: "moveHero",
+        details: {
+          hero_id: selectedHero.id,
+          destination: position
+        }
+      };
+
+      console.log("Enviando acción:", action);
+      const response = await gameService.executeAction(gameId, action);
       
-      // Actualizar estado del juego con la respuesta del backend
-      setGameState(response.data.game_state);
-      
-      // Procesar resultado específico de la acción
-      const result = response.data.result;
-      
-      // Si hay pasos de animación, puedes usarlos para animar el movimiento
-      if (result.animation_steps) {
-        // TODO: Implementar animación usando result.animation_steps
+      if (response.data && response.data.game_state) {
+        console.log("Movimiento exitoso, actualizando estado");
+        setGameState(response.data.game_state);
+        setGameMessage("Movimiento realizado");
       }
-      
-      setGameMessage(result.message || 'Movimiento completado');
-      
     } catch (err: any) {
-      setGameMessage(err.response?.data?.detail || 'Error al mover héroe');
+      console.error("Error al mover:", err);
+      setGameMessage(err.response?.data?.detail || 'Error al mover');
     }
   };
   
@@ -178,53 +199,59 @@ const GamePage: React.FC = () => {
 
   return (
     <div className="game-page">
-      <div className="game-header">
-        <h1>Legends of the Realm</h1>
-        <ResourceBar resources={getCurrentPlayerResources()} />
-        <div className="game-controls">
-          <Button onClick={handleSaveGame}>Guardar</Button>
-          <Button onClick={() => navigate('/menu')}>Menú</Button>
-        </div>
-      </div>
-      
-      <div className="game-content">
-        <div className="game-sidebar">
-          <div className="game-info">
-            <h2>Turno {gameState.turn}</h2>
-            <p>Jugador: {gameState.current_player === 'player' ? 'Jugador' : 'IA'}</p>
-            <p className="game-message">{gameMessage}</p>
+      {gameState ? (
+        <>
+          <div className="game-header">
+            <h1>Heroes&Hostias</h1>
+            <ResourceBar resources={getCurrentPlayerResources()} />
+            <div className="game-controls">
+              <Button onClick={handleSaveGame}>Guardar</Button>
+              <Button onClick={() => navigate('/menu')}>Menú</Button>
+            </div>
           </div>
           
-          {selectedHero && (
-            <HeroInfo 
-              hero={selectedHero} 
-              onClose={() => setSelectedHero(null)} 
-            />
-          )}
-          
-          {isPlayerTurn() && (
-            <Button 
-              variant="primary" 
-              size="large" 
-              onClick={handleEndTurn}
-              className="end-turn-button"
-            >
-              Finalizar Turno
-            </Button>
-          )}
-        </div>
-        
-        <div className="game-map-container">
-          <GameMap 
-            gameState={gameState}
-            selectedHero={selectedHero}
-            onTileClick={handleTileClick}
-            onHeroClick={handleHeroClick}
-            onCityClick={handleCityClick}
-            isPlayerTurn={isPlayerTurn()}
-          />
-        </div>
-      </div>
+          <div className="game-content">
+            <div className="game-sidebar">
+              <div className="game-info">
+                <h2>Turno {gameState.turn || 1}</h2>
+                <p>Jugador: {gameState.current_player === 'player' ? 'Tú' : 'IA'}</p>
+                <p className="game-message">{gameMessage}</p>
+              </div>
+              
+              {selectedHero && (
+                <HeroInfo 
+                  hero={selectedHero} 
+                  onClose={() => setSelectedHero(null)} 
+                />
+              )}
+              
+              {isPlayerTurn() && (
+                <Button 
+                  variant="primary" 
+                  size="large" 
+                  onClick={handleEndTurn}
+                  className="end-turn-button"
+                >
+                  Finalizar Turno
+                </Button>
+              )}
+            </div>
+            
+            <div className="game-map-container">
+              <GameMap 
+                gameState={gameState}
+                selectedHero={selectedHero}
+                onTileClick={handleTileClick}
+                onHeroClick={handleHeroClick}
+                onCityClick={handleCityClick}
+                isPlayerTurn={isPlayerTurn()}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="loading-screen">Cargando estado del juego...</div>
+      )}
     </div>
   );
 };

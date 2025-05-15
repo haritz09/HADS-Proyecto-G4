@@ -15,7 +15,7 @@ const API = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  withCredentials: true,
+  withCredentials: false, // Cambiar a false para desarrollo
   timeout: 5000
 });
 
@@ -97,14 +97,71 @@ export const gameService = {
   },
   
   createGame: async (scenarioId: string) => {
-    // Este endpoint espera un objeto game_data completo, no solo el scenarioId
-    // Esta es una implementación simplificada
-    const gameData = {
-      name: `Nueva partida - ${new Date().toISOString()}`,
-      scenario_id: scenarioId,
-      // El backend asignará otros valores como user_id y timestamps
-    };
-    return await API.post('/games', gameData);
+    try {
+      const userResponse = await API.get('/auth/profile');
+      const userId = userResponse.data._id;
+
+      // Crear mapa 100x100
+      const mapSize = 100;
+      const totalTiles = mapSize * mapSize;
+
+      const defaultGameState = {
+        turn: 1,
+        current_player: "player",
+        player: {
+          heroes: [{
+            id: "hero1",
+            name: "Test Hero",
+            position: { x: 5, y: 5 },
+            stats: {
+              attack: 5,
+              defense: 3,
+              power: 2,
+              knowledge: 2,
+              speed: 3,
+              movement_points: 10,
+              movement_points_left: 10
+            },
+            army: [/* ... */]
+          }],
+          cities: [],
+          resources: { gold: 1000, wood: 500, stone: 300 }
+        },
+        ai: {
+          heroes: [],
+          cities: [],
+          resources: { gold: 1000, wood: 500, stone: 300 }
+        },
+        map: {
+          size: { width: mapSize, height: mapSize },
+          tiles: Array(totalTiles).fill({
+            terrain: 'grass',
+            passable: true,
+            object_id: null,
+            object_type: null
+          }),
+          fog_of_war: Array(totalTiles).fill(false),
+          explored: Array(totalTiles).fill(true),
+          visible_objects: []
+        }
+      };
+
+      const gameData = {
+        user_id: userId,
+        name: `Nueva partida - ${new Date().toISOString()}`,
+        scenario_id: scenarioId,
+        is_autosave: false,
+        cheats_used: [],
+        game_state: defaultGameState
+      };
+
+      console.log("Creando partida con mapa 100x100");
+      const response = await API.post('/games', gameData);
+      return response;
+    } catch (error) {
+      console.error("Error en createGame:", error);
+      throw error;
+    }
   },
   
   getSavedGames: async () => {
@@ -132,7 +189,14 @@ export const gameService = {
   
   // Acciones del juego usando el sistema unificado de acciones
   executeAction: async (gameId: string, action: any) => {
-    return await API.post(`/games/${gameId}/action`, action);
+    try {
+      console.log('Sending action:', action);
+      const response = await API.post(`/games/${gameId}/action`, action);
+      return response;
+    } catch (error) {
+      console.error('Error executing action:', error);
+      throw error;
+    }
   },
   
   // Gestión de ciudades

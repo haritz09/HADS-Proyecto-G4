@@ -73,11 +73,23 @@ async def crear_nueva_partida(
     current_user: dict = Depends(get_current_user)
 ):
     """Crear una nueva partida."""
-    # Asegurar que el user_id corresponde al usuario autenticado
     if str(game_data.get("user_id")) != str(current_user["_id"]):
         raise HTTPException(status_code=403, detail="No autorizado para crear partida para otro usuario")
     
-    # Actualizar timestamps
+    # Asegurar que el mapa sea 100x100
+    map_size = 100
+    total_tiles = map_size * map_size
+    
+    # Actualizar el tamaño del mapa en game_state
+    if "game_state" in game_data and "map" in game_data["game_state"]:
+        game_data["game_state"]["map"]["size"] = {"width": map_size, "height": map_size}
+        game_data["game_state"]["map"]["tiles"] = [
+            {"terrain": "grass", "passable": True, "object_id": None, "object_type": None}
+            for _ in range(total_tiles)
+        ]
+        game_data["game_state"]["map"]["fog_of_war"] = [False] * total_tiles
+        game_data["game_state"]["map"]["explored"] = [True] * total_tiles
+    
     game_data["created_at"] = datetime.now(UTC)
     game_data["last_saved"] = datetime.now(UTC)
     
@@ -141,6 +153,11 @@ async def process_action(
     # 3. Validar y procesar la acción según su tipo
     try:
         if action["type"] == "moveHero":
+            # Verifica la estructura del action
+            hero_id = action.get("details", {}).get("hero_id")
+            if not hero_id:
+                raise HTTPException(status_code=400, detail="hero_id es requerido")
+            
             result = process_hero_movement(game_state, action)
         elif action["type"] == "combat":
             result = process_hero_attack(game_state, action)

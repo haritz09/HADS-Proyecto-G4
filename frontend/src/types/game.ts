@@ -121,23 +121,31 @@ export interface MapTile {
   object_type?: string;
 }
 
-export interface GameMap {
-  size: MapSize;
-  tiles: MapTile[];
-  fog_of_war: boolean[];
-  explored: any[];
-  visible_objects: (ResourceMine | Artifact)[];
-}
-
 export interface GameState {
   turn: number;
-  player: Entity;
-  ai: Entity;
-  map: GameMap;
-  current_player: string;
+  current_player: 'player' | 'ai';
+  player: {
+    heroes: Hero[];
+    cities: City[];
+    resources: Resources;
+  };
+  ai: {
+    heroes: Hero[];
+    cities: City[];
+    resources: Resources;
+  };
+  map: {
+    size: {
+      width: number;
+      height: number;
+    };
+    tiles: MapTile[];
+    fog_of_war: boolean[];
+    explored: boolean[];
+    visible_objects: any[];
+  };
 }
 
-// Estas interfaces son para la gestión de partidas guardadas
 export interface GameBase {
   user_id: string;
   name: string;

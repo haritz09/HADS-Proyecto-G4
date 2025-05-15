@@ -7,6 +7,8 @@
 * - Experiencia y nivel
 */
 
+import React from 'react';
+import PropTypes from 'prop-types';
 import { Hero, ArmyUnit } from '../../types/game';
 import Button from '../ui/Button';
 import '../../styles/components/HeroInfo.css';
@@ -94,6 +96,27 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
       </div>
     </div>
   );
+};
+
+HeroInfo.propTypes = {
+  hero: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    name: PropTypes.string.isRequired,
+    stats: PropTypes.shape({
+      attack: PropTypes.number.isRequired,
+      defense: PropTypes.number.isRequired,
+      speed: PropTypes.number.isRequired,
+      movement_points: PropTypes.number.isRequired,
+      movement_points_left: PropTypes.number.isRequired,
+    }).isRequired,
+    army: PropTypes.arrayOf(PropTypes.shape({
+      // Define army unit shape
+    })).isRequired,
+    artifacts: PropTypes.arrayOf(PropTypes.shape({
+      // Define artifact shape
+    })).isRequired,
+  }).isRequired,
+  onClose: PropTypes.func.isRequired,
 };
 
 export default HeroInfo;

@@ -66,6 +66,10 @@ const App: React.FC = () => {
           element={isAuthenticated ? <GamePage /> : <Navigate to="/login" />} 
         />
         <Route 
+          path="/game/:gameId" 
+          element={isAuthenticated ? <GamePage /> : <Navigate to="/login" />} 
+        />
+        <Route 
           path="/city" 
           element={isAuthenticated ? <CityPage /> : <Navigate to="/login" />} 
         />

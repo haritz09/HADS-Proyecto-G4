@@ -7,7 +7,7 @@
 * - Gestión de recursos
 */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { gameService } from '../services/api';
 import { City, Resources, Hero } from '../types/game';

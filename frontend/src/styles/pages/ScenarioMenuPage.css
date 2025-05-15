@@ -168,7 +168,7 @@
 
 .scenario-menu-btn {
   background: linear-gradient(90deg, #bfa76f 0%, #6b4f1d 100%);
-  color: #3a2c0f;
+  color: #f5e9c6;  /* Cambiado para mejor contraste */
   border: 3px solid #bfa76f;
   border-radius: 12px;
   padding: 10px 32px;
@@ -177,17 +177,30 @@
   font-weight: 600;
   cursor: pointer;
   box-shadow: 0 2px 8px #0007;
-  transition: background 0.2s, color 0.2s, transform 0.1s;
+  transition: all 0.3s ease;
 }
-.scenario-menu-btn {
-  background: #6b4f1d;
-  color: #bfa76f;
-  /* cursor: not-allowed; */
+
+.scenario-menu-btn:enabled {
+  opacity: 1;
+  pointer-events: auto;
 }
-.scenario-menu-btn:hover {
+
+.scenario-menu-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: #4a3816;
+  border-color: #6b4f1d;
+}
+
+.scenario-menu-btn:enabled:hover {
   background: linear-gradient(90deg, #e9d8a6 0%, #bfa76f 100%);
   color: #3a2c0f;
   transform: translateY(-2px) scale(1.04);
+}
+
+.scenario-menu-btn:enabled:active {
+  transform: translateY(1px) scale(0.98);
 }
 
 .scenario-selection, .scenario-menu-header, .scenario-item, .scenario-menu-btn {

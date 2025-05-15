@@ -1,16 +1,5 @@
-/*
-* Componente para el mapa del juego
-* Implementar:
-* - Renderizado de tiles según su tipo
-* - Interacción con el mapa (clic, hover)
-* - Visualización de héroes, ciudades y objetos
-* - Fog of war (áreas no exploradas)
-* - Animaciones de movimiento
-*/
-
-import { useState, useEffect } from 'react';
-import { MapTile, Hero, Position, GameState } from '../../types/game';
-import { canMoveToPosition } from '../../services/gameEngine';
+import React, { useState, useRef } from 'react';
+import { GameState, Hero, Position } from '../../types/game';
 import '../../styles/components/GameMap.css';
 
 interface GameMapProps {
@@ -27,122 +16,138 @@ const GameMap: React.FC<GameMapProps> = ({
   selectedHero,
   onTileClick,
   onHeroClick,
-  onCityClick,
   isPlayerTurn
 }) => {
-  // Estado para manejar paths de movimiento válidos
-  const [validPaths, setValidPaths] = useState<Position[]>([]);
-  
-  // Calcular rutas válidas cuando se selecciona un héroe
-  useEffect(() => {
-    if (selectedHero && isPlayerTurn) {
-      const newValidPaths: Position[] = [];
-      const { x, y } = selectedHero.position;
-      const adjacentPositions = [
-        { x: x+1, y },
-        { x: x-1, y },
-        { x, y: y+1 },
-        { x, y: y-1 }
-      ];
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [startY, setStartY] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
 
-      // Convertir el array plano en una matriz 2D
-      const mapWidth = gameState.map.size.width;
-      const tilesMatrix: MapTile[][] = Array.from(
-        { length: gameState.map.size.height },
-        (_, row) => gameState.map.tiles.slice(row * mapWidth, (row + 1) * mapWidth)
-      );
-      
-      adjacentPositions.forEach(pos => {
-        if (pos.x >= 0 && pos.x < gameState.map.size.width && 
-            pos.y >= 0 && pos.y < gameState.map.size.height &&
-            canMoveToPosition(selectedHero, pos, tilesMatrix)) {
-          newValidPaths.push(pos);
-        }
-      });
-      
-      setValidPaths(newValidPaths);
-    } else {
-      setValidPaths([]);
+  // Manejador para el scroll del mouse (zoom)
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom(prev => Math.max(0.5, Math.min(2, prev * delta)));
+  };
+
+  // Manejador para el arrastre del mapa con botón derecho
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 2) { // Solo botón derecho
+      e.preventDefault();
+      setIsDragging(true);
+      setStartX(e.pageX - mapRef.current!.offsetLeft);
+      setStartY(e.pageY - mapRef.current!.offsetTop);
+      setScrollLeft(mapRef.current!.scrollLeft);
+      setScrollTop(mapRef.current!.scrollTop);
     }
-  }, [selectedHero, gameState, isPlayerTurn]);
+  };
 
-  // Renderiza un tile individual
-  const renderTile = (tile: MapTile, x: number, y: number) => {
-    // Determinar si este tile es un camino válido para el héroe seleccionado
-    const isValidPath = validPaths.some(pos => pos.x === x && pos.y === y);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
     
-    // Determinar si hay un héroe en esta posición
-    const heroOnTile = [...gameState.player.heroes, ...gameState.ai.heroes]
-      .find(h => h.position.x === x && h.position.y === y);
-    
-    // Determinar si hay una ciudad en esta posición
-    const cityOnTile = [...gameState.player.cities, ...gameState.ai.cities]
-      .find(c => c.position.x === x && c.position.y === y);
-    
-    // Determinar si hay otro objeto en esta posición
-    const objectOnTile = tile.object_type ? {
-      type: tile.object_type,
-      id: tile.object_id
-    } : undefined;
-    
-    // Determinar si es el héroe seleccionado
-    const isSelectedHero = selectedHero && selectedHero.position.x === x && selectedHero.position.y === y;
-    
-    // Preparar clases CSS
-    let tileClasses = `map-tile terrain-${tile.terrain}`;
-    if (isValidPath) tileClasses += ' valid-path';
-    if (isSelectedHero) tileClasses += ' selected-hero';
-    
+    e.preventDefault();
+    const x = e.pageX - mapRef.current!.offsetLeft;
+    const y = e.pageY - mapRef.current!.offsetTop;
+    const walkX = x - startX;
+    const walkY = y - startY;
+
+    if (mapRef.current) {
+      mapRef.current.scrollLeft = scrollLeft - walkX;
+      mapRef.current.scrollTop = scrollTop - walkY;
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Prevenir menú contextual
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
+  console.log("GameMap received gameState:", gameState);
+  console.log("Map data:", gameState?.map);
+
+  if (!gameState?.map?.size || !gameState?.map?.tiles) {
+    console.error("Invalid map data:", gameState?.map);
+    return <div className="error-map">Error: Datos del mapa no válidos</div>;
+  }
+
+  const renderTile = (x: number, y: number) => {
+    const index = y * gameState.map.size.width + x;
+    const tile = gameState.map.tiles[index];
+
+    // Verificar que el tile existe
+    if (!tile) {
+      console.error(`No tile found at index ${index} (${x},${y})`);
+      return null;
+    }
+
+    // Encontrar héroe en esta posición
+    const hero = gameState.player.heroes.find(h => 
+      h.position && h.position.x === x && h.position.y === y
+    );
+
     return (
       <div
         key={`tile-${x}-${y}`}
-        className={tileClasses}
+        className={`map-tile ${tile.terrain || 'grass'} ${hero ? 'has-hero' : ''}`}
         onClick={() => onTileClick({ x, y })}
       >
-        {/* Renderizar contenido del tile */}
-        {heroOnTile && (
+        {hero && (
           <div 
-            className={`hero-icon player-${heroOnTile.id.split('-')[0]}`}
+            className="hero-sprite"
             onClick={(e) => {
               e.stopPropagation();
-              onHeroClick(heroOnTile.id);
+              onHeroClick(hero.id);
             }}
           >
             H
-          </div>
-        )}
-        
-        {cityOnTile && !heroOnTile && (
-          <div 
-            className={`city-icon ${cityOnTile.owner ? `player-${cityOnTile.owner}` : 'neutral'}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onCityClick(cityOnTile.id);
-            }}
-          >
-            C
-          </div>
-        )}
-        
-        {objectOnTile && !heroOnTile && !cityOnTile && (
-          <div className={`object-icon object-${objectOnTile.type}`}>
-            {objectOnTile.type.charAt(0).toUpperCase()}
           </div>
         )}
       </div>
     );
   };
 
+  // Crear grid del mapa
+  const grid = [];
+  for (let y = 0; y < gameState.map.size.height; y++) {
+    const row = [];
+    for (let x = 0; x < gameState.map.size.width; x++) {
+      row.push(renderTile(x, y));
+    }
+    grid.push(
+      <div key={`row-${y}`} className="map-row">
+        {row}
+      </div>
+    );
+  }
+
   return (
-    <div className="game-map" style={{ 
-      gridTemplateColumns: `repeat(${gameState.map.size.width}, 1fr)`,
-      gridTemplateRows: `repeat(${gameState.map.size.height}, 1fr)`
-    }}>
-      {gameState.map.tiles.map((tile, i) => {
-        const y = Math.floor(i / gameState.map.size.width);
-        const x = i % gameState.map.size.width;
-        return renderTile(tile, x, y);
-      })}
+    <div 
+      ref={mapRef}
+      className={`game-map-wrapper ${isDragging ? 'dragging' : ''}`}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onContextMenu={handleContextMenu}
+    >
+      <div 
+        className="game-map"
+        style={{
+          transform: `scale(${zoom})`,
+          transformOrigin: '0 0'
+        }}
+      >
+        {grid}
+      </div>
     </div>
   );
 };
