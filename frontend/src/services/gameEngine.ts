@@ -11,14 +11,166 @@ import { GameState, Hero, Position, MapTile, Resources, ArmyUnit, ResourceMine }
 
 // Calcula si un héroe puede moverse a una posición
 export const canMoveToPosition = (hero: Hero, target: Position, map: MapTile[][]): boolean => {
-  // Implementar validación de movimiento basada en:
-  // - Distancia (según puntos de movimiento)
-  // - Tipo de terreno (algunos terrenos cuestan más)
-  // - Obstáculos (montañas, agua, etc.)
+  // Verificar si hay suficientes puntos de movimiento
+  const path = findPath(hero.position, target, map);
+  if (!path.length) return false;
   
-  // Implementar algoritmo de pathfinding (A*) para encontrar el camino más corto
+  // Calcular el costo total del camino
+  const totalCost = calculatePathCost(path, map);
   
-  return false; // Placeholder
+  // Verificar si el héroe tiene suficientes puntos de movimiento
+  return totalCost <= hero.stats.movement_points_left;
+};
+
+// Calcula el costo total de un camino
+export const calculatePathCost = (path: Position[], map: MapTile[][]): number => {
+  let cost = 0;
+  
+  for (let i = 0; i < path.length - 1; i++) {
+    const current = path[i];
+    const next = path[i + 1];
+    
+    // Coste por tipo de terreno
+    const from = map[current.y][current.x];
+    const to = map[next.y][next.x];
+    const terrainCost = calculateMovementCost(from, to);
+    
+    // Coste adicional por movimiento diagonal
+    const isDiagonal = current.x !== next.x && current.y !== next.y;
+    const moveCost = isDiagonal ? 1.414 : 1; // sqrt(2) para diagonales
+    
+    cost += moveCost * terrainCost;
+  }
+  
+  return cost;
+};
+
+// Encuentra un camino usando el algoritmo A*
+export const findPath = (start: Position, target: Position, map: MapTile[][]): Position[] => {
+  if (!map || !map.length || !map[0].length) return [];
+  
+  const rows = map.length;
+  const cols = map[0].length;
+  
+  // Verificar límites del mapa
+  if (target.x < 0 || target.x >= cols || target.y < 0 || target.y >= rows) return [];
+  if (start.x < 0 || start.x >= cols || start.y < 0 || start.y >= rows) return [];
+  
+  // No buscar camino si la casilla destino es agua y no es la posición actual
+  if (map[target.y][target.x].terrain === 'water' && (start.x !== target.x || start.y !== target.y)) {
+    return [];
+  }
+  
+  // Definir direcciones de movimiento (8 direcciones, incluyendo diagonales)
+  const directions = [
+    {x: 0, y: -1}, {x: 1, y: -1}, {x: 1, y: 0}, {x: 1, y: 1},
+    {x: 0, y: 1}, {x: -1, y: 1}, {x: -1, y: 0}, {x: -1, y: -1}
+  ];
+  
+  // Inicializar estructuras para A*
+  const openSet: Position[] = [start];
+  const closedSet: boolean[][] = Array(rows).fill(0).map(() => Array(cols).fill(false));
+  const gScore: number[][] = Array(rows).fill(0).map(() => Array(cols).fill(Infinity));
+  const fScore: number[][] = Array(rows).fill(0).map(() => Array(cols).fill(Infinity));
+  const cameFrom: {[key: string]: Position} = {};
+  
+  gScore[start.y][start.x] = 0;
+  fScore[start.y][start.x] = heuristic(start, target);
+  
+  while (openSet.length > 0) {
+    // Encontrar el nodo con menor fScore
+    let current = openSet[0];
+    let lowestFScore = fScore[current.y][current.x];
+    let currentIndex = 0;
+    
+    for (let i = 1; i < openSet.length; i++) {
+      const score = fScore[openSet[i].y][openSet[i].x];
+      if (score < lowestFScore) {
+        lowestFScore = score;
+        current = openSet[i];
+        currentIndex = i;
+      }
+    }
+    
+    // Si hemos alcanzado el destino, reconstruir y devolver el camino
+    if (current.x === target.x && current.y === target.y) {
+      return reconstructPath(cameFrom, current);
+    }
+    
+    // Sacar el nodo actual del openSet y marcarlo como visitado
+    openSet.splice(currentIndex, 1);
+    closedSet[current.y][current.x] = true;
+    
+    // Explorar vecinos
+    for (const dir of directions) {
+      const neighbor = {
+        x: current.x + dir.x,
+        y: current.y + dir.y
+      };
+      
+      // Validar límites
+      if (neighbor.x < 0 || neighbor.x >= cols || neighbor.y < 0 || neighbor.y >= rows) {
+        continue;
+      }
+      
+      // Ignorar nodos ya evaluados
+      if (closedSet[neighbor.y][neighbor.x]) {
+        continue;
+      }
+      
+      // Ignorar terreno impassable (agua)
+      if (map[neighbor.y][neighbor.x].terrain === 'water') {
+        continue;
+      }
+      
+      // Calcular costo de movimiento (mayor para diagonal)
+      const isDiagonal = dir.x !== 0 && dir.y !== 0;
+      const moveCost = isDiagonal ? 1.414 : 1; // sqrt(2) para diagonales
+      
+      // Costo del terreno
+      const terrainCost = calculateMovementCost(map[current.y][current.x], map[neighbor.y][neighbor.x]);
+      
+      // Costo acumulado hasta este vecino
+      const tentativeGScore = gScore[current.y][current.x] + (moveCost * terrainCost);
+      
+      // Si no está en openSet, añadirlo
+      const neighborInOpenSet = openSet.some(pos => pos.x === neighbor.x && pos.y === neighbor.y);
+      if (!neighborInOpenSet) {
+        openSet.push({...neighbor});
+      } else if (tentativeGScore >= gScore[neighbor.y][neighbor.x]) {
+        // No es un camino mejor
+        continue;
+      }
+      
+      // Este es el mejor camino hasta ahora
+      const key = `${neighbor.x},${neighbor.y}`;
+      cameFrom[key] = {...current};
+      gScore[neighbor.y][neighbor.x] = tentativeGScore;
+      fScore[neighbor.y][neighbor.x] = tentativeGScore + heuristic(neighbor, target);
+    }
+  }
+  
+  // No se encontró camino
+  return [];
+};
+
+// Reconstruye el camino desde el destino hasta el inicio
+const reconstructPath = (cameFrom: {[key: string]: Position}, current: Position): Position[] => {
+  const path = [current];
+  let key = `${current.x},${current.y}`;
+  
+  while (key in cameFrom) {
+    current = cameFrom[key];
+    path.unshift(current);
+    key = `${current.x},${current.y}`;
+  }
+  
+  return path;
+};
+
+// Heurística: distancia euclidiana
+const heuristic = (a: Position, b: Position): number => {
+  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 };
 
 // Calcula el coste de movimiento entre celdas

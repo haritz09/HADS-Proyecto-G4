@@ -73,10 +73,47 @@
   background-color: var(--terrain-snow);
 }
 
-/* Resaltado para tiles válidos para movimiento */
+/* Resaltado para tiles válidos para movimiento que ya están en curso */
 .valid-path {
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5);
-  animation: pulse 1.5s infinite;
+  box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7);
+  animation: redPulse 1.5s infinite;
+  z-index: 5;
+}
+
+/* Resaltado para el camino seleccionado (ahora todo en rojo) */
+.reachable-path {
+  box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7);
+  animation: redPulse 1.5s infinite;
+}
+
+/* Ya no necesitamos diferente color para unreachable-path */
+.unreachable-path {
+  box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7);
+  animation: redPulse 1.5s infinite;
+}
+
+/* Resaltado para el destino pendiente de confirmación */
+.pending-destination {
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 0.9);
+  animation: yellowPulse 1.5s infinite;
+  z-index: 6;
+}
+
+/* Indicador visual del camino */
+.path-indicator {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Estilos para casillas con héroes moviéndose */
+.hero-moving {
+  transition: all 0.3s ease-in-out;
 }
 
 /* Resaltado para héroe seleccionado */
@@ -158,15 +195,27 @@
 
 /* Animaciones */
 @keyframes pulse {
-  0% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5); }
-  50% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.8); }
-  100% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5); }
+  0% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.7); }
+  50% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 1); }
+  100% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.7); }
 }
 
-@keyframes selectedPulse {
-  0% { box-shadow: inset 0 0 0 3px gold; }
-  50% { box-shadow: inset 0 0 0 3px rgba(255, 215, 0, 0.5); }
-  100% { box-shadow: inset 0 0 0 3px gold; }
+@keyframes greenPulse {
+  0% { box-shadow: inset 0 0 0 3px rgba(0, 255, 0, 0.7); }
+  50% { box-shadow: inset 0 0 0 3px rgba(0, 255, 0, 1); }
+  100% { box-shadow: inset 0 0 0 3px rgba(0, 255, 0, 0.7); }
+}
+
+@keyframes redPulse {
+  0% { box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7); }
+  50% { box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 1); }
+  100% { box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7); }
+}
+
+@keyframes yellowPulse {
+  0% { box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 0.7); }
+  50% { box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 1); }
+  100% { box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 0.7); }
 }
 
 .error-map {

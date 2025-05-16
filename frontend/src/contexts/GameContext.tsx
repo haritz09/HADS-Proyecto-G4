@@ -7,7 +7,7 @@
 */
 
 import React, { createContext, useState, useContext } from 'react';
-import { GameState, Hero, Position, Resources } from '../types/game';
+import { GameState, Hero, Position, Resources, MapTile } from '../types/game';
 import { gameService } from '../services/api';
 import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
 
@@ -17,10 +17,12 @@ interface GameContextType {
   error: string | null;
   selectedHero: Hero | null;
   gameMessage: string;
+  currentPath: Position[];
   loadGame: (gameId: string) => Promise<void>;
   saveGame: () => Promise<void>;
   moveHero: (heroId: string, destination: Position) => Promise<void>;
   selectHero: (hero: Hero | null) => void;
+  setCurrentPath: (path: Position[]) => void;
   endTurn: () => Promise<void>;
   setGameMessage: (message: string) => void;
 }
@@ -31,12 +33,15 @@ const GameContext = createContext<GameContextType>({
   error: null,
   selectedHero: null,
   gameMessage: '',
-  loadGame: async () => {},
-  saveGame: async () => {},
-  moveHero: async () => {},
-  selectHero: () => {},
-  endTurn: async () => {},
-  setGameMessage: () => {},
+  currentPath: [],
+  // Implementar dummy functions para evitar error de eslint
+  loadGame: async () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
+  saveGame: async () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
+  moveHero: async () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
+  selectHero: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
+  setCurrentPath: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
+  endTurn: async () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
+  setGameMessage: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
 });
 
 export const useGame = () => useContext(GameContext);
@@ -48,6 +53,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
   const [gameMessage, setGameMessage] = useState<string>('');
   const [gameId, setGameId] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState<Position[]>([]);
   
   // Cargar partida
   const loadGame = async (id: string) => {
@@ -95,23 +101,123 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
+      // Encontrar el héroe seleccionado
+      const hero = gameState.player.heroes.find(h => h.id === heroId);
+      if (!hero) {
+        setError('Héroe no encontrado');
+        setLoading(false);
+        return;
+      }
+      
+      // Convertir el array plano a un formato de matriz 2D
+      const mapWidth = gameState.map.size.width;
+      const mapHeight = gameState.map.size.height;
+      const tiles2D: MapTile[][] = [];
+      
+      for (let y = 0; y < mapHeight; y++) {
+        const row: MapTile[] = [];
+        for (let x = 0; x < mapWidth; x++) {
+          const index = y * mapWidth + x;
+          if (index < gameState.map.tiles.length) {
+            row.push(gameState.map.tiles[index]);
+          }
+        }
+        tiles2D.push(row);
+      }
+      
+      // Importar las funciones del motor de juego
+      const { findPath } = await import('../services/gameEngine');
+      
+      // Encontrar camino
+      const path = findPath(hero.position, destination, tiles2D);
+      
+      if (!path.length) {
+        setError('No se puede encontrar un camino hacia esa posición');
+        setLoading(false);
+        return;
+      }
+      
+      // Comprobar si hay suficientes puntos de movimiento
+      let totalCost = 0;
+      for (let i = 0; i < path.length - 1; i++) {
+        const current = path[i];
+        const next = path[i + 1];
+        
+        // Obtener los tiles
+        const currentTile = tiles2D[current.y][current.x];
+        const nextTile = tiles2D[next.y][next.x];
+        
+        // Calcular costo
+        const { calculateMovementCost } = await import('../services/gameEngine');
+        const terrainCost = calculateMovementCost(currentTile, nextTile);
+        
+        // Añadir costo adicional para movimientos diagonales
+        const isDiagonal = current.x !== next.x && current.y !== next.y;
+        const moveCost = isDiagonal ? 1.414 : 1; // sqrt(2) para diagonales
+        
+        totalCost += moveCost * terrainCost;
+      }
+      
+      if (hero.stats.movement_points_left < totalCost) {
+        setError('Puntos de movimiento insuficientes');
+        setLoading(false);
+        return;
+      }
+      
+      // Establecer el camino para visualización
+      setCurrentPath(path);
+      
+      // Crear la acción de movimiento
       const action = createMoveHeroAction(heroId, destination);
       const response = await executeAction(gameId, action);
       
-      setGameState(response.data.game_state);
+      // Crear una copia del estado actual para animar el movimiento
+      const updatedGameState = {...gameState};
+      const updatedHero = updatedGameState.player.heroes.find(h => h.id === heroId);
       
-      // Actualizar el héroe seleccionado si es necesario
-      if (selectedHero && selectedHero.id === heroId) {
-        const updatedHero = response.data.game_state.player.heroes.find(
-          (h: Hero) => h.id === heroId
-        );
-        setSelectedHero(updatedHero || null);
+      if (updatedHero) {
+        // Actualizar puntos de movimiento restantes
+        updatedHero.stats.movement_points_left -= totalCost;
+        
+        // Animar el movimiento del héroe a través del camino
+        const animateHeroMovement = async () => {
+          for (let i = 1; i < path.length; i++) {
+            // Actualizar posición del héroe
+            updatedHero.position = {...path[i]};
+            setGameState({...updatedGameState});
+            
+            // Esperar 1 segundo antes del siguiente paso
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+          // Actualizar con el estado final del servidor
+          setGameState(response.data.game_state);
+          
+          // Actualizar el héroe seleccionado si es necesario
+          if (selectedHero && selectedHero.id === heroId) {
+            const serverUpdatedHero = response.data.game_state.player.heroes.find(
+              (h: Hero) => h.id === heroId
+            );
+            setSelectedHero(serverUpdatedHero || null);
+          }
+          
+          setGameMessage(response.data.result?.message || `Héroe movido a (${destination.x}, ${destination.y})`);
+          setCurrentPath([]); // Limpiar el camino después del movimiento
+          setLoading(false);
+        };
+        
+        // Iniciar la animación
+        animateHeroMovement();
+      } else {
+        // Si no se encontró el héroe, simplemente actualizar al estado final
+        setGameState(response.data.game_state);
+        setCurrentPath([]);
+        setLoading(false);
       }
       
-      setGameMessage(response.data.result.message || `Héroe movido a (${destination.x}, ${destination.y})`);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al mover el héroe');
-    } finally {
+      setCurrentPath([]);
       setLoading(false);
     }
   };
@@ -159,10 +265,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     error,
     selectedHero,
     gameMessage,
+    currentPath,
     loadGame,
     saveGame,
     moveHero,
     selectHero,
+    setCurrentPath,
     endTurn,
     setGameMessage,
   };
