@@ -55,7 +55,7 @@ class Stats(BaseModel):
     defense: int
     speed: int
     movement_points: int
-    movement_points_left: int
+    movement_points_left: float  # Cambiado de int a float para soportar valores decimales
 
 class ArmyUnit(BaseModel):
     type: str
