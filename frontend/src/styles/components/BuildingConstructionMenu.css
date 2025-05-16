@@ -1,0 +1,27 @@
+.building-construction-menu {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--ui-background);
+  border: 2px solid var(--ui-border);
+  padding: 20px;
+  z-index: 1000;
+  min-width: 300px;
+}
+
+.building-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid var(--ui-border);
+}
+
+.cost-info {
+  display: flex;
+  gap: 10px;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}

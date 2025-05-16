@@ -171,9 +171,9 @@ export const gameService = {
                 position: { x: 48, y: 48 },
                 building_type: "castle",
                 cost: { gold: 0, wood: 0, stone: 0 },
-                built: true,
+                built: true,  // Asegurarnos de que está construido
                 can_recruit: false,
-                is_castle: true,
+                is_castle: true,  // Asegurarnos de que es castillo
                 has_tavern: false,
                 requirements: [],
                 available_creatures: []

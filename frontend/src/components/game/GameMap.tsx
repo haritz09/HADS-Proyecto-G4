@@ -213,6 +213,22 @@ const GameMap: React.FC<GameMapProps> = ({
     });
   };
 
+  const checkHeroOnBuilding = (hero: Hero | undefined | null, building: Building): string | null => {
+    if (!hero) return null;
+    if (hero.position.x === building.position.x && hero.position.y === building.position.y) {
+      if (building.is_castle) {
+        return "Castillo: Puedes construir edificios aquí";
+      }
+      if (!building.built) {
+        return `${building.name}: Necesitas construir este edificio primero`;
+      }
+      if (building.built && building.can_recruit) {
+        return `${building.name}: Puedes reclutar unidades aquí`;
+      }
+    }
+    return null;
+  };
+
   const renderTile = (x: number, y: number) => {
     const index = y * gameState.map.size.width + x;
     const tile = gameState.map.tiles[index];
@@ -227,15 +243,22 @@ const GameMap: React.FC<GameMapProps> = ({
     const city = gameState.player.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
     const building = city?.buildings?.[0]; // Cada ciudad tiene un edificio
 
+    const selectedHero = gameState.player.heroes.find(h => h.id === selectedHeroId) || null;
+    const tooltipMessage = building ? checkHeroOnBuilding(selectedHero, building) : null;
+
+    const isHeroHere = hero?.position.x === x && hero?.position.y === y;
+    const isBuildingInteractive = building && isHeroHere && (building.is_castle || building.built);
+
     return (
       <div
-        key={`tile-${x}-${y}`}
         className={`
           map-tile 
           terrain-${tile?.terrain || 'grass'} 
           ${hero ? 'has-hero' : ''} 
           ${city ? 'has-city' : ''}
-          ${building ? `has-building building-${building.building_type || 'default'}` : ''}
+          ${building ? `has-building building-${building.building_type}` : ''}
+          ${isBuildingInteractive ? 'interactive-building' : ''}
+          ${isHeroHere && selectedHeroId === hero.id ? 'selected-hero-tile' : ''}
         `}
         onClick={() => handleTileClick({ x, y })}
       >
@@ -265,11 +288,26 @@ const GameMap: React.FC<GameMapProps> = ({
 
         {building && (
           <div 
-            className={`building-sprite ${building.built ? 'built' : 'not-built'} building-${building.building_type}`}
+            className={`
+              building-sprite 
+              ${building.built ? 'built' : 'not-built'}
+              ${isBuildingInteractive ? 'interactive' : ''}
+            `}
             onClick={(e) => {
               e.stopPropagation();
-              onBuildingClick(building, city?.id || '');
+              if (isBuildingInteractive) {
+                onBuildingClick(building, city?.id || '');
+              }
             }}
+            title={
+              isBuildingInteractive 
+                ? building.is_castle 
+                  ? "Construir edificios" 
+                  : "Reclutar unidades"
+                : building.built 
+                  ? "Edificio construido" 
+                  : "Necesitas construir este edificio"
+            }
           >
             {getBuildingIcon(building.building_type)}
           </div>

@@ -17,6 +17,8 @@ import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
 import BuildingInfo from '../components/game/BuildingInfo';
 import Button from '../components/ui/Button';
+import RecruitmentMenu from '../components/game/RecruitmentMenu';
+import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
 import '../styles/pages/GamePage.css';
 
 const GamePage: React.FC = () => {
@@ -37,6 +39,9 @@ const GamePage: React.FC = () => {
     currentStep: number;
   } | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+  const [activeBuilding, setActiveBuilding] = useState<Building | null>(null);
+  const [showRecruitmentMenu, setShowRecruitmentMenu] = useState(false);
+  const [showConstructionMenu, setShowConstructionMenu] = useState(false);
   
   // Cargar el estado del juego
   useEffect(() => {
@@ -150,19 +155,18 @@ const GamePage: React.FC = () => {
   const handleHeroClick = (heroId: string) => {
     if (!gameState) return;
     
-    const hero = [...gameState.player.heroes, ...gameState.ai.heroes]
-      .find(h => h.id === heroId);
-    
+    // Deseleccionar héroe si ya está seleccionado
+    if (selectedHero && selectedHero.id === heroId) {
+      setSelectedHero(null);
+      setGameMessage('Héroe deseleccionado');
+      return;
+    }
+
+    const hero = gameState.player.heroes.find(h => h.id === heroId);
     if (!hero) return;
     
-    // Si es un héroe del jugador actual y es su turno, seleccionarlo
-    if (gameState.current_player === 'player' && hero.id.startsWith('player_')) {
-      setSelectedHero(hero);
-      setGameMessage(`Héroe ${hero.name} seleccionado`);
-    } else {
-      setSelectedHero(hero);
-      setGameMessage(`Información del héroe ${hero.name}`);
-    }
+    setSelectedHero(hero);
+    setGameMessage(`Héroe ${hero.name} seleccionado`);
   };
   
   // Manejar click en una ciudad
@@ -180,8 +184,70 @@ const GamePage: React.FC = () => {
   // Manejar click en un edificio
   const handleBuildingClick = (building: Building, cityId: string) => {
     setSelectedBuilding(building);
+
+    // Si hay un héroe en la misma posición que el edificio
+    const heroAtBuilding = selectedHero && 
+      selectedHero.position.x === building.position.x && 
+      selectedHero.position.y === building.position.y;
+
+    if (heroAtBuilding && building.is_castle) {
+      setShowConstructionMenu(true);
+    }
   };
-  
+
+  const handleHeroInBuilding = (building: Building) => {
+    if (building.is_castle) {
+      setShowConstructionMenu(true);
+    } else if (building.built && building.can_recruit) {
+      setActiveBuilding(building);
+      setShowRecruitmentMenu(true);
+    }
+  };
+
+  const handleRecruit = async (unitType: string, amount: number) => {
+    if (!gameId || !activeBuilding) return;
+
+    try {
+      await gameService.executeAction(gameId, {
+        type: 'recruitUnits',
+        details: {
+          buildingId: activeBuilding.id,
+          unitType,
+          amount,
+          heroId: selectedHero?.id
+        }
+      });
+      setShowRecruitmentMenu(false);
+      // Recargar el estado del juego
+      const response = await gameService.loadGame(gameId);
+      setGameState(response.data.game_state);
+    } catch (error) {
+      console.error('Error recruiting units:', error);
+    }
+  };
+
+  const handleConstructBuilding = async (buildingId: string) => {
+    if (!gameId || !selectedBuilding) return;
+
+    try {
+      await gameService.executeAction(gameId, {
+        type: "buildStructure",
+        details: {
+          buildingId: buildingId,
+          cityId: selectedBuilding.id
+        }
+      });
+
+      // Recargar el estado del juego
+      const response = await gameService.loadGame(gameId);
+      setGameState(response.data.game_state);
+      setShowConstructionMenu(false);
+      setGameMessage("Edificio construido con éxito");
+    } catch (error) {
+      setGameMessage("Error al construir el edificio");
+    }
+  };
+
   // Finalizar turno
   const handleEndTurn = async () => {
     if (!gameState || !isPlayerTurnValue || !gameId) return;
@@ -259,6 +325,16 @@ const GamePage: React.FC = () => {
                 <BuildingInfo
                   building={selectedBuilding}
                   onClose={() => setSelectedBuilding(null)}
+                  playerResources={getCurrentPlayerResources()}
+                />
+              )}
+              
+              {showConstructionMenu && (
+                <BuildingConstructionMenu
+                  availableBuildings={gameState?.player.cities.flatMap(c => c.buildings) || []}
+                  onBuild={handleConstructBuilding}
+                  onClose={() => setShowConstructionMenu(false)}
+                  playerResources={getCurrentPlayerResources()}
                 />
               )}
               
@@ -286,6 +362,15 @@ const GamePage: React.FC = () => {
               />
             </div>
           </div>
+          
+          {showRecruitmentMenu && activeBuilding && selectedHero && (
+            <RecruitmentMenu
+              building={activeBuilding}
+              hero={selectedHero}
+              onRecruit={handleRecruit}
+              onClose={() => setShowRecruitmentMenu(false)}
+            />
+          )}
         </>
       ) : (
         <div className="loading-screen">Cargando estado del juego...</div>
