@@ -1,24 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GameState, Hero, Position, MapTile } from '../../types/game';
+import { GameState, Hero, Position, MapTile, Building } from '../../types/game';
 import { useGame } from '../../contexts/GameContext';
 import { findPath, calculatePathCost } from '../../services/gameEngine';
 import '../../styles/components/GameMap.css';
 
 interface GameMapProps {
   gameState: GameState;
-  selectedHero: Hero | null;
-  onTileClick: (position: Position) => void;
+  selectedHeroId?: string | null;
   onHeroClick: (heroId: string) => void;
   onCityClick: (cityId: string) => void;
-  isPlayerTurn: boolean;
+  onTileClick: (position: Position) => void;
+  onBuildingClick: (building: Building, cityId: string) => void;
+  isPlayerTurn: boolean; // Asegurar que es boolean
 }
 
 const GameMap: React.FC<GameMapProps> = ({
   gameState,
-  selectedHero,
-  onTileClick,
+  selectedHeroId,
   onHeroClick,
   onCityClick,
+  onTileClick,
+  onBuildingClick,
   isPlayerTurn
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -33,8 +35,31 @@ const GameMap: React.FC<GameMapProps> = ({
   const [previewPath, setPreviewPath] = useState<Position[]>([]);
   const [pendingDestination, setPendingDestination] = useState<Position | null>(null);
   const [lastClickTime, setLastClickTime] = useState(0);
-  
+  const [animatingHero, setAnimatingHero] = useState<{
+    heroId: string;
+    currentPosition: Position;
+    path: Position[];
+    step: number;
+  } | null>(null);
+
   const { currentPath } = useGame();
+
+  useEffect(() => {
+    if (animatingHero && animatingHero.step < animatingHero.path.length) {
+      const timer = setTimeout(() => {
+        setAnimatingHero(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            currentPosition: prev.path[prev.step],
+            step: prev.step + 1
+          };
+        });
+      }, 200); // 200ms por paso
+
+      return () => clearTimeout(timer);
+    }
+  }, [animatingHero]);
 
   // Convertir el mapa a formato 2D para el pathfinding
   const convertMapTo2D = () => {
@@ -113,24 +138,12 @@ const GameMap: React.FC<GameMapProps> = ({
   };
 
   // Determinar si el punto está en la parte alcanzable (verde) o inalcanzable (rojo) del camino
-  const getPathSegmentType = (x: number, y: number): string => {
-    if (!selectedHero || !previewPath.length) return '';
+  const getPathClass = (cost: number): string => {
+    if (!selectedHeroId) return '';
     
-    // Si no es parte del camino, no aplicar estilo
-    if (!isPositionInPreviewPath(x, y)) return '';
-
-    // Convertir el mapa para calcular costos
-    const tiles2D = convertMapTo2D();
+    const selectedHero = gameState.player.heroes.find(h => h.id === selectedHeroId);
+    if (!selectedHero) return '';
     
-    // Encontrar el índice del punto en el camino
-    const pointIndex = previewPath.findIndex(pos => pos.x === x && pos.y === y);
-    if (pointIndex === -1) return '';
-    
-    // Calcular subpath hasta este punto
-    const subPath = previewPath.slice(0, pointIndex + 1);
-    const cost = calculatePathCost(subPath, tiles2D);
-    
-    // Determinar si es alcanzable con los puntos de movimiento actuales
     return cost <= selectedHero.stats.movement_points_left 
       ? 'reachable-path' 
       : 'unreachable-path';
@@ -138,7 +151,7 @@ const GameMap: React.FC<GameMapProps> = ({
 
   // Manejo de click en tile con comportamiento de doble click
   const handleTileClick = (position: Position) => {
-    if (!selectedHero || !isPlayerTurn) return;
+    if (!selectedHeroId) return;
     
     const now = Date.now();
     const isDoubleClick = now - lastClickTime < 300 && 
@@ -159,59 +172,76 @@ const GameMap: React.FC<GameMapProps> = ({
       
       // Actualizar el camino solo al hacer clic
       const tiles2D = convertMapTo2D();
-      const path = findPath(selectedHero.position, position, tiles2D);
-      setPreviewPath(path);
+      const heroPosition = getHeroCurrentPosition(selectedHeroId);
+      if (heroPosition) {
+        const path = findPath(heroPosition, position, tiles2D);
+        setPreviewPath(path);
+        handleHeroMovement(selectedHeroId, path);
+      }
     }
   };
 
-  // Renderizar un tile con información de camino
+  const getBuildingIcon = (buildingType: string): string => {
+    switch (buildingType) {
+      case 'castle': return '🏰';
+      case 'barracks': return '⚔️';
+      case 'archery': return '🏹';
+      case 'knights': return '🐎';
+      case 'dragon': return '🐉';
+      case 'mage_tower': return '🔮';
+      default: return '🏛️';
+    }
+  };
+
+  const getHeroCurrentPosition = (heroId: string) => {
+    if (animatingHero && heroId === animatingHero.heroId) {
+      return animatingHero.currentPosition;
+    }
+    const hero = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => h.id === heroId);
+    return hero?.position;
+  };
+
+  const handleHeroMovement = (heroId: string, path: Position[]) => {
+    const startPosition = getHeroCurrentPosition(heroId);
+    if (!startPosition) return;
+
+    setAnimatingHero({
+      heroId,
+      currentPosition: startPosition,
+      path,
+      step: 0
+    });
+  };
+
   const renderTile = (x: number, y: number) => {
     const index = y * gameState.map.size.width + x;
     const tile = gameState.map.tiles[index];
 
-    // Verificar que el tile existe
-    if (!tile) {
-      console.error(`No tile found at index ${index} (${x},${y})`);
-      return null;
-    }
-
     // Encontrar héroe en esta posición
-    const hero = [...gameState.player.heroes, ...gameState.ai.heroes].find(h => 
-      h.position && h.position.x === x && h.position.y === y
-    );
+    const hero = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
+      const currentPos = getHeroCurrentPosition(h.id);
+      return currentPos && currentPos.x === x && currentPos.y === y;
+    });
 
-    // Determinar si es parte del camino
-    const isInPath = isPositionInPath(x, y);
-    const isInPreview = isPositionInPreviewPath(x, y);
-    // Ya no necesitamos diferenciar entre reachable e unreachable
-    // Todos serán del mismo color (rojo)
-    const isPendingDestination = pendingDestination && 
-      pendingDestination.x === x && pendingDestination.y === y;
-    
-    // Determinar si es la posición del héroe seleccionado
-    const isSelectedPosition = selectedHero && 
-      selectedHero.position.x === x && 
-      selectedHero.position.y === y;
+    // Encontrar ciudad y edificio en esta posición exacta
+    const city = gameState.player.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
+    const building = city?.buildings?.[0]; // Cada ciudad tiene un edificio
 
     return (
       <div
         key={`tile-${x}-${y}`}
         className={`
           map-tile 
-          terrain-${tile.terrain || 'grass'} 
+          terrain-${tile?.terrain || 'grass'} 
           ${hero ? 'has-hero' : ''} 
-          ${isInPath ? 'valid-path' : ''} 
-          ${isInPreview ? 'reachable-path' : ''}
-          ${isPendingDestination ? 'pending-destination' : ''}
-          ${isSelectedPosition ? 'selected-hero' : ''}
+          ${city ? 'has-city' : ''}
+          ${building ? `has-building building-${building.building_type || 'default'}` : ''}
         `}
         onClick={() => handleTileClick({ x, y })}
-        onMouseEnter={() => setHoveredPosition({ x, y })}
-        onMouseLeave={() => setHoveredPosition(null)}
       >
-        {hero && (
+        {hero && !animatingHero && (
           <div 
-            className={`hero-sprite ${hero.id.includes('player') ? 'player-blue' : 'player-red'}`}
+            className={`hero-sprite ${selectedHeroId === hero.id ? 'selected' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               onHeroClick(hero.id);
@@ -220,8 +250,29 @@ const GameMap: React.FC<GameMapProps> = ({
             H
           </div>
         )}
-        {isInPreview && !hero && (
-          <div className="path-indicator"></div>
+
+        {hero && animatingHero && hero.id === animatingHero.heroId && (
+          <div 
+            className="hero-sprite moving"
+            onClick={(e) => {
+              e.stopPropagation();
+              onHeroClick(hero.id);
+            }}
+          >
+            H
+          </div>
+        )}
+
+        {building && (
+          <div 
+            className={`building-sprite ${building.built ? 'built' : 'not-built'} building-${building.building_type}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onBuildingClick(building, city?.id || '');
+            }}
+          >
+            {getBuildingIcon(building.building_type)}
+          </div>
         )}
       </div>
     );

@@ -90,6 +90,43 @@ export const authService = {
 };
 
 // Servicios de gestión de partidas
+const INITIAL_BUILDINGS = [
+  {
+    id: 'castle',
+    name: 'Castillo',
+    building_type: 'castle',
+    cost: { gold: 0, wood: 0, stone: 0 },
+    built: true,
+    can_recruit: false,
+    is_castle: true,
+    has_tavern: false,
+    requirements: []
+  },
+  {
+    id: 'barracks',
+    name: 'Cuartel',
+    building_type: 'barracks',
+    cost: { gold: 400, wood: 200, stone: 100 },
+    built: false,
+    can_recruit: false,
+    is_castle: false,
+    has_tavern: false,
+    requirements: ['castle']
+  },
+  {
+    id: 'archery',
+    name: 'Campo de Tiro',
+    building_type: 'archery',
+    cost: { gold: 400, wood: 300, stone: 100 },
+    built: false,
+    can_recruit: false,
+    is_castle: false,
+    has_tavern: false,
+    requirements: ['castle']
+  }
+  // Añadir más edificios según necesites
+];
+
 export const gameService = {
   getScenarios: async () => {
     return await API.get('/scenarios');
@@ -115,15 +152,126 @@ export const gameService = {
             stats: {
               attack: 5,
               defense: 3,
-              power: 2,
-              knowledge: 2,
               speed: 3,
-              movement_points: 10,
-              movement_points_left: 10
+              movement_points: 1000,
+              movement_points_left: 1000
             },
-            army: [/* ... */]
+            army: [],
+            artifacts: []
           }],
-          cities: [],
+          cities: [
+            {
+              id: "central_castle",
+              name: "Castillo Central",
+              position: { x: 48, y: 48 },
+              owner: "player",
+              buildings: [{
+                id: "castle",
+                name: "Castillo",
+                position: { x: 48, y: 48 },
+                building_type: "castle",
+                cost: { gold: 0, wood: 0, stone: 0 },
+                built: true,
+                can_recruit: false,
+                is_castle: true,
+                has_tavern: false,
+                requirements: [],
+                available_creatures: []
+              }]
+            },
+            {
+              id: "knights_city",
+              name: "Ciudad de Caballería",
+              position: { x: 48, y: 52 },
+              owner: "player",
+              buildings: [{
+                id: "knights_tower",
+                name: "Torre de Caballería",
+                position: { x: 48, y: 52 },
+                building_type: "knights",
+                cost: { gold: 1500, wood: 100, stone: 100 },
+                built: false,
+                can_recruit: false,
+                is_castle: false,
+                has_tavern: false,
+                requirements: [],
+                available_creatures: []
+              }]
+            },
+            {
+              id: "dragon_city",
+              name: "Ciudad de Dragones",
+              position: { x: 5, y: 90 },
+              owner: "player",
+              buildings: [{
+                id: "dragons_lair",
+                name: "Guarida de Dragones",
+                position: { x: 5, y: 90 },
+                building_type: "dragon",
+                cost: { gold: 5000, wood: 200, stone: 200 },
+                built: false,
+                can_recruit: false,
+                is_castle: false,
+                has_tavern: false,
+                requirements: [],
+                available_creatures: []
+              }]
+            },
+            {
+              id: "barracks_city",
+              name: "Ciudad Cuartel",
+              position: { x: 50, y: 50 },
+              owner: "player",
+              buildings: [{
+                id: "barracks",
+                name: "Cuartel",
+                position: { x: 50, y: 50 },
+                cost: { gold: 1000, wood: 50, stone: 50 },
+                built: false,
+                can_recruit: false,
+                is_castle: false,
+                has_tavern: false,
+                requirements: [],
+                available_creatures: []
+              }]
+            },
+            {
+              id: "archery_city",
+              name: "Ciudad Arquería",
+              position: { x: 52, y: 52 },
+              owner: "player",
+              buildings: [{
+                id: "archery",
+                name: "Campo de Tiro",
+                position: { x: 52, y: 52 },
+                cost: { gold: 1200, wood: 70, stone: 30 },
+                built: false,
+                can_recruit: false,
+                is_castle: false,
+                has_tavern: false,
+                requirements: [],
+                available_creatures: []
+              }]
+            },
+            {
+              id: "mage_city",
+              name: "Ciudad Mágica",
+              position: { x: 70, y: 58 },
+              owner: "player",
+              buildings: [{
+                id: "mage_tower",
+                name: "Torre de Magos",
+                position: { x: 70, y: 58 },
+                cost: { gold: 2000, wood: 100, stone: 100 },
+                built: false,
+                can_recruit: false,
+                is_castle: false,
+                has_tavern: false,
+                requirements: [],
+                available_creatures: []
+              }]
+            }
+          ],
           resources: { gold: 1000, wood: 500, stone: 300 }
         },
         ai: {
@@ -136,13 +284,14 @@ export const gameService = {
           tiles: Array(totalTiles).fill({
             terrain: 'grass',
             passable: true,
-            object_id: null,
-            object_type: null
+            object_type: null,
+            object_id: null
           }),
           fog_of_war: Array(totalTiles).fill(false),
           explored: Array(totalTiles).fill(true),
           visible_objects: []
-        }
+        },
+        cities: [] // Array global de ciudades según schema.py
       };
 
       const gameData = {

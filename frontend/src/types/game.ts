@@ -51,74 +51,48 @@ export interface Hero {
   artifacts: Artifact[];
 }
 
-export interface AvailableCreature {
+export interface Creature {
+  id: string;
   type: string;
+  name: string;  // Añadido
   count: number;
   growth_per_week: number;
+  unit_cost: Resources;  // Cambiado de cost a unit_cost
   stats: Stats;
-  recruit_cost: Record<string, number>;
+}
+
+export interface MapTile {
+  terrain: 'grass' | 'forest' | 'mountain' | 'water' | 'desert' | 'snow';
+  passable: boolean;
+  object_type?: string;
+  object_id?: string;
 }
 
 export interface Building {
   id: string;
   name: string;
   position: Position;
-  cost: Partial<Resources>;
-  requirements: string[];
   built: boolean;
-  produces?: {
-    resource?: keyof Resources;
-    amount?: number;
-    unit?: string;
-    unitCost?: Record<string, number>;
-  };
-  available_creatures: AvailableCreature[];
+  can_recruit: boolean;
   is_castle: boolean;
   has_tavern: boolean;
-  can_recruit: boolean;
+  building_type: string; // Cambiado de type a building_type
+  requirements: string[];
+  cost: Resources;
+  available_creatures: Creature[];
 }
 
 export interface City {
   id: string;
   name: string;
   position: Position;
+  owner: string;
   buildings: Building[];
-  owner: string | null;
+  garrison: Creature[]; // Cambiado de Hero[] a Creature[]
   availableUnits: {
     unitId: string;
     amount: number;
   }[];
-  garrison: Unit[];
-}
-
-export interface ResourceMine {
-  id: string;
-  type: 'goldmine' | 'sawmill' | 'quarry';
-  position: Position;
-  owner: string | null;
-  resource_type: 'gold' | 'wood' | 'stone';
-  resource_per_turn: number;
-}
-
-export interface Entity {
-  heroes: Hero[];
-  resources: Resources;
-  cities: City[];
-}
-
-export interface MapObject {
-  type: 'resource' | 'dwelling' | 'artifact' | 'city' | 'hero' | 'obstacle';
-  id?: string;
-  visitable: boolean;
-  explored: boolean;
-}
-
-export interface MapTile {
-  terrain: string;
-  passable: boolean;
-  object?: MapObject;
-  object_id?: string;
-  object_type?: string;
 }
 
 export interface GameState {
@@ -135,40 +109,25 @@ export interface GameState {
     resources: Resources;
   };
   map: {
-    size: {
-      width: number;
-      height: number;
-    };
+    size: MapSize;
     tiles: MapTile[];
     fog_of_war: boolean[];
     explored: boolean[];
-    visible_objects: any[];
+    visible_objects: VisibleObject[];
   };
+  cities: City[];
 }
 
-export interface GameBase {
-  user_id: string;
-  name: string;
-  scenario_id: string;
-  created_at: string;
-  last_saved: string;
-  is_autosave: boolean;
-  cheats_used: string[];
-  game_state: GameState;
+export interface ResourceMine extends VisibleObject {
+  resource_type: keyof Resources;
+  resource_per_turn: number;
 }
 
-export interface Game extends GameBase {
+export interface VisibleObject {
   id: string;
-}
-
-export interface ScenarioBase {
-  name: string;
-  description: string;
-  difficulty: string;
-  map_size: MapSize;
-  initial_state: Record<string, any>;
-}
-
-export interface Scenario extends ScenarioBase {
-  id: string;
+  type: string;
+  position: Position;
+  owner: string | null;
+  resource_type?: string;
+  resource_per_turn?: number;
 }

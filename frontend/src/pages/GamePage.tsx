@@ -11,10 +11,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { gameService } from '../services/api';
 import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
-import { GameState, Hero, Position } from '../types/game';
+import { GameState, Hero, Position, Building } from '../types/game';
 import GameMap from '../components/game/GameMap';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
+import BuildingInfo from '../components/game/BuildingInfo';
 import Button from '../components/ui/Button';
 import '../styles/pages/GamePage.css';
 
@@ -30,6 +31,12 @@ const GamePage: React.FC = () => {
   // Estado UI
   const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
   const [gameMessage, setGameMessage] = useState<string>('');
+  const [movingHero, setMovingHero] = useState<{
+    heroId: string;
+    path: Position[];
+    currentStep: number;
+  } | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   
   // Cargar el estado del juego
   useEffect(() => {
@@ -61,10 +68,7 @@ const GamePage: React.FC = () => {
   }, [gameId]);
   
   // Comprobar si es el turno del jugador
-  const isPlayerTurn = (): boolean => {
-    if (!gameState) return false;
-    return gameState.current_player === 'player';
-  };
+  const isPlayerTurnValue = gameState?.current_player === 'player';
   
   // Obtener recursos del jugador actual con validación
   const getCurrentPlayerResources = () => {
@@ -84,21 +88,38 @@ const GamePage: React.FC = () => {
       gameState.ai.heroes;
   };
   
+  // Manejar movimiento de héroe
+  const handleHeroMovement = (heroId: string, path: Position[]) => {
+    setMovingHero({
+      heroId,
+      path,
+      currentStep: 0
+    });
+
+    const animateMovement = async () => {
+      for (let i = 0; i < path.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        setGameState(prev => {
+          if (!prev) return prev;
+          const newState = { ...prev };
+          const hero = newState.player.heroes.find(h => h.id === heroId);
+          if (hero) {
+            hero.position = path[i];
+          }
+          return newState;
+        });
+      }
+      setMovingHero(null);
+    };
+
+    animateMovement();
+  };
+
   // Manejar click en una casilla del mapa
   const handleTileClick = async (position: Position) => {
-    if (!gameState || !gameId) {
-      console.log("No hay gameState o gameId");
-      return;
-    }
-
-    if (!selectedHero) {
-      console.log("No hay héroe seleccionado");
-      setGameMessage("Selecciona un héroe primero");
-      return;
-    }
+    if (!gameState || !gameId || !selectedHero) return;
 
     try {
-      console.log("Intentando mover héroe:", selectedHero.id, "a posición:", position);
       const action = {
         type: "moveHero",
         details: {
@@ -107,29 +128,21 @@ const GamePage: React.FC = () => {
         }
       };
 
-      console.log("Enviando acción:", action);
-      try {
-        const response = await gameService.executeAction(gameId, action);
+      const response = await gameService.executeAction(gameId, action);
+      
+      if (response.data.path) {
+        // Primero animamos el movimiento
+        const currentPath = response.data.path;
+        handleHeroMovement(selectedHero.id, currentPath);
         
-        if (response && response.data && response.data.game_state) {
-          console.log("Movimiento exitoso, actualizando estado");
+        // Después de la animación, actualizamos el estado
+        setTimeout(() => {
           setGameState(response.data.game_state);
-          setGameMessage("Movimiento realizado");
-        }
-      } catch (err: any) {
-        console.error("Error al mover:", err);
-        
-        // Mensaje de error más detallado para CORS o problemas de red
-        if (err.message && err.message.includes("Network Error")) {
-          setGameMessage("Error de conexión con el servidor. Posible problema de CORS.");
-          console.error("Este error puede deberse a que el backend no tiene configurados los headers CORS correctamente.");
-        } else {
-          setGameMessage(err.response?.data?.detail || 'Error al mover: ' + err.message);
-        }
+        }, currentPath.length * 200); // 200ms por paso
       }
-    } catch (err: any) {
-      console.error("Error general:", err);
-      setGameMessage('Error inesperado: ' + err.message);
+    } catch (err) {
+      console.error("Error moving hero:", err);
+      setGameMessage("Error al mover el héroe");
     }
   };
   
@@ -163,10 +176,15 @@ const GamePage: React.FC = () => {
     
     navigate(`/city/${cityId}?gameId=${gameId}`);
   };
+
+  // Manejar click en un edificio
+  const handleBuildingClick = (building: Building, cityId: string) => {
+    setSelectedBuilding(building);
+  };
   
   // Finalizar turno
   const handleEndTurn = async () => {
-    if (!gameState || !isPlayerTurn() || !gameId) return;
+    if (!gameState || !isPlayerTurnValue || !gameId) return;
     
     try {
       const action = createEndTurnAction();
@@ -237,7 +255,14 @@ const GamePage: React.FC = () => {
                 />
               )}
               
-              {isPlayerTurn() && (
+              {selectedBuilding && (
+                <BuildingInfo
+                  building={selectedBuilding}
+                  onClose={() => setSelectedBuilding(null)}
+                />
+              )}
+              
+              {isPlayerTurnValue && (
                 <Button 
                   variant="primary" 
                   size="large" 
@@ -252,11 +277,12 @@ const GamePage: React.FC = () => {
             <div className="game-map-container">
               <GameMap 
                 gameState={gameState}
-                selectedHero={selectedHero}
+                selectedHeroId={selectedHero?.id || null}
                 onTileClick={handleTileClick}
                 onHeroClick={handleHeroClick}
                 onCityClick={handleCityClick}
-                isPlayerTurn={isPlayerTurn()}
+                onBuildingClick={handleBuildingClick}
+                isPlayerTurn={isPlayerTurnValue}
               />
             </div>
           </div>

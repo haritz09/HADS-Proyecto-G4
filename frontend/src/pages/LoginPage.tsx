@@ -11,6 +11,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/api';
 import Button from '../components/ui/Button';
 import '../styles/pages/LoginPage.css';
+import React from 'react';
+import PropTypes from 'prop-types';
 
 interface LoginPageProps {
   setAuth: (isAuth: boolean) => void;
@@ -134,6 +136,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
       </div>
     </div>
   );
+};
+
+LoginPage.propTypes = {
+  setAuth: PropTypes.func.isRequired
 };
 
 export default LoginPage;

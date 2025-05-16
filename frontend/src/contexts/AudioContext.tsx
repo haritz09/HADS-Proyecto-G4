@@ -25,10 +25,22 @@ const AudioContext = createContext<AudioContextType>({
   playLandingMusic: async () => false,
   playGameMusic: async () => false,
   playLoginMusic: async () => false, // Nueva función para reproducir música de login
-  stopMusic: () => {},
-  togglePlay: () => {},
-  setVolume: () => {},
-  toggleMute: () => {},
+  stopMusic: () => {
+    // Implementación básica
+    console.log("Deteniendo música...");
+  },
+  togglePlay: () => {
+    // Implementación básica
+    console.log("Alternando reproducción...");
+  },
+  setVolume: (volume: number) => {
+    // Implementación básica
+    console.log(`Estableciendo volumen a ${volume}`);
+  },
+  toggleMute: () => {
+    // Implementación básica
+    console.log("Alternando silencio...");
+  },
 });
 
 export const useAudio = () => useContext(AudioContext);

@@ -7,7 +7,8 @@
 * - Producción de recursos
 */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { City, Resources, Unit, Building, Hero, ArmyUnit } from '../../types/game';
 import Button from '../ui/Button';
 import '../../styles/components/CityView.css';
@@ -59,18 +60,17 @@ const CityView: React.FC<CityViewProps> = ({
     
     // Obtener el edificio que produce esta unidad
     const building = city.buildings.find(b => 
-      b.built && b.produces?.unit === unitId
+      b.built && b.can_recruit && b.available_creatures.some(c => c.id === unitId)
     );
     
     if (!building) return 0;
     
-    // Obtener el coste por unidad
-    const unitCost = building.produces?.unitCost || {};
+    const creature = building.available_creatures.find(c => c.id === unitId);
+    if (!creature) return 0;
     
-    // Calcular cuántas unidades podemos pagar con los recursos actuales
-    let maxAmount = unit.amount; // Limitado por las unidades disponibles
+    let maxAmount = Math.min(unit.amount, creature.count);
     
-    Object.entries(unitCost).forEach(([resource, cost]) => {
+    Object.entries(creature.unit_cost).forEach(([resource, cost]) => {
       if (cost && typeof cost === 'number' && cost > 0) {
         const resourceKey = resource as keyof Resources;
         const affordableAmount = Math.floor(playerResources[resourceKey] / cost);
@@ -162,19 +162,22 @@ const CityView: React.FC<CityViewProps> = ({
               
               // Encontrar el edificio que produce esta unidad para obtener más información
               const building = city.buildings.find(b => 
-                b.built && b.produces?.unit === unitId
+                b.built && b.can_recruit && b.available_creatures.some(c => c.id === unitId)
               );
               
-              if (!building || !building.produces) return null;
+              if (!building) return null;
+              
+              const creature = building.available_creatures.find(c => c.id === unitId);
+              if (!creature) return null;
               
               return (
                 <div key={unitId} className="unit-recruitment">
                   <div className="unit-icon"></div>
                   <div className="unit-details">
-                    <div className="unit-name">{building.produces?.unit || 'Unidad'}</div>
+                    <div className="unit-name">{creature.type || 'Unidad'}</div>
                     <div className="unit-available">Disponibles: {availableUnit.amount}</div>
                     <div className="unit-cost">
-                      {Object.entries(building.produces?.unitCost || {}).map(([resource, amount]) => (
+                      {Object.entries(creature.unit_cost).map(([resource, amount]) => (
                         <div key={resource} className="resource-cost">
                           <div className={`resource-icon ${resource}-icon`}></div>
                           <span>{String(amount)}</span>
@@ -231,6 +234,20 @@ const CityView: React.FC<CityViewProps> = ({
       </div>
     </div>
   );
+};
+
+CityView.propTypes = {
+  city: PropTypes.shape({
+    name: PropTypes.string.isRequired,
+    buildings: PropTypes.arrayOf(PropTypes.object).isRequired,
+    availableUnits: PropTypes.arrayOf(PropTypes.object).isRequired,
+    garrison: PropTypes.arrayOf(PropTypes.object).isRequired
+  }).isRequired,
+  playerResources: PropTypes.object.isRequired,
+  heroes: PropTypes.arrayOf(PropTypes.object).isRequired,
+  onBuildBuilding: PropTypes.func.isRequired,
+  onRecruitUnits: PropTypes.func.isRequired,
+  onClose: PropTypes.func.isRequired
 };
 
 export default CityView;

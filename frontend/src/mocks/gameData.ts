@@ -49,28 +49,29 @@ export const createSampleHero = (playerId: string, name: string, position: Posit
   artifacts: []
 });
 
-// Crear ciudad de muestra
-export const createSampleCity = (name: string, position: Position, owner: string | null = null): City => ({
-  id: `city-${Date.now()}`,
+// Crear ciudad
+export const createCity = (position: Position, name: string, owner: string): City => ({
+  id: `city-${position.x}-${position.y}`,
   name,
   position,
-  owner,
+  owner: owner || 'player',
   buildings: [
     {
       id: 'town_hall',
       name: 'Ayuntamiento',
       position,
-      available_creatures: [],
+      building_type: 'town_hall', // Añadido
+      cost: { gold: 0, wood: 0, stone: 0 },
+      built: true,
+      can_recruit: true,
       is_castle: true,
       has_tavern: true,
-      can_recruit: true,
-      cost: { gold: 0, wood: 0, stone: 0 },
       requirements: [],
-      built: true
+      available_creatures: []
     }
   ],
-  availableUnits: [], // Añadido: array de unidades disponibles para reclutar
-  garrison: []        // Añadido: array de unidades en la guarnición
+  garrison: [],
+  availableUnits: []
 });
 
 // Estado de juego de muestra
@@ -79,7 +80,7 @@ export const sampleGameState: GameState = {
   current_player: 'player',
   player: {
     heroes: [createSampleHero('player', 'Sir Lancelot', { x: 3, y: 3 })],
-    cities: [createSampleCity('Camelot', { x: 5, y: 5 }, 'player')],
+    cities: [createCity({ x: 5, y: 5 }, 'Camelot', 'player')],
     resources: {
       gold: 1000,
       wood: 10,
@@ -88,7 +89,7 @@ export const sampleGameState: GameState = {
   },
   ai: {
     heroes: [createSampleHero('ai', 'Mordred', { x: 16, y: 16 })],
-    cities: [createSampleCity('Avalon', { x: 15, y: 15 }, 'ai')],
+    cities: [createCity({ x: 15, y: 15 }, 'Avalon', 'ai')],
     resources: {
       gold: 1000,
       wood: 10,
@@ -113,5 +114,6 @@ export const sampleGameState: GameState = {
         resource_per_turn: 500
       }
     ]
-  }
+  },
+  cities: [] // Añadir array de ciudades vacío
 };

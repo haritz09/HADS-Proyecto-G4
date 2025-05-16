@@ -11,6 +11,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/api';
 import Button from '../components/ui/Button';
 import '../styles/pages/RegisterPage.css';
+import React from 'react';
+import PropTypes from 'prop-types';
 
 interface RegisterPageProps {
   setAuth: (isAuth: boolean) => void;
@@ -155,6 +157,10 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
       </div>
     </div>
   );
+};
+
+RegisterPage.propTypes = {
+  setAuth: PropTypes.func.isRequired
 };
 
 export default RegisterPage;

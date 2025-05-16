@@ -1,0 +1,41 @@
+.building-info {
+  background: var(--ui-background);
+  border: 2px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.building-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.building-info-header button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-color);
+}
+
+.building-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.building-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.building-cost ul,
+.available-units ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}

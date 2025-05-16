@@ -1,3 +1,5 @@
+import React from 'react';
+
 /*
 * Página del menú principal
 * Implementar:

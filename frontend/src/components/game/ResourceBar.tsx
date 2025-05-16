@@ -6,7 +6,8 @@
 * - Animaciones al cambiar recursos
 */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { Resources } from '../../types/game';
 import '../../styles/components/ResourceBar.css';
 
@@ -34,6 +35,14 @@ const ResourceBar: React.FC<ResourceBarProps> = ({ resources }) => {
       </div>
     </div>
   );
+};
+
+ResourceBar.propTypes = {
+  resources: PropTypes.shape({
+    gold: PropTypes.number.isRequired,
+    wood: PropTypes.number.isRequired,
+    stone: PropTypes.number.isRequired
+  }).isRequired
 };
 
 export default ResourceBar;

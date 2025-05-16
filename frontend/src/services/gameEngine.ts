@@ -272,3 +272,20 @@ export const prepareNextTurn = (gameState: GameState): GameState => {
   
   return newState;
 };
+
+export function updateAvailableCreatures(state: GameState): GameState {
+  const newState = { ...state };
+  
+  [...newState.player.cities, ...newState.ai.cities].forEach(city => {
+    city.buildings.forEach(building => {
+      if (building.can_recruit && building.available_creatures) {
+        building.available_creatures = building.available_creatures.map(creature => ({
+          ...creature,
+          count: creature.count + (creature.growth_per_week || 0)
+        }));
+      }
+    });
+  });
+
+  return newState;
+}
