@@ -7,18 +7,170 @@
 * - Cálculo de recursos
 */
 
-import { GameState, Hero, Position, MapTile, Resources, Unit } from '../types/game';
+import { GameState, Hero, Position, MapTile, Resources, ArmyUnit, ResourceMine } from '../types/game';
 
 // Calcula si un héroe puede moverse a una posición
 export const canMoveToPosition = (hero: Hero, target: Position, map: MapTile[][]): boolean => {
-  // Implementar validación de movimiento basada en:
-  // - Distancia (según puntos de movimiento)
-  // - Tipo de terreno (algunos terrenos cuestan más)
-  // - Obstáculos (montañas, agua, etc.)
+  // Verificar si hay suficientes puntos de movimiento
+  const path = findPath(hero.position, target, map);
+  if (!path.length) return false;
   
-  // Implementar algoritmo de pathfinding (A*) para encontrar el camino más corto
+  // Calcular el costo total del camino
+  const totalCost = calculatePathCost(path, map);
   
-  return false; // Placeholder
+  // Verificar si el héroe tiene suficientes puntos de movimiento
+  return totalCost <= hero.stats.movement_points_left;
+};
+
+// Calcula el costo total de un camino
+export const calculatePathCost = (path: Position[], map: MapTile[][]): number => {
+  let cost = 0;
+  
+  for (let i = 0; i < path.length - 1; i++) {
+    const current = path[i];
+    const next = path[i + 1];
+    
+    // Coste por tipo de terreno
+    const from = map[current.y][current.x];
+    const to = map[next.y][next.x];
+    const terrainCost = calculateMovementCost(from, to);
+    
+    // Coste adicional por movimiento diagonal
+    const isDiagonal = current.x !== next.x && current.y !== next.y;
+    const moveCost = isDiagonal ? 1.414 : 1; // sqrt(2) para diagonales
+    
+    cost += moveCost * terrainCost;
+  }
+  
+  return cost;
+};
+
+// Encuentra un camino usando el algoritmo A*
+export const findPath = (start: Position, target: Position, map: MapTile[][]): Position[] => {
+  if (!map || !map.length || !map[0].length) return [];
+  
+  const rows = map.length;
+  const cols = map[0].length;
+  
+  // Verificar límites del mapa
+  if (target.x < 0 || target.x >= cols || target.y < 0 || target.y >= rows) return [];
+  if (start.x < 0 || start.x >= cols || start.y < 0 || start.y >= rows) return [];
+  
+  // No buscar camino si la casilla destino es agua y no es la posición actual
+  if (map[target.y][target.x].terrain === 'water' && (start.x !== target.x || start.y !== target.y)) {
+    return [];
+  }
+  
+  // Definir direcciones de movimiento (8 direcciones, incluyendo diagonales)
+  const directions = [
+    {x: 0, y: -1}, {x: 1, y: -1}, {x: 1, y: 0}, {x: 1, y: 1},
+    {x: 0, y: 1}, {x: -1, y: 1}, {x: -1, y: 0}, {x: -1, y: -1}
+  ];
+  
+  // Inicializar estructuras para A*
+  const openSet: Position[] = [start];
+  const closedSet: boolean[][] = Array(rows).fill(0).map(() => Array(cols).fill(false));
+  const gScore: number[][] = Array(rows).fill(0).map(() => Array(cols).fill(Infinity));
+  const fScore: number[][] = Array(rows).fill(0).map(() => Array(cols).fill(Infinity));
+  const cameFrom: {[key: string]: Position} = {};
+  
+  gScore[start.y][start.x] = 0;
+  fScore[start.y][start.x] = heuristic(start, target);
+  
+  while (openSet.length > 0) {
+    // Encontrar el nodo con menor fScore
+    let current = openSet[0];
+    let lowestFScore = fScore[current.y][current.x];
+    let currentIndex = 0;
+    
+    for (let i = 1; i < openSet.length; i++) {
+      const score = fScore[openSet[i].y][openSet[i].x];
+      if (score < lowestFScore) {
+        lowestFScore = score;
+        current = openSet[i];
+        currentIndex = i;
+      }
+    }
+    
+    // Si hemos alcanzado el destino, reconstruir y devolver el camino
+    if (current.x === target.x && current.y === target.y) {
+      return reconstructPath(cameFrom, current);
+    }
+    
+    // Sacar el nodo actual del openSet y marcarlo como visitado
+    openSet.splice(currentIndex, 1);
+    closedSet[current.y][current.x] = true;
+    
+    // Explorar vecinos
+    for (const dir of directions) {
+      const neighbor = {
+        x: current.x + dir.x,
+        y: current.y + dir.y
+      };
+      
+      // Validar límites
+      if (neighbor.x < 0 || neighbor.x >= cols || neighbor.y < 0 || neighbor.y >= rows) {
+        continue;
+      }
+      
+      // Ignorar nodos ya evaluados
+      if (closedSet[neighbor.y][neighbor.x]) {
+        continue;
+      }
+      
+      // Ignorar terreno impassable (agua)
+      if (map[neighbor.y][neighbor.x].terrain === 'water') {
+        continue;
+      }
+      
+      // Calcular costo de movimiento (mayor para diagonal)
+      const isDiagonal = dir.x !== 0 && dir.y !== 0;
+      const moveCost = isDiagonal ? 1.414 : 1; // sqrt(2) para diagonales
+      
+      // Costo del terreno
+      const terrainCost = calculateMovementCost(map[current.y][current.x], map[neighbor.y][neighbor.x]);
+      
+      // Costo acumulado hasta este vecino
+      const tentativeGScore = gScore[current.y][current.x] + (moveCost * terrainCost);
+      
+      // Si no está en openSet, añadirlo
+      const neighborInOpenSet = openSet.some(pos => pos.x === neighbor.x && pos.y === neighbor.y);
+      if (!neighborInOpenSet) {
+        openSet.push({...neighbor});
+      } else if (tentativeGScore >= gScore[neighbor.y][neighbor.x]) {
+        // No es un camino mejor
+        continue;
+      }
+      
+      // Este es el mejor camino hasta ahora
+      const key = `${neighbor.x},${neighbor.y}`;
+      cameFrom[key] = {...current};
+      gScore[neighbor.y][neighbor.x] = tentativeGScore;
+      fScore[neighbor.y][neighbor.x] = tentativeGScore + heuristic(neighbor, target);
+    }
+  }
+  
+  // No se encontró camino
+  return [];
+};
+
+// Reconstruye el camino desde el destino hasta el inicio
+const reconstructPath = (cameFrom: {[key: string]: Position}, current: Position): Position[] => {
+  const path = [current];
+  let key = `${current.x},${current.y}`;
+  
+  while (key in cameFrom) {
+    current = cameFrom[key];
+    path.unshift(current);
+    key = `${current.x},${current.y}`;
+  }
+  
+  return path;
+};
+
+// Heurística: distancia euclidiana
+const heuristic = (a: Position, b: Position): number => {
+  return Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 };
 
 // Calcula el coste de movimiento entre celdas
@@ -36,10 +188,10 @@ export const calculateMovementCost = (from: MapTile, to: MapTile): number => {
 };
 
 // Simula un combate entre dos ejércitos
-export const simulateCombat = (attackerArmy: Unit[], defenderArmy: Unit[]): {
+export const simulateCombat = (attackerArmy: ArmyUnit[], defenderArmy: ArmyUnit[]): {
   winner: 'attacker' | 'defender',
-  attackerLosses: Unit[],
-  defenderLosses: Unit[],
+  attackerLosses: ArmyUnit[],
+  defenderLosses: ArmyUnit[],
 } => {
   // Implementar algoritmo de combate que considere:
   // - Estadísticas de las unidades
@@ -54,97 +206,65 @@ export const simulateCombat = (attackerArmy: Unit[], defenderArmy: Unit[]): {
 };
 
 // Calcula los recursos generados al final del turno
-export const calculateEndTurnResources = (gameState: GameState, playerId: string): Resources => {
-  const player = gameState.players.find(p => p.id === playerId);
-  if (!player) throw new Error('Player not found');
-  
-  // Recursos base
+export const calculateEndTurnResources = (gameState: GameState): Resources => {
   const resources: Resources = {
     gold: 0,
     wood: 0,
-    stone: 0,
-    gems: 0,
-    crystal: 0,
+    stone: 0
   };
   
+  // Procesar recursos del jugador actual
+  const entity = gameState.current_player === 'player' ? gameState.player : gameState.ai;
+  
   // Recursos de ciudades
-  player.cities.forEach(cityId => {
-    const city = gameState.cities[cityId];
+  entity.cities.forEach(city => {
     city.buildings.forEach(building => {
-      if (building.built && building.produces?.resource) {
-        const resource = building.produces.resource;
-        const amount = building.produces.amount || 0;
-        resources[resource] = (resources[resource] || 0) + amount;
+      if (building.can_recruit && building.available_creatures) {
+        // Sumar recursos de producción de edificios
+        // TODO: Implementar cuando se defina la producción de recursos
       }
     });
   });
   
-  // Recursos de minas y otros objetos del mapa
-  Object.values(gameState.objects).forEach(obj => {
-    if (obj.type === 'resource' && obj.data.owner === playerId) {
-      const resource = obj.data.resourceType as keyof Resources;
-      const amount = obj.data.amount || 0;
-      resources[resource] = (resources[resource] || 0) + amount;
-    }
-  });
+  // Recursos de minas 
+  gameState.map.visible_objects
+    .filter(obj => 'resource_type' in obj && obj.owner === gameState.current_player)
+    .forEach(obj => {
+      const mine = obj as ResourceMine;
+      if (mine.resource_type in resources) {
+        resources[mine.resource_type as keyof Resources] += mine.resource_per_turn;
+      }
+    });
   
   return resources;
 };
 
 // Prepara el estado del juego para el siguiente turno
 export const prepareNextTurn = (gameState: GameState): GameState => {
-  // Crear una copia del estado para no mutar el original
   const newState = { ...gameState };
   
-  // Incrementar contador de turno si todos los jugadores han jugado
-  const playerIndex = newState.players.findIndex(p => p.id === newState.currentPlayer);
-  const nextPlayerIndex = (playerIndex + 1) % newState.players.length;
+  // Cambiar jugador actual
+  newState.current_player = newState.current_player === 'player' ? 'ai' : 'player';
   
-  if (nextPlayerIndex === 0) {
+  // Incrementar turno si volvemos al jugador
+  if (newState.current_player === 'player') {
     newState.turn += 1;
   }
   
-  // Actualizar jugador actual
-  newState.currentPlayer = newState.players[nextPlayerIndex].id;
-  
   // Restaurar puntos de movimiento de los héroes del jugador actual
-  Object.values(newState.heroes).forEach(hero => {
-    if (hero.id.startsWith(newState.currentPlayer)) {
-      hero.movementPoints = hero.maxMovementPoints;
-    }
+  const currentEntity = newState.current_player === 'player' ? newState.player : newState.ai;
+  currentEntity.heroes.forEach(hero => {
+    hero.stats.movement_points_left = hero.stats.movement_points;
   });
   
-  // Actualizar recursos del jugador que acaba de terminar su turno
-  const currentPlayer = newState.players[playerIndex];
-  const newResources = calculateEndTurnResources(gameState, currentPlayer.id);
-  
-  // Sumar los nuevos recursos a los existentes
-  newState.players[playerIndex].resources = {
-    gold: currentPlayer.resources.gold + newResources.gold,
-    wood: currentPlayer.resources.wood + newResources.wood,
-    stone: currentPlayer.resources.stone + newResources.stone,
-    gems: currentPlayer.resources.gems + newResources.gems,
-    crystal: currentPlayer.resources.crystal + newResources.crystal,
-  };
-  
-  // Actualizar unidades disponibles en ciudades (semanalmente)
+  // Crecimiento semanal de unidades (cada 7 turnos)
   if (newState.turn % 7 === 1) {
-    Object.values(newState.cities).forEach(city => {
+    [...newState.player.cities, ...newState.ai.cities].forEach(city => {
       city.buildings.forEach(building => {
-        if (building.built && building.produces?.unit) {
-          const unitId = building.produces.unit;
-          const amount = building.produces.unitPerWeek || 0;
-          
-          const existingUnitIndex = city.availableUnits.findIndex(u => u.unitId === unitId);
-          
-          if (existingUnitIndex >= 0) {
-            city.availableUnits[existingUnitIndex].amount += amount;
-          } else {
-            city.availableUnits.push({
-              unitId,
-              amount
-            });
-          }
+        if (building.can_recruit && building.available_creatures) {
+          building.available_creatures.forEach(creature => {
+            creature.count += creature.growth_per_week;
+          });
         }
       });
     });
@@ -152,3 +272,20 @@ export const prepareNextTurn = (gameState: GameState): GameState => {
   
   return newState;
 };
+
+export function updateAvailableCreatures(state: GameState): GameState {
+  const newState = { ...state };
+  
+  [...newState.player.cities, ...newState.ai.cities].forEach(city => {
+    city.buildings.forEach(building => {
+      if (building.can_recruit && building.available_creatures) {
+        building.available_creatures = building.available_creatures.map(creature => ({
+          ...creature,
+          count: creature.count + (creature.growth_per_week || 0)
+        }));
+      }
+    });
+  });
+
+  return newState;
+}

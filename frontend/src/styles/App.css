@@ -71,3 +71,16 @@
 .gap-4 {
   gap: 16px;
 }
+
+.audio-control-container {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 1000;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.audio-control-container:hover {
+  opacity: 1;
+}

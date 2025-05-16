@@ -1,156 +1,133 @@
-/*
-* Definiciones de tipos para el juego
-* Implementar interfaces para:
-* - Entidades del juego (Héroes, Unidades, Ciudades, etc.)
-* - Estado del juego
-* - Acciones del juego
-*/
+export interface MapSize {
+  width: number;
+  height: number;
+}
 
-// Tipos de terreno
-export type TerrainType = 'grass' | 'forest' | 'mountain' | 'water' | 'desert' | 'snow';
-
-// Tipo de recursos
-export type ResourceType = 'gold' | 'wood' | 'stone' | 'gems' | 'crystal';
-
-// Interfaz para los recursos del jugador
 export interface Resources {
   gold: number;
   wood: number;
   stone: number;
-  gems: number;
-  crystal: number;
 }
 
-// Interfaz para una posición en el mapa
 export interface Position {
   x: number;
   y: number;
 }
 
-// Interfaz para estadísticas de un héroe
-export interface HeroStats {
+export interface Stats {
   attack: number;
   defense: number;
-  power: number;
-  knowledge: number;
+  speed: number;
+  movement_points: number;
+  movement_points_left: number;
 }
 
-// Interfaz para una unidad
+export interface ArmyUnit {
+  type: string;
+  count: number;
+  stats: Stats;
+}
+
 export interface Unit {
   id: string;
-  name: string;
-  attack: number;
-  defense: number;
-  health: number;
-  speed: number;
-  quantity: number;
-  tier: number;
-  cost: Partial<Resources>;
+  type: string;
+  count: number;
+  stats: Stats;
 }
 
-// Interfaz para un héroe
-export interface Hero {
-  id: string;
-  name: string;
-  stats: HeroStats;
-  position: Position;
-  movementPoints: number;
-  maxMovementPoints: number;
-  army: Unit[];
-  artifacts: Artifact[];
-  experience: number;
-  level: number;
-  portrait: string;
-}
-
-// Interfaz para un artefacto
 export interface Artifact {
   id: string;
   name: string;
-  description: string;
-  bonuses: Partial<HeroStats>;
-  slot: 'head' | 'neck' | 'armor' | 'weapon' | 'shield' | 'boots' | 'misc';
+  subtype: 'totemDeGuerra' | 'totemVelocidad' | 'reclutamiento';
+  effect: Record<string, any>;
 }
 
-// Interfaz para un edificio
+export interface Hero {
+  id: string;
+  name: string;
+  position: Position;
+  stats: Stats;
+  army: ArmyUnit[];
+  artifacts: Artifact[];
+}
+
+export interface Creature {
+  id: string;
+  type: string;
+  name: string;  // Añadido
+  count: number;
+  growth_per_week: number;
+  unit_cost: Resources;  // Cambiado de cost a unit_cost
+  stats: Stats;
+}
+
+export interface MapTile {
+  terrain: 'grass' | 'forest' | 'mountain' | 'water' | 'desert' | 'snow';
+  passable: boolean;
+  object_type?: string;
+  object_id?: string;
+}
+
 export interface Building {
   id: string;
   name: string;
-  level: number;
-  cost: Partial<Resources>;
-  requirements: string[];
-  produces?: Produces;
+  position: Position;
   built: boolean;
+  can_recruit: boolean;
+  is_castle: boolean;
+  has_tavern: boolean;
+  building_type: string; // Cambiado de type a building_type
+  requirements: string[];
+  cost: Resources;
+  available_creatures: Creature[];
 }
 
-// Interfaz para una ciudad
 export interface City {
   id: string;
   name: string;
   position: Position;
-  owner: string | null;
+  owner: string;
   buildings: Building[];
+  garrison: Creature[]; // Cambiado de Hero[] a Creature[]
   availableUnits: {
     unitId: string;
     amount: number;
   }[];
-  garrison: Unit[];
 }
 
-// Interfaz para una celda del mapa
-export interface MapTile {
-  terrain: TerrainType;
-  position: Position;
-  object?: {
-    type: 'resource' | 'dwelling' | 'artifact' | 'city' | 'hero' | 'obstacle';
-    id?: string;
-    visitable: boolean;
-    explored: boolean;
-  };
-}
-
-// Interfaz para el estado del juego
 export interface GameState {
-  id: string;
-  scenario: string;
   turn: number;
-  currentPlayer: string;
-  players: {
-    id: string;
-    name: string;
+  current_player: 'player' | 'ai';
+  player: {
+    heroes: Hero[];
+    cities: City[];
     resources: Resources;
-    cities: string[];
-    heroes: string[];
-  }[];
+  };
+  ai: {
+    heroes: Hero[];
+    cities: City[];
+    resources: Resources;
+  };
   map: {
-    width: number;
-    height: number;
-    tiles: MapTile[][];
+    size: MapSize;
+    tiles: MapTile[];
+    fog_of_war: boolean[];
+    explored: boolean[];
+    visible_objects: VisibleObject[];
   };
-  heroes: { [id: string]: Hero };
-  cities: { [id: string]: City };
-  objects: {
-    [id: string]: {
-      type: string;
-      position: Position;
-      data: any;
-    };
-  };
+  cities: City[];
 }
 
-// Interfaz para un jugador
-export interface Player {
+export interface ResourceMine extends VisibleObject {
+  resource_type: keyof Resources;
+  resource_per_turn: number;
+}
+
+export interface VisibleObject {
   id: string;
-  name: string;
-  resources: Resources;
-  // Add other player properties as needed
-}
-
-// Interfaz para la producción de un edificio
-export interface Produces {
-  resource?: ResourceType;
-  amount?: number;
-  unit?: string;
-  unitPerWeek?: number;
-  unitCost?: Record<string, number>; // Add this property
+  type: string;
+  position: Position;
+  owner: string | null;
+  resource_type?: string;
+  resource_per_turn?: number;
 }

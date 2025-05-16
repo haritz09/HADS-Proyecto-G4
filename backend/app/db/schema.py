@@ -53,19 +53,20 @@ class Position(BaseModel):
 class Stats(BaseModel):
     attack: int
     defense: int
-    power: int
-    knowledge: int
+    speed: int
     movement_points: int
-    movement_points_left: int
+    movement_points_left: float  # Cambiado de int a float para soportar valores decimales
 
 class ArmyUnit(BaseModel):
     type: str
     count: int
+    stats: Stats
 
 class Artifact(BaseModel):
     id: str
     name: str
-    slot: str
+    subtype: str  # 'totemDeGuerra', 'totemVelocidad', 'reclutamiento'
+    effect: Dict[str, Any] = {}  # Efectos del artefacto
 
 class Heroe(BaseModel):
     id: str
@@ -73,7 +74,7 @@ class Heroe(BaseModel):
     position: Position
     stats: Stats
     army: List[ArmyUnit]
-    artifacts: List[Artifact]
+    artifacts: List[Artifact] = []  # Máximo 2 artefactos
 
 class City(BaseModel):
     id: str
@@ -100,9 +101,18 @@ class Building(BaseModel):
 
 class CastleBuilding(Building):
     is_castle: bool = True
-    has_tavern: bool = True
-    can_recruit: bool = True
+    has_tavern: bool = False
+    can_recruit: bool = False
+    garrison: List[ArmyUnit] = []  # Guarnición del castillo
     # Aquí se puede añadir lógica/método para reclutar unidades si se requiere
+
+class ResourceMine(BaseModel):
+    id: str
+    type: str  # 'goldmine', 'sawmill', 'quarry'
+    position: Position
+    owner: Optional[str] = None  # 'player', 'ai' o None (neutral)
+    resource_type: str  # 'gold', 'wood', 'stone'
+    resource_per_turn: int
 
 class Entity(BaseModel):
     heroes: List[Heroe] = []
@@ -120,8 +130,8 @@ class GameMap(BaseModel):
     tiles: Optional[List[MapTile]] = None
     fog_of_war: Optional[List[bool]] = None
     explored: Optional[List[Any]] = None
-    visible_objects: Optional[List[Any]] = None
-    
+    visible_objects: Optional[List[Union[ResourceMine, Artifact]]] = None
+    # visible_objects ahora puede contener ResourceMine y otros objetos
 
 class GameState(BaseModel):
     turn: int

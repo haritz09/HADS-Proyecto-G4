@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from bson import ObjectId
 from pymongo import MongoClient
 from backend.app.core.config import settings
@@ -108,16 +108,32 @@ def delete_game(game_id: str) -> bool:
         result = db.games.delete_one({"_id": ObjectId(game_id)})
         return result.deleted_count > 0
 
-def list_saved_games(user_id: str) -> list[Dict[str, Any]]:
-    """Listar todas las partidas guardadas de un usuario."""
-    with get_db_client() as db:
-        cursor = db.games.find({"user_id": ObjectId(user_id)})
-        games = []
-        for game in cursor:
-            game["_id"] = str(game["_id"])
-            game["user_id"] = str(game["user_id"])
-            games.append(game)
-        return games
+def list_saved_games(user_id: str) -> List[dict]:
+    try:
+        with get_db_client() as db:
+            print(f"DEBUG CRUD: Buscando partidas para user_id: {user_id}")
+            
+            # Asegurarnos de que el user_id es un ObjectId válido
+            user_oid = ObjectId(user_id)
+            
+            # Realizar la búsqueda con el filtro correcto
+            cursor = db.games.find({"user_id": user_oid})
+            games = list(cursor)
+            
+            # Convertir ObjectId a str para cada documento
+            for game in games:
+                game["_id"] = str(game["_id"])
+                game["user_id"] = str(game["user_id"])
+                print(f"DEBUG CRUD: Encontrada partida: {game['_id']}")
+            
+            print(f"DEBUG CRUD: Total partidas encontradas: {len(games)}")
+            return games
+            
+    except Exception as e:
+        print(f"ERROR CRUD: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 def save_game(game_id: str, game_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Guardar o actualizar el estado de una partida."""

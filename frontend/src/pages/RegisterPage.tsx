@@ -11,6 +11,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/api';
 import Button from '../components/ui/Button';
 import '../styles/pages/RegisterPage.css';
+import React from 'react';
+import PropTypes from 'prop-types';
 
 interface RegisterPageProps {
   setAuth: (isAuth: boolean) => void;
@@ -62,11 +64,11 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
       // Llamar a la API de registro
       await authService.register(username, email, password);
       
-      // Actualizar estado de autenticación
-      setAuth(true);
+      // No actualizamos el estado de autenticación aquí
+      // Ya que queremos que el usuario inicie sesión explícitamente
       
-      // Redirigir a la página principal
-      navigate('/menu');
+      // Redirigir a la página de login en lugar del menú
+      navigate('/login');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al registrarse. Inténtalo de nuevo más tarde.');
     } finally {
@@ -78,7 +80,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
     <div className="register-page">
       <div className="register-container">
         <div className="register-header">
-          <h1>Legends of the Realm</h1>
+          <h1>Heroes&Hostias</h1>
           <h2>Crear Cuenta</h2>
         </div>
         
@@ -88,7 +90,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
         
         <form onSubmit={handleSubmit} className="register-form">
           <div className="form-group">
-            <label htmlFor="username">Nombre de usuario</label>
+            <label htmlFor="username">Nombre de Usuario</label>
             <input
               type="text"
               id="username"
@@ -96,11 +98,12 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
               placeholder="Elige un nombre de usuario"
+              required
             />
           </div>
           
           <div className="form-group">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="email">Correo Electrónico</label>
             <input
               type="email"
               id="email"
@@ -108,6 +111,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
               placeholder="Ingresa tu email"
+              required
             />
           </div>
           
@@ -120,6 +124,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               placeholder="Crea una contraseña"
+              required
             />
           </div>
           
@@ -132,6 +137,7 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={loading}
               placeholder="Repite tu contraseña"
+              required
             />
           </div>
           
@@ -151,6 +157,10 @@ const RegisterPage: React.FC<RegisterPageProps> = ({ setAuth }) => {
       </div>
     </div>
   );
+};
+
+RegisterPage.propTypes = {
+  setAuth: PropTypes.func.isRequired
 };
 
 export default RegisterPage;

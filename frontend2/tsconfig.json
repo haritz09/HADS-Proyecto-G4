@@ -22,5 +22,5 @@
   },
   "include": [
     "src"
-  ]
+, "../frontend/src/components/game/HeroSprite.tsx"  ]
 }

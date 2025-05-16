@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=MedievalSharp&family=UnifrakturCook:wght@700&display=swap');
+
+.credits-page {
+  min-height: 100vh;
+  width: 100vw;
+  background: url('../../assets/images/background/menu_scenarios.png') no-repeat center center fixed;
+  background-size: contain;
+  background-color: #18120a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  font-family: 'MedievalSharp', serif;
+  color: #e9d8a6;
+  padding: 20px;
+}
+
+.credits-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 1200px;
+  margin-bottom: 30px;
+  padding: 20px;
+}
+
+.credits-header h1 {
+  font-size: 3rem;
+  color: #e9d8a6;
+  text-shadow: 2px 2px 8px #3a2c0f, 0 0 2px #fff8;
+  font-family: 'Cinzel Decorative', serif;
+  margin: 0;
+}
+
+.credits-content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  width: 100%;
+  max-width: 1200px;
+  background: rgba(26, 21, 15, 0.85);
+  padding: 30px;
+  border-radius: 12px;
+  border: 3px solid #bfa76f;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.credits-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.credits-info h2 {
+  font-size: 2.5rem;
+  margin: 0;
+  text-align: center;
+  font-family: 'UnifrakturCook', serif;
+  color: #e9d8a6;
+  text-shadow: 2px 2px 5px #000;
+}
+
+.credits-info p {
+  font-size: 1.2rem;
+  text-align: center;
+  margin: 10px 0;
+}
+
+.team-section, .tech-section {
+  margin: 20px 0;
+}
+
+.team-section h3, .tech-section h3, .map-section h3 {
+  font-size: 1.8rem;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #bfa76f;
+  padding-bottom: 5px;
+  color: #e9d8a6;
+}
+
+.team-section ul, .tech-section ul {
+  list-style-type: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+}
+
+.team-section li, .tech-section li {
+  background: rgba(58, 44, 15, 0.7);
+  padding: 10px 20px;
+  border-radius: 5px;
+  border: 1px solid #bfa76f;
+  font-size: 1.1rem;
+}
+
+.map-section {
+  margin-top: 30px;
+}
+
+.map-section p {
+  margin-bottom: 20px;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .credits-content {
+    padding: 15px;
+  }
+  
+  .credits-header h1 {
+    font-size: 2.2rem;
+  }
+  
+  .credits-info h2 {
+    font-size: 2rem;
+  }
+  
+  .team-section li, .tech-section li {
+    padding: 8px 15px;
+    font-size: 1rem;
+  }
+}

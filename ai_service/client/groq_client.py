@@ -58,36 +58,90 @@ class GroqClient:
             Exception: If all models hit rate limits
         """
         # Construct the prompt with the game state
-        prompt_template = """You are an AI agent playing Heroes of Might and Magic, a turn-based strategy game. Your goal is to expand your empire, conquer cities, collect resources, and defeat your opponent.
-
-You will receive the current game state in JSON format and must decide the actions for this turn.
-
----
-
-IMPORTANT:
-- Only reply with a **valid JSON object**, strictly matching the format below.
-- DO NOT include any text, commentary, or XML tags like <strategic_planning> outside the JSON.
-- DO NOT invent new action types. Valid types are:
-  - moveHero
-  - buildStructure
-  - recruitUnits
-  - collectResource
-  - attackEnemy
-  - castSpell
-  - pickupArtifact
-  - endTurn
-- Use camelCase for field names.
-- Actions should respect remaining movement points and game constraints.
-
----
-
-Here is the current game state:
-<game_state>
-{{GAME_STATE}}
-</game_state>
-
-Now, based on this state, analyze the situation, plan your strategy, and return your decisions in the following format:
-
+        prompt_template = """Here is the current game state:
+ <game_state>
+ {{GAME_STATE}}
+ </game_state>
+ You are an AI agent playing Heroes of Might and Magic, a turn-based strategy 
+game. Your goal is to expand your empire, conquer cities, collect resources, 
+and defeat your opponent. You will receive the current game state and must 
+decide on your actions for this turn.
+ Your task is to analyze the game state, formulate a strategy, and determine 
+the actions for your current turn. Follow these steps:
+ 1. Analyze the game state, considering:
+   - Your heroes' positions, stats, and armies
+   - Your cities and their development
+   - Available resources and income
+   - Explored areas of the map
+   - Known enemy positions and strength
+   - Nearby opportunities (resources, neutral armies, artifacts)
+   - Fog of war (areas of the map you haven't explored)
+ 2. Formulate a strategy based on these priorities:
+   - Exploration to uncover resources and cities
+   - Securing income sources
+   - City development for stronger unit recruitment
+   - Hero improvement through experience and artifacts
+   - Balancing economy and military strength
+3. Generate a set of actions for this turn. You can perform multiple actions 
+until you run out of movement points. Possible action types include:- moveHero: Move a hero to a new location- buildStructure: Construct a building in a city- recruitUnits: Recruit new units in a city- collectResource: Collect a resource on the map- attackEnemy: Initiate combat with an enemy (you have to be in the same position as the enemy on the map)- transer: Transfer troops between the heroe and the castle (you have to be in the castle to do this)- pickupArtifact: Equip a hero with an artifact
+ You can recruit these units based on your buildings and available resources (to recruit a unit you have to be in the city and building which generates it): 
+- soldado (cost: 50 gold, health: 100, attack: 10, speed: 8) -It's generated in the barracks
+- arquero: (cost: 50 gold, health: 100, attack: 8, speed: 12) -It's generated in the archery
+- caballero: (cost: 100 gold, health: 150, attack: 15, speed: 10) -It's generated in the knigths_tower
+- mago: (cost: 200 gold, health: 80, attack: 20, speed: 12) -It's generated in the mage_tower
+- dragon: (cost: 400 gold, heath: 100, attack: 30, speed: 15) -It's generated in the dragons_lair
+You can also build these structures in your cities with buildStructure (to build a structure you have to be in the castle):
+-"barracks": {"gold": 1000, "wood": 50, "stone": 50},
+-"archery": {"gold": 1200, "wood": 70, "stone": 30},
+-"knigths_tower": {"gold": 1500, "wood": 100, "stone": 100},
+-"mage_tower": {"gold": 2000, "wood": 100, "stone": 100},
+-"dragons_lair": {"gold": 5000, "wood": 200, "stone": 200}
+You can also build a tavern in the castle to increase the maximum number of heroes you can have (so you don't lose when a hero dies):
+-"tavern": {"gold": 1000, "wood": 200, "stone": 200} 
+ Before providing your final response, wrap your thought process and 
+strategic considerations inside <strategic_planning> tags. In this section:
+ 1. Summarize the current game state, including hero positions, resources, 
+and known enemy information.
+ 2. List out potential opportunities and threats.
+ 3. Prioritize objectives based on the current situation.
+ 4. Outline a short-term (this turn) and long-term (next few turns) strategy.
+ It's OK for this section to be quite long, as thorough planning is crucial 
+for success in the game.
+ Your final response should be in the following JSON format:
+{
+  "actions": [
+    {
+      "type": "actionType",
+      "details": {
+        // Relevant details for the action
+      }
+    },
+ 	//… more actions ...
+    {
+      "type": "endTurn"
+    }
+  ],
+  "strategic_planning": {
+    "summary": "Resumen del estado actual del juego, incluyendo posiciones de héroes, recursos y enemigos.",
+    "opportunities": [
+      "Oportunidad 1",
+      "Oportunidad 2"
+    ],
+    "threats": [
+      "Amenaza 1",
+      "Amenaza 2"
+    ],
+    "prioritized_objectives": [
+      "Objetivo prioritario 1",
+      "Objetivo prioritario 2"
+    ],
+    "short_term_strategy": "Acciones clave para este turno.",
+    "long_term_strategy": "Plan general para los próximos turnos."
+  },
+  "reasoning": "Explicación general de la estrategia y decisiones tomadas.",
+  "analysis": "Breve análisis del estado del juego y la posición del oponente."
+}
+ Here's an example of the action format:
 {
   "actions": [
     {
@@ -103,6 +157,23 @@ Now, based on this state, analyze the situation, plan your strategy, and return 
         "heroId": "hero1",
         "resourceType": "gold",
         "location": { "x": 4, "y": 2 }
+      }
+    },
+    {
+      "type": "buildStructure",
+      "details": {
+      "cityId": "city1",
+      "structureType": "barracks"
+      }
+    },
+    {
+      "type": "recruitUnits",
+      "details": {
+        "heroId": "hero1",
+        "cityId": "city1",
+        "buildingId": "barracks",
+        "unitType": "archer",
+        "quantity": 5
       }
     },
     {

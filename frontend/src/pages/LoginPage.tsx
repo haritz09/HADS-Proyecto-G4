@@ -11,6 +11,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/api';
 import Button from '../components/ui/Button';
 import '../styles/pages/LoginPage.css';
+import React from 'react';
+import PropTypes from 'prop-types';
 
 interface LoginPageProps {
   setAuth: (isAuth: boolean) => void;
@@ -20,6 +22,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
   const navigate = useNavigate();
   
   // Estados
+  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -30,8 +33,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
     e.preventDefault();
     
     // Validar campos
-    if (!username.trim() || !password.trim()) {
+    if (!email.trim() || !username.trim() || !password.trim()) {
       setError('Por favor, completa todos los campos');
+      return;
+    }
+    
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Por favor, ingresa un email válido');
       return;
     }
     
@@ -40,14 +50,18 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
       setError(null);
       
       // Llamar a la API de login
-      await authService.login(username, password);
+      const response = await authService.login(username, password);
       
       // Actualizar estado de autenticación
       setAuth(true);
       
-      // Redirigir a la página principal
+      console.log('Login exitoso, redirigiendo al menú principal...');
+      
+      // Redirigir al menú principal (MainMenuPage)
       navigate('/menu');
+      
     } catch (err: any) {
+      console.error('Error en login:', err);
       setError(err.response?.data?.message || 'Error al iniciar sesión. Verifica tus credenciales.');
     } finally {
       setLoading(false);
@@ -58,7 +72,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
     <div className="login-page">
       <div className="login-container">
         <div className="login-header">
-          <h1>Legends of the Realm</h1>
+          <h1>Heroes&Hostias</h1>
           <h2>Iniciar Sesión</h2>
         </div>
         
@@ -68,7 +82,20 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
         
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="username">Nombre de usuario</label>
+            <label htmlFor="email">Correo Electrónico</label>
+            <input
+              type="email"
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              placeholder="Ingresa tu correo electrónico"
+              required
+            />
+          </div>
+          
+          <div className="form-group">
+            <label htmlFor="username">Nombre de Usuario</label>
             <input
               type="text"
               id="username"
@@ -76,6 +103,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
               placeholder="Ingresa tu nombre de usuario"
+              required
             />
           </div>
           
@@ -88,6 +116,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
               placeholder="Ingresa tu contraseña"
+              required
             />
           </div>
           
@@ -107,6 +136,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ setAuth }) => {
       </div>
     </div>
   );
+};
+
+LoginPage.propTypes = {
+  setAuth: PropTypes.func.isRequired
 };
 
 export default LoginPage;

@@ -7,3 +7,5 @@ python-multipart>=0.0.6
 pydantic>=2.4.2
 pydantic-settings>=2.0.3
 httpx>=0.25.0  # Required for TestClient
+email-validator>=2.0.0  # Required for EmailStr validation
+pygame

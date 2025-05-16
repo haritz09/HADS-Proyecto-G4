@@ -7,92 +7,132 @@
 */
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { authService } from '../services/api';
+
+interface LoginCredentials {
+  username: string;
+  password: string;
+}
+
+interface RegisterData {
+  username: string;
+  email: string;
+  password: string;
+}
 
 interface AuthContextType {
-  isAuthenticated: boolean;
   user: any | null;
-  loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  isAuthenticated: boolean;
+  loading: boolean;  // Añadimos loading al tipo
+  login: (credentials: LoginCredentials) => Promise<void>;
+  register: (userData: RegisterData) => Promise<void>;
   logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  isAuthenticated: false,
-  user: null,
-  loading: true,
-  login: async () => {},
-  register: async () => {},
-  logout: () => {},
-});
-
-export const useAuth = () => useContext(AuthContext);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<any | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  
-  // Verificar si hay una sesión activa al cargar la aplicación
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);  // Añadimos el estado loading
+
   useEffect(() => {
+    // Comprobar si hay un token guardado
     const checkAuth = async () => {
       try {
-        // Verificar si hay un token guardado
         const token = localStorage.getItem('authToken');
-        if (!token) {
-          setLoading(false);
-          return;
+        if (token) {
+          // Verificar token con el backend si es necesario
+          setIsAuthenticated(true);
+          // Establecer usuario si es necesario
         }
-        
-        // Validar el token obteniendo el perfil del usuario
-        const response = await authService.getProfile();
-        setUser(response.data);
-        setIsAuthenticated(true);
-      } catch (err) {
-        // Si hay un error, limpiar el token
-        localStorage.removeItem('authToken');
+      } catch (error) {
+        console.error('Auth check error:', error);
       } finally {
-        setLoading(false);
+        setLoading(false);  // Importante: establecer loading a false al terminar
       }
     };
-    
+
     checkAuth();
   }, []);
-  
-  // Función para iniciar sesión
-  const login = async (username: string, password: string) => {
-    const response = await authService.login(username, password);
-    setUser(response.data.user);
-    setIsAuthenticated(true);
+
+  const login = async (credentials: LoginCredentials): Promise<void> => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(credentials)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
+      
+      const userData = await response.json();
+      setUser(userData);
+      setIsAuthenticated(true);
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
-  
-  // Función para registrarse
-  const register = async (username: string, email: string, password: string) => {
-    const response = await authService.register(username, email, password);
-    setUser(response.data.user);
-    setIsAuthenticated(true);
+
+  const register = async (userData: RegisterData): Promise<void> => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData)
+      });
+      
+      if (!response.ok) {
+        throw new Error('Registration failed');
+      }
+      
+      const newUser = await response.json();
+      setUser(newUser);
+      setIsAuthenticated(true);
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
-  
-  // Función para cerrar sesión
+
   const logout = () => {
-    authService.logout();
     setUser(null);
     setIsAuthenticated(false);
+    localStorage.removeItem('authToken');
   };
-  
-  const value = {
-    isAuthenticated,
-    user,
-    loading,
-    login,
-    register,
-    logout,
-  };
-  
+
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider 
+      value={{ 
+        user, 
+        isAuthenticated,
+        loading,  // Añadimos loading al valor del contexto
+        login, 
+        register, 
+        logout 
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };

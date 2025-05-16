@@ -10,6 +10,9 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import WelcomeScreen from './components/WelcomeScreen';
 import { useAuth } from './contexts/AuthContext';
+import { AudioProvider } from './contexts/AudioContext';
+import AudioPlayer from './components/ui/AudioPlayer';
+import AudioControl from './components/ui/AudioControl';  // Add this import
 import './styles/App.css';
 
 // Importar páginas principales
@@ -20,6 +23,9 @@ import MainMenuPage from './pages/MainMenuPage';
 import GamePage from './pages/GamePage';
 import CityPage from './pages/CityPage';
 import HeroPage from './pages/HeroPage';
+import ScenarioMenuPage from './pages/ScenarioMenuPage';
+import LoadGamePage from './pages/LoadGamePage';
+import MapViewPage from './pages/MapViewPage';
 
 const App: React.FC = () => {
   const { isAuthenticated, loading, login, register } = useAuth();
@@ -40,33 +46,58 @@ const App: React.FC = () => {
   }
 
   return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage setAuth={handleLogin} />} />
-      <Route path="/register" element={<RegisterPage setAuth={handleRegister} />} />
+    <AudioProvider>
+      <AudioPlayer />
       
-      {/* Protected routes - only accessible when authenticated */}
-      <Route 
-        path="/menu" 
-        element={isAuthenticated ? <MainMenuPage /> : <Navigate to="/login" />} 
-      />
-      <Route 
-        path="/game" 
-        element={isAuthenticated ? <GamePage /> : <Navigate to="/login" />} 
-      />
-      <Route 
-        path="/city" 
-        element={isAuthenticated ? <CityPage /> : <Navigate to="/login" />} 
-      />
-      <Route 
-        path="/hero" 
-        element={isAuthenticated ? <HeroPage /> : <Navigate to="/login" />} 
-      />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<LandingPage />} />
+        
+        <Route path="/login" element={<LoginPage setAuth={handleLogin} />} />
+        <Route path="/register" element={<RegisterPage setAuth={handleRegister} />} />
+        
+        {/* Protected routes - only accessible when authenticated */}
+        <Route 
+          path="/menu" 
+          element={isAuthenticated ? <MainMenuPage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/game" 
+          element={isAuthenticated ? <GamePage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/game/:gameId" 
+          element={isAuthenticated ? <GamePage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/city" 
+          element={isAuthenticated ? <CityPage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/hero" 
+          element={isAuthenticated ? <HeroPage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/scenarios" 
+          element={isAuthenticated ? <ScenarioMenuPage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/load-game" 
+          element={isAuthenticated ? <LoadGamePage /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/map-view" 
+          element={isAuthenticated ? <MapViewPage /> : <Navigate to="/login" />} 
+        />
+        
+        {/* Fallback route */}
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
       
-      {/* Fallback route */}
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+      <div className="audio-control-container">
+        <AudioControl variant="small" />
+      </div>
+    </AudioProvider>
   );
 };
 

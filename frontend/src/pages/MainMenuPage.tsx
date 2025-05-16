@@ -1,3 +1,5 @@
+import React from 'react';
+
 /*
 * Página del menú principal
 * Implementar:
@@ -38,8 +40,6 @@ const MainMenuPage: React.FC = () => {
   // Estados
   const [savedGames, setSavedGames] = useState<SavedGame[]>([]);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
-  const [showNewGame, setShowNewGame] = useState<boolean>(false);
   const [showLoadGame, setShowLoadGame] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>('');
   
@@ -58,11 +58,6 @@ const MainMenuPage: React.FC = () => {
         // Cargar escenarios disponibles
         const scenariosResponse = await gameService.getScenarios();
         setScenarios(scenariosResponse.data);
-        
-        // Preseleccionar el primer escenario
-        if (scenariosResponse.data.length > 0) {
-          setSelectedScenario(scenariosResponse.data[0].id);
-        }
       } catch (err) {
         console.error('Error loading data:', err);
       }
@@ -70,18 +65,6 @@ const MainMenuPage: React.FC = () => {
     
     loadData();
   }, []);
-  
-  // Crear nueva partida
-  const handleCreateGame = async () => {
-    if (!selectedScenario) return;
-    
-    try {
-      const response = await gameService.createGame(selectedScenario);
-      navigate(`/game/${response.data.id}`);
-    } catch (err) {
-      console.error('Error creating game:', err);
-    }
-  };
   
   // Cargar partida guardada
   const handleLoadGame = (gameId: string) => {
@@ -97,24 +80,15 @@ const MainMenuPage: React.FC = () => {
   return (
     <div className="main-menu-page">
       <div className="menu-header">
-        <h1>Legends of the Realm</h1>
-        <div className="user-info">
-          <span>Bienvenido, {userName}</span>
-          <Button variant="secondary" size="small" onClick={handleLogout}>
-            Cerrar Sesión
-          </Button>
-        </div>
+        <h1>Heroes&Hostias</h1>
       </div>
       
       <div className="menu-content">
-        <div className="menu-sidebar">
+        <div className="menu-buttons">
           <Button 
             variant="primary" 
             size="large" 
-            onClick={() => {
-              setShowNewGame(true);
-              setShowLoadGame(false);
-            }}
+            onClick={() => navigate('/scenarios')}
           >
             Nueva Partida
           </Button>
@@ -122,57 +96,43 @@ const MainMenuPage: React.FC = () => {
           <Button 
             variant="primary" 
             size="large" 
-            onClick={() => {
-              setShowLoadGame(true);
-              setShowNewGame(false);
-            }}
+            onClick={() => navigate('/load-game')}
           >
             Cargar Partida
           </Button>
           
-          <Button variant="secondary" size="large">
+          <Button 
+            variant="primary" 
+            size="large"
+            onClick={() => navigate('/map-view')}
+          >
+            Ver Mapa
+          </Button>
+          
+          <Button 
+            variant="primary" 
+            size="large"
+          >
             Opciones
           </Button>
           
-          <Button variant="secondary" size="large">
+          <Button 
+            variant="primary" 
+            size="large"
+          >
             Créditos
+          </Button>
+          
+          <Button 
+            variant="primary" 
+            size="large" 
+            onClick={handleLogout}
+          >
+            Cerrar Sesión
           </Button>
         </div>
         
         <div className="menu-main-content">
-          {showNewGame && (
-            <div className="new-game-section">
-              <h2>Nueva Partida</h2>
-              
-              <div className="scenario-selection">
-                <h3>Selecciona un escenario:</h3>
-                <div className="scenarios-list">
-                  {scenarios.map(scenario => (
-                    <div 
-                      key={scenario.id}
-                      className={`scenario-item ${selectedScenario === scenario.id ? 'selected' : ''}`}
-                      onClick={() => setSelectedScenario(scenario.id)}
-                    >
-                      <h4>{scenario.name}</h4>
-                      <p>Dificultad: {scenario.difficulty}</p>
-                      <p>Tamaño: {scenario.mapSize.width}x{scenario.mapSize.height}</p>
-                      <p>{scenario.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <Button 
-                variant="success" 
-                size="large" 
-                onClick={handleCreateGame}
-                disabled={!selectedScenario}
-              >
-                Comenzar Partida
-              </Button>
-            </div>
-          )}
-          
           {showLoadGame && (
             <div className="load-game-section">
               <h2>Cargar Partida</h2>
@@ -199,24 +159,11 @@ const MainMenuPage: React.FC = () => {
               )}
             </div>
           )}
-          
-          {!showNewGame && !showLoadGame && (
-            <div className="welcome-section">
-              <h2>¡Bienvenido a Legends of the Realm!</h2>
-              <p>Selecciona una opción del menú para comenzar.</p>
-              
-              <div className="game-info">
-                <h3>Sobre el juego</h3>
-                <p>Legends of the Realm es un juego de estrategia por turnos inspirado en clásicos como Heroes of Might and Magic.</p>
-                <p>Recluta héroes, construye tu ejército, conquista ciudades y derrota a tus enemigos en emocionantes batallas tácticas.</p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
       
       <div className="menu-footer">
-        <p>Legends of the Realm v0.1 - Proyecto Educativo</p>
+        <p>v.1.0.0 - Proyecto educativo</p>
       </div>
     </div>
   );

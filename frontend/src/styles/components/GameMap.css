@@ -1,18 +1,42 @@
 /* Estilos para el componente GameMap */
+.game-map-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #000;
+  padding: 10px;
+  cursor: default;
+  user-select: none;
+}
+
+.game-map-wrapper.dragging {
+  cursor: grab;
+}
+
 .game-map {
-  display: grid;
-  gap: 0;
-  background-color: var(--ui-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #2a2a2a;
+  padding: 1px;
+  min-width: max-content; /* Asegura que el mapa no se encoja */
   border: 2px solid var(--ui-border);
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
 }
 
+.map-row {
+  display: flex;
+  gap: 1px;
+}
+
 .map-tile {
-  width: var(--tile-size);
-  height: var(--tile-size);
+  width: 32px; /* Reducido para mejor manejo del mapa grande */
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  background-color: #4a7023;
   position: relative;
   cursor: pointer;
-  border: 1px solid rgba(0, 0, 0, 0.2);
   transition: all 0.2s ease;
 }
 
@@ -20,7 +44,27 @@
   filter: brightness(1.2);
 }
 
+.map-tile:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
 /* Tipos de terreno */
+.map-tile.grass {
+  background-color: #4a7023;
+}
+
 .terrain-grass {
   background-color: var(--terrain-grass);
 }
@@ -45,10 +89,47 @@
   background-color: var(--terrain-snow);
 }
 
-/* Resaltado para tiles válidos para movimiento */
+/* Resaltado para tiles válidos para movimiento que ya están en curso */
 .valid-path {
-  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5);
-  animation: pulse 1.5s infinite;
+  box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7);
+  animation: redPulse 1.5s infinite;
+  z-index: 5;
+}
+
+/* Resaltado para el camino seleccionado (ahora todo en rojo) */
+.reachable-path {
+  box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7);
+  animation: redPulse 1.5s infinite;
+}
+
+/* Ya no necesitamos diferente color para unreachable-path */
+.unreachable-path {
+  box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7);
+  animation: redPulse 1.5s infinite;
+}
+
+/* Resaltado para el destino pendiente de confirmación */
+.pending-destination {
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 0.9);
+  animation: yellowPulse 1.5s infinite;
+  z-index: 6;
+}
+
+/* Indicador visual del camino */
+.path-indicator {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Estilos para casillas con héroes moviéndose */
+.hero-moving {
+  transition: all 0.3s ease-in-out;
 }
 
 /* Resaltado para héroe seleccionado */
@@ -83,6 +164,51 @@
   border: 2px solid currentColor;
 }
 
+.hero-sprite {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  background-color: #4a90e2;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  z-index: 20;
+  transition: all 0.2s ease-in-out;
+}
+
+.hero-sprite.moving {
+  animation: heroMove 0.2s ease-in-out;
+}
+
+@keyframes heroMove {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hero-sprite.selected {
+  border: 2px solid gold;
+  box-shadow: 0 0 10px gold;
+}
+
+.selected .hero-sprite {
+  border-color: #ffff00;
+  box-shadow: 0 0 10px #ffff00;
+}
+
+.has-hero {
+  background-color: #5a8033;
+}
+
 /* Colores por jugador */
 .player-red {
   color: var(--player-red);
@@ -102,13 +228,145 @@
 
 /* Animaciones */
 @keyframes pulse {
-  0% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5); }
-  50% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.8); }
-  100% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.5); }
+  0% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.7); }
+  50% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 1); }
+  100% { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.7); }
 }
 
-@keyframes selectedPulse {
-  0% { box-shadow: inset 0 0 0 3px gold; }
-  50% { box-shadow: inset 0 0 0 3px rgba(255, 215, 0, 0.5); }
-  100% { box-shadow: inset 0 0 0 3px gold; }
+@keyframes greenPulse {
+  0% { box-shadow: inset 0 0 0 3px rgba(0, 255, 0, 0.7); }
+  50% { box-shadow: inset 0 0 0 3px rgba(0, 255, 0, 1); }
+  100% { box-shadow: inset 0 0 0 3px rgba(0, 255, 0, 0.7); }
+}
+
+@keyframes redPulse {
+  0% { box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7); }
+  50% { box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 1); }
+  100% { box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7); }
+}
+
+@keyframes yellowPulse {
+  0% { box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 0.7); }
+  50% { box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 1); }
+  100% { box-shadow: inset 0 0 0 4px rgba(255, 255, 0, 0.7); }
+}
+
+.error-map {
+  padding: 20px;
+  background: #ff000033;
+  color: white;
+  text-align: center;
+  border: 2px solid #ff0000;
+}
+
+.has-city {
+  position: relative;
+}
+
+.city-sprite {
+  position: absolute;
+  width: 80%;
+  height: 80%;
+  top: 10%;
+  left: 10%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.player-city {
+  background-color: rgba(0, 100, 255, 0.6);
+  color: white;
+}
+
+.enemy-city {
+  background-color: rgba(255, 0, 0, 0.6);
+  color: white;
+}
+
+.building-sprite {
+  transition: all 0.3s ease;
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  border-radius: 4px;
+}
+
+.building-sprite.interactive {
+  cursor: pointer;
+  filter: brightness(1.2);
+  transform: scale(1.05);
+}
+
+.building-sprite.interactive:hover {
+  filter: brightness(1.4);
+  transform: scale(1.1);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.interactive-building .building-sprite {
+  animation: pulse 2s infinite;
+}
+
+.selected-hero-tile .building-sprite {
+  opacity: 1;
+  z-index: 15;
+}
+
+.building-sprite.not-built {
+  opacity: 0.7;
+  filter: grayscale(0.5);
+}
+
+.building-sprite.built {
+  opacity: 1;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+}
+
+.building-sprite.built {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+}
+
+.building-sprite.not-built {
+  background-color: rgba(128, 128, 128, 0.5);
+  color: #ddd;
+  border: 1px dashed #999;
+}
+
+.building-castle { 
+  background-color: rgba(128, 0, 128, 0.8) !important; 
+  font-size: 14px;
+}
+.building-barracks { 
+  background-color: rgba(139, 69, 19, 0.8) !important; 
+  font-size: 14px;
+}
+.building-archery { 
+  background-color: rgba(34, 139, 34, 0.8) !important; 
+  font-size: 14px;
+}
+.building-knights { 
+  background-color: rgba(255, 215, 0, 0.8) !important; 
+  font-size: 14px;
+}
+.building-dragon { 
+  background-color: rgba(255, 0, 0, 0.8) !important; 
+  font-size: 14px;
+}
+.building-mage_tower { 
+  background-color: rgba(0, 0, 139, 0.8) !important; 
+  font-size: 14px;
 }
