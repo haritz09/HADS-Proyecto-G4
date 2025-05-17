@@ -168,6 +168,14 @@ async def process_action(
                 result = process_recruitment(game_state, action)
             elif action_type == "buildStructure":
                 result = process_build_structure(game_state, action)
+                
+                # Añadir log específico para buildStructure
+                if result and result.get("success"):
+                    logger.info(f"Building successful! Type: {action['details']['structureType']}, City: {action['details']['cityId']}")
+                    # Asegurar que el owner está asignado correctamente
+                    if "built" in result:
+                        logger.info(f"Building {result['built']} set with owner: {game_state.current_player}")
+                        
             elif action_type == "transfer": # Transerir tropas entre heroe-castillo
                 result = transfer_troops_between_hero_and_castle(game_state, action)
             elif action_type == "endTurn":

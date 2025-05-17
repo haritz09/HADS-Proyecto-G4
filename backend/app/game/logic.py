@@ -27,7 +27,13 @@ MOVEMENT_POINTS_BASE = 10
 
 def calculate_distance(pos1: Position, pos2: Position) -> float:
     """Calcula la distancia entre dos posiciones."""
-    return math.sqrt((pos2.x - pos1.x) ** 2 + (pos2.y - pos1.y) ** 2)
+    # Asegurarnos de que ambos valores son numéricos
+    x1 = float(pos1.x)
+    y1 = float(pos1.y)
+    x2 = float(pos2.x)
+    y2 = float(pos2.y)
+    
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
 
 def has_enough_movement_points(hero: Heroe, start: Position, end: Position) -> bool:
     """Verifica si un héroe tiene suficientes puntos de movimiento."""
@@ -45,9 +51,32 @@ def has_enough_resources(entity: Any, cost: Dict[str, int]) -> bool:
 def deduct_resources(entity: Any, cost: Dict[str, int]) -> None:
     """Deduce recursos de una entidad."""
     resources = entity.resources if hasattr(entity, 'resources') else entity
+    
+    # Registro detallado antes de la deducción
+    print(f"DEBUG: Resources BEFORE deduction: Gold={getattr(resources, 'gold', 0)}, Wood={getattr(resources, 'wood', 0)}, Stone={getattr(resources, 'stone', 0)}")
+    print(f"DEBUG: Cost to deduct: {cost}")
+    
+    # Asegurar que estamos deduciendo valores numéricos
     for resource, amount in cost.items():
-        current = getattr(resources, resource, 0)
-        setattr(resources, resource, current - amount)
+        if not isinstance(amount, (int, float)):
+            print(f"WARNING: Non-numeric cost for {resource}: {amount}, converting to int")
+            cost[resource] = int(amount)
+    
+    # Realizar la deducción de recursos
+    for resource, amount in cost.items():
+        current_value = getattr(resources, resource, 0)
+        print(f"DEBUG: Deducting {amount} from {resource} (current: {current_value})")
+        
+        # Establecer el nuevo valor
+        new_value = current_value - amount
+        setattr(resources, resource, new_value)
+        
+        # Verificar que la deducción se realizó correctamente
+        after_value = getattr(resources, resource, 0)
+        print(f"DEBUG: After deduction, {resource} = {after_value} (expected {new_value})")
+    
+    # Registro detallado después de la deducción
+    print(f"DEBUG: Resources AFTER deduction: Gold={getattr(resources, 'gold', 0)}, Wood={getattr(resources, 'wood', 0)}, Stone={getattr(resources, 'stone', 0)}")
 
 def calculate_level(experience: int) -> int:
     """Calcula el nivel basado en la experiencia"""
@@ -107,33 +136,48 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         hero_id = action["details"]["hero_id"]
         # Handle both destination object and separate x,y coordinates
         if "destination" in action["details"]:
-            target_x = action["details"]["destination"]["x"]
-            target_y = action["details"]["destination"]["y"]
+            target_x = int(action["details"]["destination"]["x"])
+            target_y = int(action["details"]["destination"]["y"])
         else:
-            target_x = action["details"].get("x")
-            target_y = action["details"].get("y")
+            target_x = int(action["details"].get("x"))
+            target_y = int(action["details"].get("y"))
 
         if target_x is None or target_y is None:
             raise ValueError("Invalid target coordinates")
         
         hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
         if not hero:
-            raise ValueError("Hero not found")
+            raise ValueError(f"Hero not found with ID: {hero_id}")
+        
+        # Validate map boundaries
+        if target_x < 0 or target_x >= game_state.map.size.width or target_y < 0 or target_y >= game_state.map.size.height:
+            raise ValueError(f"Target position ({target_x}, {target_y}) is outside map boundaries")
         
         # Calculate movement cost without map parameter
         movement_cost = calculate_movement_cost(hero.position, Position(x=target_x, y=target_y))
         if movement_cost > hero.stats.movement_points_left:
-            raise ValueError("Not enough movement points")
+            raise ValueError(f"Not enough movement points: needed {movement_cost}, available {hero.stats.movement_points_left}")
+        
+        # Ensure position values are integers
+        original_x, original_y = hero.position.x, hero.position.y
         
         # Update position
         hero.position.x = target_x
         hero.position.y = target_y
         hero.stats.movement_points_left -= movement_cost
         
+        print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({target_x}, {target_y})")
+        print(f"DEBUG: Hero position after update: ({hero.position.x}, {hero.position.y})")
+        
         # Check for interactions at the new position (artifacts, resources, etc.)
-        print(f"DEBUG: Checking interactions at position ({target_x}, {target_y}) for hero {hero_id}")
-        interaction_result = process_tile_interaction(hero, Position(x=target_x, y=target_y), game_state)
-        print(f"DEBUG: Interaction result: {interaction_result}")
+        try:
+            print(f"DEBUG: Checking interactions at position ({target_x}, {target_y}) for hero {hero_id}")
+            interaction_result = process_tile_interaction(hero, Position(x=target_x, y=target_y), game_state)
+            print(f"DEBUG: Interaction result: {interaction_result}")
+        except Exception as e:
+            print(f"ERROR in interaction processing: {str(e)}")
+            # Continue execution even if interaction processing fails
+            interaction_result = {"interaction": "error", "error_message": str(e)}
         
         return {
             "success": True,
@@ -143,7 +187,12 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
             "interaction": interaction_result  # Include the interaction result in the response
         }
     except Exception as e:
-        raise ValueError(f"Error processing hero movement: {str(e)}")
+        print(f"ERROR in process_hero_movement: {str(e)}")
+        # Return a structured error to avoid 500 response
+        return {
+            "success": False,
+            "error": f"Error processing hero movement: {str(e)}"
+        }
 
 def calculate_movement_cost(start: Position, end: Position, game_map: Any = None) -> float:
     """Calcula el coste de movimiento entre dos posiciones usando distancia euclídea."""
@@ -273,6 +322,8 @@ def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Di
         structure_type = details["structureType"]
         current_player = game_state.current_player
         
+        print(f"DEBUG: Processing build structure. Type: {structure_type}, City ID: {city_id}, Player: {current_player}")
+        
         # Building configurations
         building_configs = {
             "barracks": {
@@ -301,7 +352,7 @@ def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Di
                     }
                 ]
             },
-            "knigths_tower": {
+            "knights_tower": {  # Ya está correctamente como knights_tower
                 "cost": {"gold": 1500, "wood": 100, "stone": 100},
                 "can_recruit": True,
                 "available_creatures": [
@@ -314,177 +365,209 @@ def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Di
                     }
                 ]
             },
-            "mage_tower": {
-                "cost": {"gold": 2000, "wood": 100, "stone": 100},
-                "can_recruit": True,
-                "available_creatures": [
-                    {
-                        "type": "Mago",
-                        "count": 3,
-                        "growth_per_week": 1,
-                        "stats": {"attack": 7, "defense": 3, "speed": 3, "movement_points": 5, "movement_points_left": 5},
-                        "recruit_cost": {"gold": 500}
-                    }
-                ]
-            },
-            "dragons_lair": {
-                "cost": {"gold": 5000, "wood": 200, "stone": 200},
-                "can_recruit": True,
-                "available_creatures": [
-                    {
-                        "type": "Dragon",
-                        "count": 1,
-                        "growth_per_week": 1,
-                        "stats": {"attack": 10, "defense": 8, "speed": 6, "movement_points": 8, "movement_points_left": 8},
-                        "recruit_cost": {"gold": 2000}
-                    }
-                ]
-            }
         }
 
         # Get building configuration
         building_config = building_configs.get(structure_type)
         if not building_config:
+            print(f"ERROR: Invalid building type: {structure_type}")
             raise ValueError(f"Invalid building type: {structure_type}")
 
         # Find player resources and cities based on current player
         player = game_state.player if current_player == "player" else game_state.ai
         cities = player.cities
-        city = next((c for c in cities if c.id == city_id), None)
         
+        # Log initial resources
+        print(f"DEBUG: Player initial resources: Gold={player.resources.gold}, Wood={player.resources.wood}, Stone={player.resources.stone}")
+        print(f"DEBUG: Building cost: {building_config['cost']}")
+        
+        # Find the city
+        city = next((c for c in cities if c.id == city_id), None)
         if not city:
-            raise ValueError(f"City not found: {city_id}")
-
-        # Find the specific building in the city
+            print(f"ERROR: City not found: {city_id}")
+            # Try to find an alternative city
+            if cities and len(cities) > 0:
+                city = cities[0]
+                print(f"DEBUG: Using alternative city: {city.id}")
+            else:
+                raise ValueError(f"City not found: {city_id} and no alternative cities available")
+        
+        # Find the building
         building = next((b for b in city.buildings if b.building_type == structure_type), None)
         if not building:
-            raise ValueError("Building not found in city")
-
-        # Check if already built
-        if building.built or building.owner:
-            raise ValueError("Building already built")
-
-        # Verify resources BEFORE making any changes
+            print(f"DEBUG: Building with type '{structure_type}' not found in city {city.id}.")
+            raise ValueError(f"Building with type '{structure_type}' not found in city {city.id}.")
+                
+        # Check if player has enough resources
         if not has_enough_resources(player.resources, building_config["cost"]):
-            raise ValueError("Insufficient resources")
-
-        # If we reach here, we can safely make all changes
+            print(f"ERROR: Insufficient resources for {structure_type}")
+            return {
+                "success": False,
+                "error": f"Insufficient resources for {structure_type}. Required: {building_config['cost']}, Available: gold={player.resources.gold}, wood={player.resources.wood}, stone={player.resources.stone}"
+            }
         
-        # 1. Deduct resources first
+        # 1. DEDUCT RESOURCES FIRST - This is the key part
+        print(f"CRITICAL: Deducting resources for {structure_type}: {building_config['cost']}")
+        # Make a backup of resources before deduction for verification
+        resources_before = {"gold": player.resources.gold, "wood": player.resources.wood, "stone": player.resources.stone}
+        
+        # Deduct resources - use our improved function
         deduct_resources(player.resources, building_config["cost"])
+        
+        # Verify deduction actually worked
+        resources_after = {"gold": player.resources.gold, "wood": player.resources.wood, "stone": player.resources.stone}
+        print(f"DEBUG: Resources before: {resources_before}")
+        print(f"DEBUG: Resources after: {resources_after}")
+        
+        for resource, amount in building_config["cost"].items():
+            expected = resources_before[resource] - amount
+            actual = resources_after[resource]
+            if expected != actual:
+                print(f"WARNING: Resource {resource} not deducted correctly. Expected: {expected}, Actual: {actual}")
+                # Force the correct value
+                setattr(player.resources, resource, expected)
+                print(f"DEBUG: Forced {resource} to correct value: {expected}")
         
         # 2. Update building properties
         building.built = True
         building.owner = current_player
         building.can_recruit = building_config["can_recruit"]
-        building.available_creatures = building_config["available_creatures"]
+        if "available_creatures" in building_config:
+            building.available_creatures = building_config["available_creatures"]
         
-        logger.info(f"Built {structure_type} in {city_id} for {current_player}. Resources deducted: {building_config['cost']}")
-        logger.info(f"Building state after update: built={building.built}, owner={building.owner}, can_recruit={building.can_recruit}")
+        # 3. If building is part of a city, update city owner as well
+        if city:
+            city.owner = current_player
+            print(f"DEBUG: Updated city {city.id} owner to {current_player}")
+        
+        print(f"SUCCESS: Built {structure_type} in {city.id}. Resources deducted: {building_config['cost']}")
+        print(f"DEBUG: Final resources: Gold={player.resources.gold}, Wood={player.resources.wood}, Stone={player.resources.stone}")
 
+        # Return success with updated resources
         return {
             "success": True,
             "built": structure_type,
-            "city": city_id,
+            "city": city.id,
             "building": building.id,
             "cost": building_config["cost"],
             "new_resources": {
                 "gold": player.resources.gold,
                 "wood": player.resources.wood,
                 "stone": player.resources.stone
-            }
+            },
+            # Include the full game state for proper frontend update
+            "game_state": game_state
         }
 
     except Exception as e:
-        logger.error(f"Error in process_build_structure: {str(e)}")
+        print(f"CRITICAL ERROR in process_build_structure: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {
             "success": False,
             "error": str(e)
         }
 
-# Funciones auxiliares
 def process_tile_interaction(hero: Heroe, position: Position, game_state: GameState) -> Dict[str, Any]:
     """Procesa la interacción con objetos en la casilla: recursos, minas, artefactos, enemigos, etc."""
-    idx = position.y * game_state.map.size.width + position.x
-    tile = game_state.map.tiles[idx] if game_state.map.tiles and 0 <= idx < len(game_state.map.tiles) else None
-    print(f"DEBUG: process_tile_interaction at ({position.x}, {position.y}), tile={tile}")
-    
-    if not tile:
+    try:
+        idx = position.y * game_state.map.size.width + position.x
+        
+        # Validate index is within bounds
+        if idx < 0 or idx >= len(game_state.map.tiles):
+            print(f"WARNING: Tile index {idx} out of bounds (map size: {game_state.map.size.width}x{game_state.map.size.height}, tiles: {len(game_state.map.tiles)})")
+            return {"interaction": "none", "warning": "Tile index out of bounds"}
+            
+        tile = game_state.map.tiles[idx] if game_state.map.tiles else None
+        print(f"DEBUG: process_tile_interaction at ({position.x}, {position.y}), tile={tile}")
+        
+        if not tile:
+            return {"interaction": "none", "reason": "No tile found"}
+        
+        # Captura de minas y sitios de recursos
+        for obj in (game_state.map.visible_objects or []):
+            # --- ARTEFACTOS ---
+            if isinstance(obj, Artifact) and obj.position.x == position.x and obj.position.y == position.y:
+                print(f"DEBUG: Artifact found at position ({position.x}, {position.y}): {obj}")
+                
+                # Comprobar límite de artefactos
+                print(f"DEBUG: Hero {hero.id} current artifacts: {hero.artifacts}")
+                
+                if len(hero.artifacts) >= 2:
+                    print(f"DEBUG: Artifact limit reached ({len(hero.artifacts)}/2)")
+                    return {"interaction": "artifact_found", "error": "Inventario de artefactos lleno", "stop_movement": False}
+                
+                # Si hay guardianes, no se recoge hasta derrotarlos (no implementado aquí)
+                # Recoger artefacto
+                artifact = Artifact(
+                    id=getattr(obj, 'id', f"artifact_{position.x}_{position.y}"),
+                    name=getattr(obj, 'name', obj.subtype),
+                    subtype=obj.subtype,
+                    effect={}
+                )
+                
+                print(f"DEBUG: Creating artifact object to add to hero: {artifact}")
+                
+                # Aplicar bonificación según el tipo
+                if obj.subtype == 'totemDeGuerra':
+                    print(f"DEBUG: Applying totemDeGuerra effect")
+                    for unit in hero.army:
+                        if hasattr(unit, 'stats'):
+                            unit.stats.attack = int(unit.stats.attack * 1.2)
+                            unit.stats.health = int(unit.stats.health * 1.2)
+                            unit.stats.speed = int(unit.stats.speed * 1.2)
+                    artifact.effect = {"army_buff": "+20% attack, health, speed"}
+                elif obj.subtype == 'totemVelocidad':
+                    print(f"DEBUG: Applying totemVelocidad effect")
+                    hero.stats.movement_points = int(hero.stats.movement_points * 1.3)
+                    hero.stats.movement_points_left = int(hero.stats.movement_points_left * 1.3)
+                    artifact.effect = {"movement_buff": "+30% movement points"}
+                elif obj.subtype == 'totemReclutamiento':
+                    print(f"DEBUG: Applying totemReclutamiento effect")
+                    artifact.effect = {"recruitment_discount": "-30% cost"}
+                
+                hero.artifacts.append(artifact)
+                print(f"DEBUG: Hero {hero.id} artifacts after adding: {hero.artifacts}")
+                
+                # Remove artifact from visible objects safely
+                try:
+                    print(f"DEBUG: Removing artifact from visible_objects. Before: {len(game_state.map.visible_objects)}")
+                    game_state.map.visible_objects = [o for o in game_state.map.visible_objects if o != obj]
+                    print(f"DEBUG: After removal: {len(game_state.map.visible_objects)}")
+                except Exception as e:
+                    print(f"ERROR removing artifact from visible_objects: {str(e)}")
+                
+                # Clear the tile's object_type and object_id safely
+                try:
+                    print(f"DEBUG: Clearing tile at ({position.x}, {position.y}) from object_type: {tile.object_type} to None")
+                    if tile and tile.object_type == 'artifact':
+                        tile.object_type = None
+                        tile.object_id = None
+                except Exception as e:
+                    print(f"ERROR clearing tile object info: {str(e)}")
+                
+                return {"interaction": "artifact_collected", "artifact": artifact.name, "stop_movement": False}
+                
+            # --- MINAS Y SITIOS DE RECURSOS ---
+            if hasattr(obj, 'position') and obj.position.x == position.x and obj.position.y == position.y:
+                if hasattr(obj, 'owner'):
+                    previous_owner = obj.owner
+                    obj.owner = 'player' if hero in game_state.player.heroes else 'ai'
+                    return {"interaction": "resource_site_captured", "site_type": obj.type, "previous_owner": previous_owner, "new_owner": obj.owner, "stop_movement": False}
+                    
+        # Combate contra enemigo (héroe IA en la misma casilla)
+        if getattr(tile, 'object_type', None) == 'enemy':
+            enemy_hero = next((h for h in game_state.ai.heroes if h.position.x == position.x and h.position.y == position.y), None)
+            if enemy_hero:
+                combat_result = resolve_combat(hero, enemy_hero)
+                return {"interaction": "enemy_encountered", "combat_result": combat_result, "stop_movement": True}
+            else:
+                return {"interaction": "enemy_encountered", "error": "No se encontró héroe enemigo en la casilla", "stop_movement": True}
+                
         return {"interaction": "none"}
-    
-    # Captura de minas y sitios de recursos
-    for obj in (game_state.map.visible_objects or []):
-        # --- ARTEFACTOS ---
-        if isinstance(obj, Artifact) and obj.position.x == position.x and obj.position.y == position.y:
-            print(f"DEBUG: Artifact found at position ({position.x}, {position.y}): {obj}")
-            
-            # Comprobar límite de artefactos
-            print(f"DEBUG: Hero {hero.id} current artifacts: {hero.artifacts}")
-            
-            if len(hero.artifacts) >= 2:
-                print(f"DEBUG: Artifact limit reached ({len(hero.artifacts)}/2)")
-                return {"interaction": "artifact_found", "error": "Inventario de artefactos lleno", "stop_movement": False}
-            
-            # Si hay guardianes, no se recoge hasta derrotarlos (no implementado aquí)
-            # Recoger artefacto
-            artifact = Artifact(
-                id=getattr(obj, 'id', f"artifact_{position.x}_{position.y}"),
-                name=getattr(obj, 'name', obj.subtype),
-                subtype=obj.subtype,
-                effect={}
-            )
-            
-            print(f"DEBUG: Creating artifact object to add to hero: {artifact}")
-            
-            # Aplicar bonificación según el tipo
-            if obj.subtype == 'totemDeGuerra':
-                print(f"DEBUG: Applying totemDeGuerra effect")
-                for unit in hero.army:
-                    if hasattr(unit, 'stats'):
-                        unit.stats.attack = int(unit.stats.attack * 1.2)
-                        unit.stats.health = int(unit.stats.health * 1.2)
-                        unit.stats.speed = int(unit.stats.speed * 1.2)
-                artifact.effect = {"army_buff": "+20% attack, health, speed"}
-            elif obj.subtype == 'totemVelocidad':
-                print(f"DEBUG: Applying totemVelocidad effect")
-                hero.stats.movement_points = int(hero.stats.movement_points * 1.3)
-                hero.stats.movement_points_left = int(hero.stats.movement_points_left * 1.3)
-                artifact.effect = {"movement_buff": "+30% movement points"}
-            elif obj.subtype == 'totemReclutamiento':
-                print(f"DEBUG: Applying totemReclutamiento effect")
-                artifact.effect = {"recruitment_discount": "-30% cost"}
-            
-            hero.artifacts.append(artifact)
-            print(f"DEBUG: Hero {hero.id} artifacts after adding: {hero.artifacts}")
-            
-            # Remove artifact from visible objects
-            print(f"DEBUG: Removing artifact from visible_objects. Before: {len(game_state.map.visible_objects)}")
-            game_state.map.visible_objects = [o for o in game_state.map.visible_objects if o != obj]
-            print(f"DEBUG: After removal: {len(game_state.map.visible_objects)}")
-            
-            print(f"DEBUG: Clearing tile at ({position.x}, {position.y}) from object_type: {tile.object_type} to None")
-            # Clear the tile's object_type and object_id
-            if tile and tile.object_type == 'artifact':
-                tile.object_type = None
-                tile.object_id = None
-            
-            return {"interaction": "artifact_collected", "artifact": artifact.name, "stop_movement": False}
-            
-        # --- MINAS Y SITIOS DE RECURSOS ---
-        if hasattr(obj, 'position') and obj.position.x == position.x and obj.position.y == position.y:
-            if hasattr(obj, 'owner'):
-                previous_owner = obj.owner
-                obj.owner = 'player' if hero in game_state.player.heroes else 'ai'
-                return {"interaction": "resource_site_captured", "site_type": obj.type, "previous_owner": previous_owner, "new_owner": obj.owner, "stop_movement": False}
-    # Combate contra enemigo (héroe IA en la misma casilla)
-    if getattr(tile, 'object_type', None) == 'enemy':
-        enemy_hero = next((h for h in game_state.ai.heroes if h.position.x == position.x and h.position.y == position.y), None)
-        if enemy_hero:
-            combat_result = resolve_combat(hero, enemy_hero)
-            return {"interaction": "enemy_encountered", "combat_result": combat_result, "stop_movement": True}
-        else:
-            return {"interaction": "enemy_encountered", "error": "No se encontró héroe enemigo en la casilla", "stop_movement": True}
-    return {"interaction": "none"}
+    except Exception as e:
+        print(f"ERROR in process_tile_interaction: {str(e)}")
+        return {"interaction": "error", "error_message": str(e)}
 
 def resolve_combat(attacker: Heroe, defender: Heroe) -> Dict[str, Any]:
     """Resuelve un combate entre dos héroes"""

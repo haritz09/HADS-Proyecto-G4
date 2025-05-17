@@ -194,13 +194,23 @@ const GamePage: React.FC = () => {
       type: "moveHero",
       details: {
         hero_id: selectedHero.id,
-        destination: position
+        destination: {
+          x: Math.floor(position.x), // Asegurarnos que son enteros
+          y: Math.floor(position.y)
+        }
       }
     };
 
     try {
       const response = await gameService.executeAction(gameId, action);
       console.log('GamePage: Backend response from moveHero action:', response.data);      
+      
+      // Handle both successful and failed responses
+      if (response.data && !response.data.success) {
+        console.error('GamePage: Hero movement failed:', response.data.error);
+        setGameMessage(response.data.error || "Error al mover el héroe");
+        return;
+      }
       
       // Check for artifact collection in the response
       if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
@@ -217,6 +227,8 @@ const GamePage: React.FC = () => {
           if (typeof h.position.x !== 'number') h.position.x = Number(h.position.x);
           if (typeof h.position.y !== 'number') h.position.y = Number(h.position.y);
         });
+        
+        // IMPORTANTE: Actualizar primero el estado global del juego
         setGameState(updatedGameState); // Update the main game state first
 
         const movedHero = updatedGameState.player.heroes.find(
@@ -224,91 +236,31 @@ const GamePage: React.FC = () => {
         );
 
         if (movedHero) {
-          console.log(`GamePage: Hero ${movedHero.id} new position in frontend state: (${movedHero.position.x},${movedHero.position.y}), MP left: ${movedHero.stats.movement_points_left}`);
+          console.log(`GamePage: Héroe ${movedHero.id} nueva posición: (${movedHero.position.x},${movedHero.position.y})`);
           
-          // Verificar que la posición se ha actualizado correctamente
+          // CRÍTICO: Verificar que la posición se ha actualizado correctamente
+          // Forzar la actualización de la posición del héroe si no coincide con la destino
           if (movedHero.position.x !== position.x || movedHero.position.y !== position.y) {
-            console.warn(`GamePage: Position mismatch detected. Forcing hero position to match target: (${position.x},${position.y})`);
-            // Forzar la actualización de la posición del héroe
+            console.warn(`GamePage: ¡Corrigiendo posición del héroe! Destino real: (${position.x},${position.y})`);
+            // Forzar la actualización de la posición del héroe al destino exacto
             movedHero.position.x = position.x;
             movedHero.position.y = position.y;
             
-            // Actualizar el estado del juego con la posición corregida
+            // Re-aplicar el estado con la posición corregida
             setGameState({...updatedGameState});
           }
           
-          setSelectedHero(movedHero); // IMPORTANT: Update selectedHero with the new data from updatedGameState
+          // IMPORTANTE: Actualizar el héroe seleccionado con todos los datos nuevos
+          setSelectedHero(movedHero);
           
-          // Verificación adicional: comprobar si el héroe está en la posición (48,48)
-          if (movedHero.position.x === 48 && movedHero.position.y === 48) {
-            console.log('GamePage: ¡HÉROE EN POSICIÓN DEL CASTILLO CENTRAL (48,48)!');
-            
-            // Buscar todos los edificios en la posición (48,48)
-            const buildingsAt4848 = updatedGameState.player.cities
-              .flatMap(city => city.buildings)
-              .filter(b => b.position.x === 48 && b.position.y === 48);
-              
-            
-            const castleBuilding = updatedGameState.player.cities
-              .flatMap(city => city.buildings)
-              .find(b => b.is_castle && b.position.x === 48 && b.position.y === 48);
-              
-            
-            // Si hay un castillo definido, usarlo
-            if (castleBuilding) {
-              console.log('GamePage: Castle building found, opening ConstructionMenu.');
-              setGameMessage('¡Has llegado al castillo central!');
-              setActiveBuilding(castleBuilding); // Establecer el edificio activo directamente
-              setShowConstructionMenu(true);     // Abrir el menú directamente
-            } 
-            // Si no hay castillo pero hay otros edificios en (48,48), usar el primero
-            else if (buildingsAt4848.length > 0) {
-              const anyBuilding = buildingsAt4848[0];
-              console.log('GamePage: Using alternative building at (48,48):', anyBuilding);
-              // Forzar el edificio como castillo para abrir menú de construcción
-              anyBuilding.is_castle = true; // Asegurar que se trata como castillo
-              setActiveBuilding(anyBuilding);
-              setShowConstructionMenu(true);
-              setGameMessage('¡Has llegado al castillo central!');
-            } 
-            // Si no hay edificios en (48,48), crear uno temporal para mostrar el menú
-            else {
-              console.log('GamePage: No buildings found at (48,48), creating a temporary one');
-              const temporaryCastle = {
-                id: "temp_castle",
-                name: "Castillo Central",
-                position: { x: 48, y: 48 },
-                is_castle: true,
-                can_recruit: false,
-                built: true,
-                cost: { gold: 0, wood: 0, stone: 0 }, // <-- Añadido para evitar error en BuildingConstructionMenu
-                has_tavern: false,
-                building_type: 'castle',
-                requirements: [],
-                available_creatures: [],
-                owner: "player"  // Add owner property
-              } as Building;
-              setActiveBuilding(temporaryCastle);
-              setShowConstructionMenu(true);
-              setGameMessage('¡Has llegado al castillo central!');
-            }
-          } else {
-            // If not at castle, ensure construction menu is closed if it was open for other reasons
-            // setShowConstructionMenu(false); // Optional: close if not at castle
-          }
-
+          // IMPORTANTE: Forzar una verificación inmediata de proximidad al castillo
+          checkHeroProximityToCastle(movedHero, updatedGameState);
         } else {
           console.error('GamePage: Moved hero not found in updated game state from backend. This is unexpected.');
           // Fallback: refresh selectedHero from the potentially unchanged gameState if hero not found in updated one
            const currentHeroInOldState = gameState.player.heroes.find(h => h.id === selectedHero.id);
            if (currentHeroInOldState) setSelectedHero(currentHeroInOldState);
         }
-        
-        if (!response.data.success) {
-            setGameMessage(response.data.error || "Movimiento fallido.");
-            console.warn("GamePage: Hero movement failed on backend:", response.data.error);
-        }
-
       } else {
         console.error('GamePage: Failed to move hero or game_state missing in response:', response.data?.error || 'Unknown error');
         setGameMessage(response.data?.error || "Error al mover el héroe");
@@ -318,18 +270,45 @@ const GamePage: React.FC = () => {
           console.log(`GamePage: Artifact collected in error case:`, response.data.interaction);
           setGameMessage(`¡Has recogido el artefacto: ${response.data.interaction.artifact}!`);
         }
-        
-        // Después de la animación, actualizamos el estado
-        setTimeout(() => {
-          setGameState(response.data.game_state);
-        }, 1000); // Use fixed timeout instead of undefined currentPath
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("GamePage: Exception during hero movement:", err);
-      setGameMessage("Error crítico al mover el héroe");
+      // Mostrar mensaje de error más descriptivo
+      if (err.response && err.response.status === 500) {
+        setGameMessage("Error del servidor al mover el héroe. Inténtalo de nuevo.");
+      } else {
+        setGameMessage(err.message || "Error crítico al mover el héroe");
+      }
     }
   };
-  
+
+  // Añadir una nueva función para verificar proximidad al castillo
+  const checkHeroProximityToCastle = (hero: Hero, state: GameState) => {
+    // Buscar todos los castillos en el mapa
+    const castles = state.player.cities
+      .flatMap(city => city.buildings)
+      .filter(b => b.is_castle || (b.position.x === 48 && b.position.y === 48));
+    
+    castles.forEach(castle => {
+      // Calcular distancia
+      const calculateDistance = (pos1: Position, pos2: Position): number => {
+        return Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
+      };
+      
+      const distance = calculateDistance(hero.position, castle.position);
+      const isNearCastle = distance <= 2;
+      
+      console.log(`GamePage: Verificación de proximidad - Héroe en (${hero.position.x}, ${hero.position.y}), ` +
+                 `Castillo en (${castle.position.x}, ${castle.position.y}), ` + 
+                 `Distancia = ${distance.toFixed(2)}, Está cerca = ${isNearCastle}`);
+      
+      // Si el héroe está cerca del castillo central, abrir el menú de construcción automáticamente
+      if (isNearCastle && castle.position.x === 48 && castle.position.y === 48) {
+        console.log('GamePage: ¡HÉROE CERCA DEL CASTILLO CENTRAL! Distancia:', distance);
+      }
+    });
+  };
+
   // Manejar click en un héroe
   const handleHeroClick = (heroId: string) => {
     if (!gameState) return;
@@ -358,59 +337,106 @@ const GamePage: React.FC = () => {
     if (!city) return;
     
     navigate(`/city/${cityId}?gameId=${gameId}`);
-  };  // Manejar click en un edificio
+  };
+
+  // Manejar click en un edificio
   const handleBuildingClick = (building: Building, cityId: string) => {
     console.log('GamePage: Building clicked:', building, 'Selected hero position:', selectedHero?.position);
-    setSelectedBuilding(building); // Keep this for showing building info if needed
+    
+    // Asegurar que el building tiene todas las propiedades necesarias
+    const safeBuilding = {
+      ...building,
+      // Asegurar que estas propiedades siempre existan
+      cost: building.cost || { gold: 0, wood: 0, stone: 0 },
+      available_creatures: building.available_creatures || [],
+      name: building.name || 'Edificio',
+      building_type: building.building_type || 'unknown',
+      requirements: building.requirements || []
+    };
+    
+    setSelectedBuilding(safeBuilding); // Keep this for showing building info if needed
 
     if (!selectedHero) {
       console.log('GamePage: No hero selected, cannot open building menus via building click.');
       return;
     }
 
-    const heroAtSamePosition = selectedHero.position.x === building.position.x && 
-                               selectedHero.position.y === building.position.y;
+    // Calcular la distancia entre el héroe y el edificio
+    const calculateDistance = (pos1: Position, pos2: Position): number => {
+      // Asegurar que las posiciones son números
+      const x1 = Number(pos1.x);
+      const y1 = Number(pos1.y);
+      const x2 = Number(pos2.x);
+      const y2 = Number(pos2.y);
+      return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+    };
+
+    // CRUCIAL: Usar SIEMPRE la posición real del héroe desde el estado
+    const heroPosition = selectedHero.position;
+    const distance = calculateDistance(heroPosition, safeBuilding.position);
+    
+    // Información de depuración detallada
+    console.log(`GamePage: VERIFICACIÓN REAL DE DISTANCIA: Héroe en (${heroPosition.x}, ${heroPosition.y}), ` +
+               `Edificio en (${safeBuilding.position.x}, ${safeBuilding.position.y}), ` +
+               `Distancia: ${distance.toFixed(2)}`);
+    
+    const heroAtSamePosition = heroPosition.x === safeBuilding.position.x && 
+                               heroPosition.y === safeBuilding.position.y;
 
     // También considerar posición (48,48) explícitamente para el castillo
-    const isAt4848 = selectedHero.position.x === 48 && selectedHero.position.y === 48;
-    const buildingIsAt4848 = building.position.x === 48 && building.position.y === 48;
+    const buildingIsAt4848 = safeBuilding.position.x === 48 && safeBuilding.position.y === 48;
 
-    console.log('GamePage: Checking if hero is at building position for click:', 
-                { heroPos: selectedHero.position, buildPos: building.position, 
-                  atSamePos: heroAtSamePosition, isAt4848: isAt4848, buildingIsAt4848: buildingIsAt4848 });
+    // Comprobar si es un castillo
+    const isCastleBuilding = safeBuilding.is_castle || buildingIsAt4848;
 
-    // Comprobar si es un castillo a mano (independientemente de la propiedad is_castle)
-    const isCastleBuilding = building.is_castle || 
-                           (building.position.x === 48 && building.position.y === 48);
+    // Comprobar si el héroe está a 2 o menos casillas del castillo
+    const isNearCastle = isCastleBuilding && distance <= 2;
 
-    console.log('GamePage: Building castle check:', { 
-      isCastleBuilding: isCastleBuilding, 
-      buildingIsCastle: building.is_castle,
-      buildingIsAt4848: buildingIsAt4848
+    console.log('GamePage: ¿ESTÁ CERCA DEL CASTILLO?', {
+      isNearCastle,
+      isCastleBuilding,
+      distance,
+      maxDistanceAllowed: 2,
+      heroPosition: `(${heroPosition.x}, ${heroPosition.y})`,
+      buildingPosition: `(${safeBuilding.position.x}, ${safeBuilding.position.y})`
     });
 
-    if (heroAtSamePosition && isCastleBuilding) {
-      console.log('GamePage: Hero is at castle (verified by click)! Opening construction menu.');
+    // Si el héroe está en la misma posición O si está cerca del castillo y es un castillo
+    if ((heroAtSamePosition || isNearCastle) && isCastleBuilding) {
+      console.log('GamePage: ✅ ABRIENDO MENÚ DE CONSTRUCCIÓN. Distancia al castillo:', distance.toFixed(2));
       // Si el edificio está en (48,48), siempre tratarlo como castillo
-      if (buildingIsAt4848 && !building.is_castle) {
-        console.log('GamePage: Building at (48,48) will be treated as castle regardless of its is_castle property');
-        building.is_castle = true;
+      if (buildingIsAt4848 && !safeBuilding.is_castle) {
+        console.log('GamePage: Edificio en (48,48) tratado como castillo independientemente de su propiedad is_castle');
+        safeBuilding.is_castle = true;
+        
+        // Asegurarnos que tiene cost para el menú de construcción
+        if (!safeBuilding.cost) {
+          safeBuilding.cost = { gold: 0, wood: 0, stone: 0 };
+        }
       }
-      setActiveBuilding(building);
+      
+      // Completar datos faltantes para el castillo antes de mostrar el menú
+      if (!safeBuilding.available_creatures) {
+        safeBuilding.available_creatures = [];
+      }
+      
+      setActiveBuilding(safeBuilding);
       setShowConstructionMenu(true);
-      setGameMessage('¡Has llegado al castillo central!');
-    } else if (heroAtSamePosition && building.built && building.can_recruit) {
-      console.log('GamePage: Hero is at built, recruitable building (verified by click)! Opening recruitment menu.');
-      setActiveBuilding(building);
+      setGameMessage(heroAtSamePosition ? 
+        '¡Has llegado al castillo central!' : 
+        '¡Puedes construir edificios en el castillo cercano!');
+    } else if (heroAtSamePosition && safeBuilding.built && safeBuilding.can_recruit) {
+      console.log('GamePage: ✅ ABRIENDO MENÚ DE RECLUTAMIENTO. Héroe en mismo lugar que edificio reclutable.');
+      setActiveBuilding(safeBuilding);
       setShowRecruitmentMenu(true);
     } else {
-      console.log('GamePage: Conditions not met for opening building menu via click:', 
-                  { heroAtSamePosition, isCastle: building.is_castle, isBuilt: building.built, canRecruit: building.can_recruit });
-       // If menu was open, consider closing it
-       // setShowConstructionMenu(false);
-       // setShowRecruitmentMenu(false);
+      console.log('GamePage: ❌ NO SE ABRIRÁ MENÚ: Condiciones no cumplidas:', 
+                  { heroAtSamePosition, isCastleBuilding, isBuilt: safeBuilding.built, 
+                    canRecruit: safeBuilding.can_recruit, distance, isNearCastle });
     }
-  };  const handleHeroInBuilding = (building: Building) => {
+  };
+
+  const handleHeroInBuilding = (building: Building) => {
     // Siempre considerar cualquier edificio en (48,48) como castillo
     const isCastleBuilding = building.is_castle || 
                          (building.position.x === 48 && building.position.y === 48);
@@ -460,22 +486,80 @@ const GamePage: React.FC = () => {
     if (!gameId || !activeBuilding || !gameState) return;
 
     try {
-      // Map building types to their respective city IDs
+      // Corregir el mapeo de edificios a ciudades
       const buildingToCityId: { [key: string]: string } = {
         barracks: "barracks_city",
         archery: "archery_city",
-        knigths_tower: "knights_city",
+        knights_tower: "knights_city",
         mage_tower: "mage_city",
         dragons_lair: "dragon_city"
       };
 
-      const cityId = buildingToCityId[buildingType];
-      if (!cityId) {
-        console.error('Invalid building type:', buildingType);
-        setGameMessage('Error: Tipo de edificio inválido');
-        return;
+      // Para el castillo central, siempre usar "central_city"
+      const isCentralCastle = activeBuilding.position.x === 48 && activeBuilding.position.y === 48;
+      let cityId: string; // Add explicit type annotation
+      
+      if (isCentralCastle) {
+        cityId = "central_city";
+        console.log(`Usando ciudad central para construcción en castillo principal (48,48)`);
+      } else if (activeBuilding && activeBuilding.position) {
+        // Para otros edificios, buscar la ciudad que contiene el edificio
+        const cityWithBuilding = gameState.player.cities.find(city => 
+          city.buildings.some(b => 
+            b.position.x === activeBuilding.position.x && 
+            b.position.y === activeBuilding.position.y
+          )
+        );
+        
+        if (cityWithBuilding) {
+          cityId = cityWithBuilding.id;
+          console.log(`Usando ciudad existente para construcción: ${cityId}`);
+        } else {
+          cityId = buildingToCityId[buildingType] || "central_city";
+          console.log(`No se encontró ciudad para el edificio activo, usando mapeo: ${cityId}`);
+        }
+      } else {
+        cityId = buildingToCityId[buildingType] || "central_city";
       }
-
+      
+      // Obtener el costo del edificio para mostrar en el log
+      const buildingConfigs = {
+        barracks: { cost: { gold: 1000, wood: 50, stone: 50 } },
+        archery: { cost: { gold: 1200, wood: 70, stone: 30 } },
+        knights_tower: { cost: { gold: 1500, wood: 100, stone: 100 } },
+        mage_tower: { cost: { gold: 2000, wood: 100, stone: 100 } },
+        dragons_lair: { cost: { gold: 5000, wood: 200, stone: 200 } }
+      };
+      
+      const buildingCost = buildingConfigs[buildingType as keyof typeof buildingConfigs]?.cost;
+      
+      console.log('Costo del edificio a construir:', buildingCost);
+      const oldResources = getCurrentPlayerResources();
+      console.log('Recursos ANTES de la construcción:', oldResources);
+      
+      // Realizar una deducción local de recursos para mostrar cambios inmediatos
+      const localUpdatedGameState = JSON.parse(JSON.stringify(gameState));
+      if (buildingCost && localUpdatedGameState.player && localUpdatedGameState.player.resources) {
+        // Deducir recursos localmente para mostrar cambios inmediatos
+        Object.entries(buildingCost).forEach(([resource, amount]) => {
+          const resourceKey = resource as keyof typeof localUpdatedGameState.player.resources;
+          if (localUpdatedGameState.player.resources[resourceKey] !== undefined) {
+            localUpdatedGameState.player.resources[resourceKey] -= amount as number;
+          }
+        });
+        // Actualizar propiedad del edificio
+        localUpdatedGameState.player.cities.forEach((city: any) => {
+          if (city.id === cityId) {
+            city.buildings.forEach((building: any) => {
+              if (building.building_type === buildingType) {
+                building.built = true;
+                building.owner = "player";
+              }
+            });
+          }
+        });
+      }
+      
       const action = {
         type: "buildStructure",
         details: {
@@ -486,16 +570,51 @@ const GamePage: React.FC = () => {
 
       console.log('Sending build action:', action);
 
-      const response = await gameService.executeAction(gameId, action);
+      // Actualizar inmediatamente el estado para mostrar cambios en la UI
+      setGameState(localUpdatedGameState);
       
-      if (response.data?.success) {
+      const response = await gameService.executeAction(gameId, action);
+      console.log("Build response:", response.data);
+      
+      if (response.data?.game_state) {
+        console.log('New resources after server response:', response.data.game_state.player.resources);
         setGameState(response.data.game_state);
         setShowConstructionMenu(false);
         setGameMessage(`${buildingType} construido con éxito`);
+      } else if (response.data?.success) {
+        // Si hay éxito pero no hay game_state, recargar el estado del juego completo
+        console.log("La construcción fue exitosa pero no se recibió el estado del juego. Recargando estado...");
+        const refreshResponse = await gameService.loadGame(gameId);
+        if (refreshResponse.data?.game_state) {
+          console.log('Resources after reload:', refreshResponse.data.game_state.player.resources);
+          setGameState(refreshResponse.data.game_state);
+          setShowConstructionMenu(false);
+          setGameMessage(`${buildingType} construido con éxito`);
+        }
+      } else {
+        // Si algo falló, restaurar el estado original
+        console.error("Build failed:", response.data?.error || "Unknown error");
+        setGameMessage(`Error al construir: ${response.data?.error || "Error desconocido"}`);
+        
+        // Recargar el estado para asegurar consistencia
+        const refreshResponse = await gameService.loadGame(gameId);
+        if (refreshResponse.data?.game_state) {
+          setGameState(refreshResponse.data.game_state);
+        }
       }
     } catch (error) {
       console.error('Error building structure:', error);
-      setGameMessage("Error al construir el edificio");
+      setGameMessage("Error al construir el edificio. Comprueba la consola para detalles.");
+      
+      // Recargar el estado en caso de error para asegurar consistencia
+      try {
+        const refreshResponse = await gameService.loadGame(gameId);
+        if (refreshResponse.data?.game_state) {
+          setGameState(refreshResponse.data.game_state);
+        }
+      } catch (refreshError) {
+        console.error('Error reloading game state after build error:', refreshError);
+      }
     }
   };
 

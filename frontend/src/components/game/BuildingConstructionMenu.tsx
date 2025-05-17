@@ -27,7 +27,7 @@ const BuildingConstructionMenu: React.FC<BuildingConstructionMenuProps> = ({
       cost: { gold: 1200, wood: 70, stone: 30 },
       cityId: "archery_city"
     },
-    knigths_tower: { 
+    knights_tower: { 
       name: "Torre de Caballeros", 
       cost: { gold: 1500, wood: 100, stone: 100 },
       cityId: "knights_city"
