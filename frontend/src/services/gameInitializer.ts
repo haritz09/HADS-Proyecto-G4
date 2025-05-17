@@ -31,7 +31,8 @@ export function initializeCity(position: Position, owner: string): City {
     has_tavern: true,
     requirements: [],
     cost: INITIAL_BUILDINGS[0].cost,
-    available_creatures: []
+    available_creatures: [],
+    owner: owner
   };
 
   return {

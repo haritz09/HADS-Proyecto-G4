@@ -14,8 +14,9 @@ export const createMoveHeroAction = (heroId: string, destination: Position): Gam
   return {
     type: 'moveHero',
     details: {
-      heroId,
-      destination
+      hero_id: heroId,
+      x: destination.x,
+      y: destination.y
     }
   };
 };

@@ -72,14 +72,15 @@ export interface Building {
   id: string;
   name: string;
   position: Position;
+  building_type: string;
+  cost: { gold: number; wood: number; stone: number };
   built: boolean;
   can_recruit: boolean;
   is_castle: boolean;
   has_tavern: boolean;
-  building_type: string; // Cambiado de type a building_type
   requirements: string[];
-  cost: Resources;
-  available_creatures: Creature[];
+  available_creatures: any[];
+  owner: string | null;  // Add this line
 }
 
 export interface City {

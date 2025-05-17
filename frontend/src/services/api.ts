@@ -167,15 +167,16 @@ export const gameService = {
               owner: "player",
               buildings: [{
                 id: "castle",
-                name: "Castillo",
+                name: "Castillo Central",
                 position: { x: 48, y: 48 },
                 building_type: "castle",
-                cost: { gold: 0, wood: 0, stone: 0 },
-                built: true,  // Asegurarnos de que está construido
-                can_recruit: false,
-                is_castle: true,  // Asegurarnos de que es castillo
-                has_tavern: false,
+                built: true,
+                can_recruit: true,
+                is_castle: true,
+                has_tavern: true,
+                owner: "player",
                 requirements: [],
+                cost: { gold: 0, wood: 0, stone: 0 },
                 available_creatures: []
               }]
             },
@@ -194,6 +195,7 @@ export const gameService = {
                 can_recruit: false,
                 is_castle: false,
                 has_tavern: false,
+                owner: null,
                 requirements: [],
                 available_creatures: []
               }]
@@ -213,6 +215,7 @@ export const gameService = {
                 can_recruit: false,
                 is_castle: false,
                 has_tavern: false,
+                owner: null,
                 requirements: [],
                 available_creatures: []
               }]
@@ -231,6 +234,7 @@ export const gameService = {
                 can_recruit: false,
                 is_castle: false,
                 has_tavern: false,
+                owner: null,
                 requirements: [],
                 available_creatures: []
               }]
@@ -249,6 +253,7 @@ export const gameService = {
                 can_recruit: false,
                 is_castle: false,
                 has_tavern: false,
+                owner: null,
                 requirements: [],
                 available_creatures: []
               }]
@@ -267,6 +272,7 @@ export const gameService = {
                 can_recruit: false,
                 is_castle: false,
                 has_tavern: false,
+                owner: null,
                 requirements: [],
                 available_creatures: []
               }]
@@ -332,7 +338,20 @@ export const gameService = {
   },
   
   saveGame: async (gameId: string, gameState: any) => {
-    return await API.post(`/games/${gameId}/save`, gameState);
+    try {
+      const response = await API.post(`/game/${gameId}/save`, {
+        game_state: gameState
+      });
+      
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to save game');
+      }
+      
+      return response;
+    } catch (error: any) {
+      console.error('Error saving game:', error);
+      throw new Error(error.response?.data?.error || 'Failed to save game');
+    }
   },
   
   // Acciones del juego usando el sistema unificado de acciones

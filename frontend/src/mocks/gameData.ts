@@ -60,14 +60,15 @@ export const createCity = (position: Position, name: string, owner: string): Cit
       id: 'town_hall',
       name: 'Ayuntamiento',
       position,
-      building_type: 'town_hall', // Añadido
+      building_type: 'town_hall',
       cost: { gold: 0, wood: 0, stone: 0 },
       built: true,
       can_recruit: true,
       is_castle: true,
       has_tavern: true,
       requirements: [],
-      available_creatures: []
+      available_creatures: [],
+      owner: null // Set initial owner as null except for central castle
     }
   ],
   garrison: [],

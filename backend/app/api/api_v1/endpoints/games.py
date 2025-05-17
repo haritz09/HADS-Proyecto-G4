@@ -1,4 +1,4 @@
-from backend.app.game.logic import process_end_turn, process_hero_attack, process_hero_movement, process_recruitment, transfer_troops_between_hero_and_castle
+from backend.app.game.logic import process_end_turn, process_hero_attack, process_hero_movement, process_recruitment, transfer_troops_between_hero_and_castle, process_build_structure
 from backend.app.game.cheats import process_cheat
 from fastapi import APIRouter, HTTPException, status, Query, Depends, Body
 from typing import List, Optional
@@ -7,13 +7,16 @@ from backend.app.api.api_v1.endpoints.auth import get_current_user
 from backend.app.db.crud import (
     list_saved_games,
     create_game,
-    save_game,
     get_game,
     update_game,
     get_db_client
 )
 from bson import ObjectId
 from datetime import datetime, UTC
+import logging
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 from ai_service.client.groq_client import GroqClient
 
@@ -95,23 +98,6 @@ async def crear_nueva_partida(
     
     return create_game(game_data)
 
-@router.post("/{game_id}/save", response_model=GameRead)
-async def guardar_partida_actual(
-    game_id: str,
-    game_data: dict,
-    current_user: dict = Depends(get_current_user)
-):
-    """Guardar el estado actual de la partida."""
-    game = get_game(game_id)
-    if not game:
-        raise HTTPException(status_code=404, detail="Partida no encontrada")
-    
-    # Verificar que el usuario es dueño de la partida
-    if str(game["user_id"]) != str(current_user["_id"]):
-        raise HTTPException(status_code=403, detail="No autorizado para guardar esta partida")
-    
-    return save_game(game_id, game_data)
-
 @router.get("/{game_id}", response_model=GameRead)
 async def cargar_partida_guardada(
     game_id: str,
@@ -163,22 +149,67 @@ async def process_action(
             result = None
             if action_type == "moveHero":
                 result = process_hero_movement(game_state, action)
+                # Verificar que la posición del héroe coincide con la posición objetivo
+                hero = next((h for h in game_state.player.heroes if h.id == action["details"]["hero_id"]), None)
+                if hero:
+                    target_x = action["details"].get("x")
+                    target_y = action["details"].get("y")
+                    if target_x is not None and target_y is not None:
+                        hero.position.x = target_x
+                        hero.position.y = target_y
+                        logger.info(f"GAMES_API: Hero position synced to ({target_x},{target_y})")
+                    
+                # Solo cerrar el menú si el héroe realmente se alejó del castillo
+                if hero and (hero.position.x != 48 or hero.position.y != 48):
+                    result["close_construction_menu"] = True
             elif action_type == "combat":
                 result = process_hero_attack(game_state, action)
             elif action_type == "recruitUnits":
                 result = process_recruitment(game_state, action)
             elif action_type == "buildStructure":
-                result = (game_state, action)
+                result = process_build_structure(game_state, action)
             elif action_type == "transfer": # Transerir tropas entre heroe-castillo
                 result = transfer_troops_between_hero_and_castle(game_state, action)
             elif action_type == "endTurn":
                 result = process_end_turn(game_state)
             else:
                 raise HTTPException(status_code=400, detail=f"Tipo de acción no válido: {action_type}")
-                
+            
             # 4. Guardar el nuevo estado
-            game["game_state"] = game_state.model_dump()
-            update_game(game_id, game)
+            # Asegurarnos de hacer un model_dump() completo del game_state
+            game_state_dump = game_state.model_dump()
+            game["game_state"] = game_state_dump
+            
+            # Log para movimiento de héroe - verificar coordenadas antes de guardar en BD
+            if action_type == "moveHero" and "hero_id" in action.get("details", {}):
+                hero_id = action["details"]["hero_id"]
+                hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
+                if hero:
+                    logger.info(f"GAMES_API: [DATABASE_UPDATE] Saving hero {hero_id} position to database. Position=({hero.position.x},{hero.position.y})")
+                    
+                    # Verificar que la posición se ha serializado correctamente en el dump
+                    serialized_heroes = game["game_state"]["player"]["heroes"]
+                    serialized_hero = next((h for h in serialized_heroes if h["id"] == hero_id), None)
+                    if serialized_hero and (serialized_hero["position"]["x"] != hero.position.x or 
+                                           serialized_hero["position"]["y"] != hero.position.y):
+                        # Corregir posición manualmente si hay discrepancia
+                        serialized_hero["position"]["x"] = hero.position.x
+                        serialized_hero["position"]["y"] = hero.position.y
+                
+            # Guardar en la base de datos
+            logger.info(f"GAMES_API: Calling update_game() to persist game state in database for game_id={game_id}")
+            updated_game = update_game(game_id, game)
+            
+            # Confirmar que se guardó correctamente
+            if action_type == "moveHero" and updated_game and "game_state" in updated_game:
+                try:
+                    hero_id = action["details"]["hero_id"]
+                    saved_heroes = updated_game["game_state"]["player"]["heroes"]
+                    saved_hero = next((h for h in saved_heroes if h["id"] == hero_id), None)
+                    if saved_hero:
+                        logger.info(f"GAMES_API: [DATABASE_VERIFY] Hero position in database after save: heroId={hero_id}, savedPosition=({saved_hero['position']['x']},{saved_hero['position']['y']})")
+                except Exception as e:
+                    logger.error(f"GAMES_API: Error verificando posición guardada: {str(e)}")
             
             return {
                 "status": "success",

@@ -20,7 +20,10 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint:clear": "eslint --cache --cache-location ./node_modules/.cache/.eslintcache --clear",
+    "lint": "eslint --cache --cache-location ./node_modules/.cache/.eslintcache 'src/**/*.{ts,tsx}'",
+    "lint:fix": "eslint --cache --cache-location ./node_modules/.cache/.eslintcache 'src/**/*.{ts,tsx}' --fix"
   },
   "eslintConfig": {
     "extends": [

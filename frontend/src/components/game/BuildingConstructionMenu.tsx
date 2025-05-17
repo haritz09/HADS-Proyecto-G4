@@ -5,7 +5,7 @@ import '../../styles/components/BuildingConstructionMenu.css';
 
 interface BuildingConstructionMenuProps {
   availableBuildings: Building[];
-  onBuild: (buildingId: string) => void;
+  onBuild: (buildingType: string) => void; // Update type to be explicit
   onClose: () => void;
   playerResources: { gold: number; wood: number; stone: number };
 }
@@ -16,9 +16,38 @@ const BuildingConstructionMenu: React.FC<BuildingConstructionMenuProps> = ({
   onClose,
   playerResources
 }) => {
-  const canAfford = (cost: any) => {
-    return Object.entries(cost).every(([resource, amount]) => 
-      playerResources[resource as keyof typeof playerResources] >= (amount as number)
+  const buildingConfigs = {
+    barracks: { 
+      name: "Cuartel", 
+      cost: { gold: 1000, wood: 50, stone: 50 },
+      cityId: "barracks_city"
+    },
+    archery: { 
+      name: "Campo de Tiro", 
+      cost: { gold: 1200, wood: 70, stone: 30 },
+      cityId: "archery_city"
+    },
+    knigths_tower: { 
+      name: "Torre de Caballeros", 
+      cost: { gold: 1500, wood: 100, stone: 100 },
+      cityId: "knights_city"
+    },
+    mage_tower: { 
+      name: "Torre de Magos", 
+      cost: { gold: 2000, wood: 100, stone: 100 },
+      cityId: "mage_city"
+    },
+    dragons_lair: { 
+      name: "Guarida de Dragones", 
+      cost: { gold: 5000, wood: 200, stone: 200 },
+      cityId: "dragon_city"
+    }
+  };
+
+  const canAfford = (cost: any = {}) => {
+    if (!cost) return false;
+    return Object.entries(cost || {}).every(([resource, amount]) => 
+      (playerResources[resource as keyof typeof playerResources] || 0) >= (amount as number)
     );
   };
 
@@ -30,8 +59,8 @@ const BuildingConstructionMenu: React.FC<BuildingConstructionMenuProps> = ({
       </div>
 
       <div className="construction-content">
-        {availableBuildings.map(building => (
-          <div key={building.id} className="building-option">
+        {Object.entries(buildingConfigs).map(([type, building]) => (
+          <div key={type} className="building-option">
             <div className="building-info">
               <span>{building.name}</span>
               <div className="cost-info">
@@ -41,10 +70,13 @@ const BuildingConstructionMenu: React.FC<BuildingConstructionMenuProps> = ({
               </div>
             </div>
             <Button
-              onClick={() => onBuild(building.id)}
-              disabled={building.built || !canAfford(building.cost)}
+              onClick={() => {
+                console.log(`Building ${type} in city ${building.cityId}`);
+                onBuild(type);
+              }}
+              disabled={!canAfford(building.cost)}
             >
-              {building.built ? 'Construido' : 'Construir'}
+              Construir
             </Button>
           </div>
         ))}

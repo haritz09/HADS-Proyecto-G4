@@ -9,6 +9,11 @@ import heapq
 import copy  # Add this import for deepcopy
 from backend.app.game.figures import render_hero_on_map, clear_hero_from_map
 from backend.app.db.crud import update_game, get_game
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Constantes del sistema
 XP_POR_COMBATE = 100
@@ -97,77 +102,49 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 heapq.heappush(open_set, (f, neighbor))
     return []  # No path found
 
-def process_hero_movement(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
-    """Procesa el movimiento de un héroe con pathfinding y actualiza el estado paso a paso."""
+def process_hero_movement(game_state: GameState, action: dict) -> dict:
     try:
-        # Extract hero_id and destination - more robust handling of different formats
-        hero_id = None
-        destination = None
-        
-        if "details" in action:
-            details = action["details"]
-            hero_id = details.get("heroId") or details.get("hero_id")
-            destination = details.get("destination")
+        hero_id = action["details"]["hero_id"]
+        # Handle both destination object and separate x,y coordinates
+        if "destination" in action["details"]:
+            target_x = action["details"]["destination"]["x"]
+            target_y = action["details"]["destination"]["y"]
         else:
-            # Handle older format or direct properties
-            hero_id = action.get("heroId") or action.get("hero_id")
-            destination = action.get("destination") or action.get("target_position")
+            target_x = action["details"].get("x")
+            target_y = action["details"].get("y")
+
+        if target_x is None or target_y is None:
+            raise ValueError("Invalid target coordinates")
         
-        if not hero_id or not destination:
-            raise ValueError("Formato de acción inválido: hero_id y destination son requeridos")
-            
-        target_position = Position(**destination)
-        
-        # Find hero with more verbose error reporting
-        hero = None
-        for h in game_state.player.heroes:
-            if h.id == hero_id:
-                hero = h
-                break
-                
+        hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
         if not hero:
-            available_heroes = [h.id for h in game_state.player.heroes]
-            raise ValueError(f"Héroe no encontrado: {hero_id}. Héroes disponibles: {available_heroes}")
+            raise ValueError("Hero not found")
         
-        # Safely access map properties with default values if missing
-        map_width = getattr(game_state.map.size, 'width', 100) 
-        map_height = getattr(game_state.map.size, 'height', 100)
+        # Calculate movement cost without map parameter
+        movement_cost = calculate_movement_cost(hero.position, Position(x=target_x, y=target_y))
+        if movement_cost > hero.stats.movement_points_left:
+            raise ValueError("Not enough movement points")
         
-        # Basic validation of positions
-        if (target_position.x < 0 or target_position.x >= map_width or
-            target_position.y < 0 or target_position.y >= map_height):
-            raise ValueError(f"Posición destino fuera de límites: {target_position.x}, {target_position.y}")
-        
-        # Simplified movement for now - direct move without pathfinding if that's causing issues
-        movement_cost = calculate_movement_cost(hero.position, target_position, game_state.map)
-        
-        if hero.stats.movement_points_left < movement_cost:
-            raise ValueError("Puntos de movimiento insuficientes")
-        
-        # Update hero position
-        old_position = copy.deepcopy(hero.position)
+        # Update position
+        hero.position.x = target_x
+        hero.position.y = target_y
         hero.stats.movement_points_left -= movement_cost
-        hero.position = target_position
         
-        # Update map representation if needed
-        if hasattr(game_state.map, 'tiles') and game_state.map.tiles:
-            try:
-                # Clear old position and render in new position (safely)
-                clear_hero_from_map(hero, game_state.map)
-                render_hero_on_map(hero, game_state.map)
-            except Exception as e:
-                print(f"Warning: Error updating map tiles: {str(e)}")
-        
-        # Return simplified result
         return {
             "success": True,
-            "old_position": {"x": old_position.x, "y": old_position.y},
-            "new_position": {"x": hero.position.x, "y": hero.position.y},
-            "remaining_movement": hero.stats.movement_points_left
+            "hero_id": hero_id,
+            "new_position": {"x": target_x, "y": target_y},
+            "movement_points_left": hero.stats.movement_points_left
         }
     except Exception as e:
-        print(f"Error in process_hero_movement: {str(e)}")
-        raise ValueError(f"Error procesando movimiento: {str(e)}")
+        raise ValueError(f"Error processing hero movement: {str(e)}")
+
+def calculate_movement_cost(start: Position, end: Position, game_map: Any = None) -> float:
+    """Calcula el coste de movimiento entre dos posiciones usando distancia euclídea."""
+    # Make game_map parameter optional
+    distance = math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2)
+    # Basic movement cost is just the distance
+    return distance
 
 def process_hero_attack(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     """Procesa el ataque de un héroe a otro"""
@@ -284,83 +261,142 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
 
 def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     """Procesa la construcción de un edificio en la ciudad."""
-    details = action["details"]
-    city_id = details["cityId"]
-    structure_type = details["structureType"]
+    try:
+        details = action["details"]
+        city_id = details["cityId"]
+        structure_type = details["structureType"]
+        current_player = game_state.current_player
+        
+        # Building configurations
+        building_configs = {
+            "barracks": {
+                "cost": {"gold": 1000, "wood": 50, "stone": 50},
+                "can_recruit": True,
+                "available_creatures": [
+                    {
+                        "type": "Guerrero",
+                        "count": 10,
+                        "growth_per_week": 4,
+                        "stats": {"attack": 4, "defense": 4, "speed": 3, "movement_points": 5, "movement_points_left": 5},
+                        "recruit_cost": {"gold": 100}
+                    }
+                ]
+            },
+            "archery": {
+                "cost": {"gold": 1200, "wood": 70, "stone": 30},
+                "can_recruit": True,
+                "available_creatures": [
+                    {
+                        "type": "Arquero",
+                        "count": 8,
+                        "growth_per_week": 3,
+                        "stats": {"attack": 5, "defense": 3, "speed": 4, "movement_points": 5, "movement_points_left": 5},
+                        "recruit_cost": {"gold": 150}
+                    }
+                ]
+            },
+            "knigths_tower": {
+                "cost": {"gold": 1500, "wood": 100, "stone": 100},
+                "can_recruit": True,
+                "available_creatures": [
+                    {
+                        "type": "Caballero",
+                        "count": 5,
+                        "growth_per_week": 2,
+                        "stats": {"attack": 6, "defense": 5, "speed": 5, "movement_points": 7, "movement_points_left": 7},
+                        "recruit_cost": {"gold": 300}
+                    }
+                ]
+            },
+            "mage_tower": {
+                "cost": {"gold": 2000, "wood": 100, "stone": 100},
+                "can_recruit": True,
+                "available_creatures": [
+                    {
+                        "type": "Mago",
+                        "count": 3,
+                        "growth_per_week": 1,
+                        "stats": {"attack": 7, "defense": 3, "speed": 3, "movement_points": 5, "movement_points_left": 5},
+                        "recruit_cost": {"gold": 500}
+                    }
+                ]
+            },
+            "dragons_lair": {
+                "cost": {"gold": 5000, "wood": 200, "stone": 200},
+                "can_recruit": True,
+                "available_creatures": [
+                    {
+                        "type": "Dragon",
+                        "count": 1,
+                        "growth_per_week": 1,
+                        "stats": {"attack": 10, "defense": 8, "speed": 6, "movement_points": 8, "movement_points_left": 8},
+                        "recruit_cost": {"gold": 2000}
+                    }
+                ]
+            }
+        }
 
-    # Encontrar la ciudad
-    city = next((c for c in game_state.player.cities if c.id == city_id), None)
-    if not city:
-        raise ValueError("Ciudad no encontrada")
+        # Get building configuration
+        building_config = building_configs.get(structure_type)
+        if not building_config:
+            raise ValueError(f"Invalid building type: {structure_type}")
 
-    # Buscar héroe dentro del castillo central (is_castle=True, radio=0)
-    castle = next((b for b in city.buildings if getattr(b, 'is_castle', False)), None)
-    if not castle:
-        raise ValueError("No hay castillo en la ciudad")
-    hero = next((h for h in game_state.player.heroes if h.position.x == castle.position.x and h.position.y == castle.position.y), None)
-    if not hero:
-        raise ValueError("El héroe debe estar dentro del castillo para construir")
+        # Find player resources and cities based on current player
+        player = game_state.player if current_player == "player" else game_state.ai
+        cities = player.cities
+        city = next((c for c in cities if c.id == city_id), None)
+        
+        if not city:
+            raise ValueError(f"City not found: {city_id}")
 
-    # Verificar si el edificio ya está construido
-    existing = next((b for b in city.buildings if b.name == structure_type), None)
-    if existing and existing.can_recruit:
-        raise ValueError("El edificio ya está construido")
+        # Find the specific building in the city
+        building = next((b for b in city.buildings if b.building_type == structure_type), None)
+        if not building:
+            raise ValueError("Building not found in city")
 
-    # Definir el coste de construcción (puedes ajustar esto según el tipo)
-    build_costs = {
-        "barracks": {"gold": 1000, "wood": 50, "stone": 50},
-        "archery": {"gold": 1200, "wood": 70, "stone": 30},
-        "knigths_tower": {"gold": 1500, "wood": 100, "stone": 100},
-        "mage_tower": {"gold": 2000, "wood": 100, "stone": 100},
-        "dragons_lair": {"gold": 5000, "wood": 200, "stone": 200},
+        # Check if already built
+        if building.built or building.owner:
+            raise ValueError("Building already built")
 
-        "tavern": {"gold": 1000, "wood": 200, "stone": 200}, #Esto sirve para reclutar héroes (esta dentro del castillo)
-    }
-    cost = build_costs.get(structure_type)
-    if not cost:
-        raise ValueError("Tipo de edificio desconocido")
-    if not has_enough_resources(game_state.player, cost):
-        raise ValueError("Recursos insuficientes para construir el edificio")
+        # Verify resources BEFORE making any changes
+        if not has_enough_resources(player.resources, building_config["cost"]):
+            raise ValueError("Insufficient resources")
 
-    # Crear el edificio y añadirlo a la ciudad
-    from backend.app.db.schema import Building, Position
-    building_id = f"{city_id}_{structure_type}"
-    # Asumimos que cada tipo tiene una posición fija relativa al castillo
-    structure_positions = {
-        "barracks": Position(x=50, y=50),
-        "archery": Position(x=52, y=52),
-        "knigths_tower": Position(x=48, y=52),
-        "mage_tower": Position(x=70, y=58),
-        "dragons_lair": Position(x=5, y=90),
-        "tavern": Position(x=castle.position.x, y=castle.position.y),
-        # ...otros edificios...
-    }
-    pos = structure_positions.get(structure_type)
-    if not pos:
-        raise ValueError("No se ha definido la posición para este edificio")
-    new_building = Building(
-        id=building_id,
-        name=structure_type,
-        position=pos,
-        available_creatures=[],
-        is_castle=False,
-        has_tavern=False,
-        can_recruit=True
-    )
-    city.buildings.append(new_building)
-    deduct_resources(game_state.player, cost)
+        # If we reach here, we can safely make all changes
+        
+        # 1. Deduct resources first
+        deduct_resources(player.resources, building_config["cost"])
+        
+        # 2. Update building properties
+        building.built = True
+        building.owner = current_player
+        building.can_recruit = building_config["can_recruit"]
+        building.available_creatures = building_config["available_creatures"]
+        
+        logger.info(f"Built {structure_type} in {city_id} for {current_player}. Resources deducted: {building_config['cost']}")
+        logger.info(f"Building state after update: built={building.built}, owner={building.owner}, can_recruit={building.can_recruit}")
 
-    # Mostrar el edificio en el mapa
-    from backend.app.game.figures import render_building_on_map
-    render_building_on_map(new_building, game_state.map)
+        return {
+            "success": True,
+            "built": structure_type,
+            "city": city_id,
+            "building": building.id,
+            "cost": building_config["cost"],
+            "new_resources": {
+                "gold": player.resources.gold,
+                "wood": player.resources.wood,
+                "stone": player.resources.stone
+            }
+        }
 
-    return {"built": structure_type, "city": city_id, "position": {"x": pos.x, "y": pos.y}}
+    except Exception as e:
+        logger.error(f"Error in process_build_structure: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 # Funciones auxiliares
-def calculate_movement_cost(start: Position, end: Position, game_map: Any) -> float:
-    """Calcula el coste de movimiento entre dos posiciones usando distancia euclídea."""
-    return math.sqrt((end.x - start.x) ** 2 + (end.y - start.y) ** 2)
-
 def process_tile_interaction(hero: Heroe, position: Position, game_state: GameState) -> Dict[str, Any]:
     """Procesa la interacción con objetos en la casilla: recursos, minas, artefactos, enemigos, etc."""
     idx = position.y * game_state.map.size.width + position.x

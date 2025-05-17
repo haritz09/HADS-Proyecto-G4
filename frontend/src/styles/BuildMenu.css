@@ -1,0 +1,78 @@
+.build-menu {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.8);
+  border: 2px solid #5a3b23;
+  border-radius: 8px;
+  padding: 15px;
+  width: 300px;
+  color: #fff;
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.build-menu h3 {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #ffd700;
+  border-bottom: 1px solid #5a3b23;
+  padding-bottom: 8px;
+}
+
+.buildings-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.building-option {
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: rgba(90, 59, 35, 0.5);
+  border-radius: 5px;
+  transition: background-color 0.2s;
+}
+
+.building-option:hover {
+  background-color: rgba(90, 59, 35, 0.8);
+}
+
+.building-option h4 {
+  margin-top: 0;
+  margin-bottom: 5px;
+  color: #ffd700;
+}
+
+.building-option p {
+  margin-top: 5px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #cccccc;
+}
+
+.build-menu button {
+  background-color: #8b4513;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.build-menu button:hover {
+  background-color: #a0522d;
+}
+
+.build-menu button:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+.build-menu > button {
+  display: block;
+  margin: 10px auto 0;
+  width: 100px;
+}

@@ -67,6 +67,7 @@ def create_game(game_data: Dict[str, Any]) -> Dict[str, Any]:
     with get_db_client() as db:
         if "user_id" in game_data and isinstance(game_data["user_id"], str):
             game_data["user_id"] = ObjectId(game_data["user_id"])
+        _fix_hero_positions(game_data)
         result = db.games.insert_one(game_data)
         # Recuperar el juego recién creado y convertir ObjectId a str
         game = db.games.find_one({"_id": result.inserted_id})
@@ -85,11 +86,31 @@ def get_game(game_id: str) -> Optional[Dict[str, Any]]:
                 game["user_id"] = str(game["user_id"])
         return game
 
+def _fix_hero_positions(game_data):
+    # Corrige la posición de todos los héroes para que sea un dict plano {x:int, y:int}
+    if "game_state" in game_data and "player" in game_data["game_state"] and "heroes" in game_data["game_state"]["player"]:
+        for hero in game_data["game_state"]["player"]["heroes"]:
+            pos = hero.get("position")
+            if pos is not None:
+                # Si es un objeto (por ejemplo, de Pydantic), conviértelo a dict plano
+                if hasattr(pos, 'x') and hasattr(pos, 'y'):
+                    hero["position"] = {"x": int(getattr(pos, 'x')), "y": int(getattr(pos, 'y'))}
+                elif isinstance(pos, dict):
+                    hero["position"]["x"] = int(pos["x"])
+                    hero["position"]["y"] = int(pos["y"])
+                else:
+                    # Si por alguna razón es un string o tipo raro, intenta forzar a int
+                    try:
+                        hero["position"] = {"x": int(pos["x"]), "y": int(pos["y"])}
+                    except Exception:
+                        hero["position"] = {"x": 0, "y": 0}  # fallback seguro
+
 def update_game(game_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     update_data.pop("_id", None)  # Eliminar _id si existe
     with get_db_client() as db:
         if "user_id" in update_data and isinstance(update_data["user_id"], str):
             update_data["user_id"] = ObjectId(update_data["user_id"])
+        _fix_hero_positions(update_data)
         result = db.games.update_one(
             {"_id": ObjectId(game_id)},
             {"$set": update_data}
@@ -141,6 +162,7 @@ def save_game(game_id: str, game_data: Dict[str, Any]) -> Optional[Dict[str, Any
     with get_db_client() as db:
         if "user_id" in game_data and isinstance(game_data["user_id"], str):
             game_data["user_id"] = ObjectId(game_data["user_id"])
+        _fix_hero_positions(game_data)
         game_data["last_saved"] = datetime.now(UTC)
         result = db.games.update_one(
             {"_id": ObjectId(game_id)},
