@@ -309,15 +309,12 @@ const GamePage: React.FC = () => {
         if (response.data.interaction && response.data.interaction.interaction === 'artifact_collected') {
           // Mostrar mensaje de artefacto recogido
           setGameMessage(`¡Has recogido el artefacto: ${response.data.interaction.artifact}!`);
-          
-          // Reproducir sonido o efecto visual (opcional)
-          // playCollectionSound();
         }
         
         // Después de la animación, actualizamos el estado
         setTimeout(() => {
           setGameState(response.data.game_state);
-        }, currentPath.length * 200); // 200ms por paso
+        }, 1000); // Use fixed timeout instead of undefined currentPath
       }
     } catch (err) {
       console.error("GamePage: Exception during hero movement:", err);
