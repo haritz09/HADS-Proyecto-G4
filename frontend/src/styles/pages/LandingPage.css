@@ -38,17 +38,18 @@
 }
 
 .title-container {
-  margin-top: 20px;
-  width: 1000px; /* Ajusta el tamaño según sea necesario */
-  height: 1000px; /* Ajusta el tamaño según sea necesario */
+  margin-top: 0px;
   background-image: url('../../assets/images/background/titleBase.png');
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  background-position: center;
-  position: relative; /* Necesario para superponer el texto */
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background-position: center 30%; /* Ajustado para mover la imagen un poco más arriba */
+  padding: 120px 150px;  /* Aumentando aún más el padding vertical y horizontal */
+  border-radius: 8px;
+  display: inline-block;
+  width: auto;
+  box-shadow: none;
+  align-self: flex-start;
+  position: relative;
 }
 
 .game-title {

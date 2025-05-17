@@ -132,3 +132,10 @@ export interface VisibleObject {
   resource_type?: string;
   resource_per_turn?: number;
 }
+
+// Definir un tipo específico para artefactos que aparecen en el mapa
+export interface ArtifactObject extends VisibleObject {
+  name: string;
+  subtype: 'totemDeGuerra' | 'totemVelocidad' | 'totemReclutamiento';
+  effect: Record<string, any>;
+}

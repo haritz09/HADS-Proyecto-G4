@@ -19,6 +19,7 @@ import BuildingInfo from '../components/game/BuildingInfo';
 import Button from '../components/ui/Button';
 import RecruitmentMenu from '../components/game/RecruitmentMenu';
 import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
+import { syncArtifactsWithTiles } from '../utils/gameMapUtils';
 import '../styles/pages/GamePage.css';
 
 const GamePage: React.FC = () => {
@@ -64,7 +65,10 @@ const GamePage: React.FC = () => {
           throw new Error("Game state is missing map data");
         }
         
-        setGameState(response.data.game_state);
+        // Sincronizar artefactos con tiles
+        const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
+        
+        setGameState(syncedGameState);
         setGameMessage(`¡Partida cargada! Turno ${response.data.game_state.turn}`);
       } catch (err) {
         console.error("Error loading game:", err);
@@ -301,6 +305,19 @@ const GamePage: React.FC = () => {
       } else {
         console.error('GamePage: Failed to move hero or game_state missing in response:', response.data?.error || 'Unknown error');
         setGameMessage(response.data?.error || "Error al mover el héroe");
+        // Verificar si hay interacción con objetos en la casilla
+        if (response.data.interaction && response.data.interaction.interaction === 'artifact_collected') {
+          // Mostrar mensaje de artefacto recogido
+          setGameMessage(`¡Has recogido el artefacto: ${response.data.interaction.artifact}!`);
+          
+          // Reproducir sonido o efecto visual (opcional)
+          // playCollectionSound();
+        }
+        
+        // Después de la animación, actualizamos el estado
+        setTimeout(() => {
+          setGameState(response.data.game_state);
+        }, currentPath.length * 200); // 200ms por paso
       }
     } catch (err) {
       console.error("GamePage: Exception during hero movement:", err);

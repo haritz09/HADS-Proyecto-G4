@@ -38,6 +38,25 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
     );
   };
 
+  // Actualizar la sección de artefactos para mostrarlos correctamente
+  const getArtifactIcon = (subtype: string): string => {
+    switch (subtype) {
+      case 'totemDeGuerra': return '⚔️';
+      case 'totemVelocidad': return '⚡';
+      case 'totemReclutamiento': return '💰';
+      default: return '🏆';
+    }
+  };
+
+  const getArtifactDescription = (subtype: string): string => {
+    switch (subtype) {
+      case 'totemDeGuerra': return 'Aumenta el ataque, defensa y salud de tus tropas en un 20%';
+      case 'totemVelocidad': return 'Incrementa los puntos de movimiento en un 30%';
+      case 'totemReclutamiento': return 'Reduce el costo de reclutamiento en un 30%';
+      default: return 'Artefacto mágico';
+    }
+  };
+
   return (
     <div className="hero-info-panel">
       <div className="hero-info-header">
@@ -86,8 +105,13 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
         {hero.artifacts.length > 0 ? (
           hero.artifacts.map(artifact => (
             <div key={artifact.id} className="hero-artifact">
-              <div className={`artifact-icon ${artifact.subtype}`}></div>
-              <div className="artifact-name">{artifact.name}</div>
+              <div className={`artifact-icon artifact-${artifact.subtype}`}>
+                {getArtifactIcon(artifact.subtype)}
+              </div>
+              <div className="artifact-details">
+                <div className="artifact-name">{artifact.name}</div>
+                <div className="artifact-effect">{getArtifactDescription(artifact.subtype)}</div>
+              </div>
             </div>
           ))
         ) : (
