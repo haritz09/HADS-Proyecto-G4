@@ -130,11 +130,17 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         hero.position.y = target_y
         hero.stats.movement_points_left -= movement_cost
         
+        # Check for interactions at the new position (artifacts, resources, etc.)
+        print(f"DEBUG: Checking interactions at position ({target_x}, {target_y}) for hero {hero_id}")
+        interaction_result = process_tile_interaction(hero, Position(x=target_x, y=target_y), game_state)
+        print(f"DEBUG: Interaction result: {interaction_result}")
+        
         return {
             "success": True,
             "hero_id": hero_id,
             "new_position": {"x": target_x, "y": target_y},
-            "movement_points_left": hero.stats.movement_points_left
+            "movement_points_left": hero.stats.movement_points_left,
+            "interaction": interaction_result  # Include the interaction result in the response
         }
     except Exception as e:
         raise ValueError(f"Error processing hero movement: {str(e)}")
@@ -401,15 +407,24 @@ def process_tile_interaction(hero: Heroe, position: Position, game_state: GameSt
     """Procesa la interacción con objetos en la casilla: recursos, minas, artefactos, enemigos, etc."""
     idx = position.y * game_state.map.size.width + position.x
     tile = game_state.map.tiles[idx] if game_state.map.tiles and 0 <= idx < len(game_state.map.tiles) else None
+    print(f"DEBUG: process_tile_interaction at ({position.x}, {position.y}), tile={tile}")
+    
     if not tile:
         return {"interaction": "none"}
+    
     # Captura de minas y sitios de recursos
     for obj in (game_state.map.visible_objects or []):
         # --- ARTEFACTOS ---
         if isinstance(obj, Artifact) and obj.position.x == position.x and obj.position.y == position.y:
+            print(f"DEBUG: Artifact found at position ({position.x}, {position.y}): {obj}")
+            
             # Comprobar límite de artefactos
+            print(f"DEBUG: Hero {hero.id} current artifacts: {hero.artifacts}")
+            
             if len(hero.artifacts) >= 2:
+                print(f"DEBUG: Artifact limit reached ({len(hero.artifacts)}/2)")
                 return {"interaction": "artifact_found", "error": "Inventario de artefactos lleno", "stop_movement": False}
+            
             # Si hay guardianes, no se recoge hasta derrotarlos (no implementado aquí)
             # Recoger artefacto
             artifact = Artifact(
@@ -418,8 +433,12 @@ def process_tile_interaction(hero: Heroe, position: Position, game_state: GameSt
                 subtype=obj.subtype,
                 effect={}
             )
+            
+            print(f"DEBUG: Creating artifact object to add to hero: {artifact}")
+            
             # Aplicar bonificación según el tipo
             if obj.subtype == 'totemDeGuerra':
+                print(f"DEBUG: Applying totemDeGuerra effect")
                 for unit in hero.army:
                     if hasattr(unit, 'stats'):
                         unit.stats.attack = int(unit.stats.attack * 1.2)
@@ -427,14 +446,30 @@ def process_tile_interaction(hero: Heroe, position: Position, game_state: GameSt
                         unit.stats.speed = int(unit.stats.speed * 1.2)
                 artifact.effect = {"army_buff": "+20% attack, health, speed"}
             elif obj.subtype == 'totemVelocidad':
+                print(f"DEBUG: Applying totemVelocidad effect")
                 hero.stats.movement_points = int(hero.stats.movement_points * 1.3)
                 hero.stats.movement_points_left = int(hero.stats.movement_points_left * 1.3)
                 artifact.effect = {"movement_buff": "+30% movement points"}
             elif obj.subtype == 'totemReclutamiento':
+                print(f"DEBUG: Applying totemReclutamiento effect")
                 artifact.effect = {"recruitment_discount": "-30% cost"}
+            
             hero.artifacts.append(artifact)
+            print(f"DEBUG: Hero {hero.id} artifacts after adding: {hero.artifacts}")
+            
+            # Remove artifact from visible objects
+            print(f"DEBUG: Removing artifact from visible_objects. Before: {len(game_state.map.visible_objects)}")
             game_state.map.visible_objects = [o for o in game_state.map.visible_objects if o != obj]
+            print(f"DEBUG: After removal: {len(game_state.map.visible_objects)}")
+            
+            print(f"DEBUG: Clearing tile at ({position.x}, {position.y}) from object_type: {tile.object_type} to None")
+            # Clear the tile's object_type and object_id
+            if tile and tile.object_type == 'artifact':
+                tile.object_type = None
+                tile.object_id = None
+            
             return {"interaction": "artifact_collected", "artifact": artifact.name, "stop_movement": False}
+            
         # --- MINAS Y SITIOS DE RECURSOS ---
         if hasattr(obj, 'position') and obj.position.x == position.x and obj.position.y == position.y:
             if hasattr(obj, 'owner'):

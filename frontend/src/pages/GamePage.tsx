@@ -201,6 +201,15 @@ const GamePage: React.FC = () => {
     try {
       const response = await gameService.executeAction(gameId, action);
       console.log('GamePage: Backend response from moveHero action:', response.data);      
+      
+      // Check for artifact collection in the response
+      if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
+        const artifactName = response.data.result.interaction.artifact;
+        console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
+        setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
+        console.log(`GamePage: Hero collected artifact: ${artifactName}`);
+      }
+      
       if (response.data && response.data.game_state) {
         const updatedGameState: GameState = response.data.game_state;
         // Forzar que la posición de todos los héroes sea un objeto plano {x:number, y:number}
@@ -239,13 +248,11 @@ const GamePage: React.FC = () => {
               .flatMap(city => city.buildings)
               .filter(b => b.position.x === 48 && b.position.y === 48);
               
-            console.log(`GamePage: Buildings found at position (48,48):`, buildingsAt4848);
             
             const castleBuilding = updatedGameState.player.cities
               .flatMap(city => city.buildings)
               .find(b => b.is_castle && b.position.x === 48 && b.position.y === 48);
               
-            console.log(`GamePage: Castle building found:`, castleBuilding);
             
             // Si hay un castillo definido, usarlo
             if (castleBuilding) {
@@ -305,9 +312,10 @@ const GamePage: React.FC = () => {
       } else {
         console.error('GamePage: Failed to move hero or game_state missing in response:', response.data?.error || 'Unknown error');
         setGameMessage(response.data?.error || "Error al mover el héroe");
-        // Verificar si hay interacción con objetos en la casilla
-        if (response.data.interaction && response.data.interaction.interaction === 'artifact_collected') {
-          // Mostrar mensaje de artefacto recogido
+        
+        // Keep existing check for artifact collection in the error case
+        if (response.data?.interaction?.interaction === 'artifact_collected') {
+          console.log(`GamePage: Artifact collected in error case:`, response.data.interaction);
           setGameMessage(`¡Has recogido el artefacto: ${response.data.interaction.artifact}!`);
         }
         
@@ -569,6 +577,7 @@ const GamePage: React.FC = () => {
                 <p className="game-message">{gameMessage}</p>
               </div>
               
+
               {selectedHero && (
                 <HeroInfo 
                   hero={selectedHero} 

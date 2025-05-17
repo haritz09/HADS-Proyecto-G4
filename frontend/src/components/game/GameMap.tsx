@@ -243,19 +243,22 @@ const GameMap: React.FC<GameMapProps> = ({
   const findArtifactAtPosition = (x: number, y: number, tile: MapTile): VisibleObject | null => {
     // Depuración detallada
     const idx = y * gameState.map.size.width + x;
-    console.log(`Buscando artefacto en (${x},${y}), índice: ${idx}`, {
+    /*console.log(`Buscando artefacto en (${x},${y}), índice: ${idx}`, {
       tileObjectType: tile?.object_type,
       tileObjectId: tile?.object_id,
       hasVisibleObjects: !!gameState.map.visible_objects,
       visibleObjectsCount: gameState.map.visible_objects?.length || 0
-    });
+    });*/
     
     // Buscar artefactos explícitamente en esta posición
     const artifactsAtPosition = gameState.map.visible_objects?.filter(obj => 
       obj.position && obj.position.x === x && obj.position.y === y
     );
     
-    console.log(`Artefactos encontrados directamente en (${x},${y}):`, artifactsAtPosition);
+    //console.log(`Artefactos encontrados directamente en (${x},${y}):`, artifactsAtPosition);
+    console.groupCollapsed(`Artefactos en (${x},${y})`); 
+    console.log(artifactsAtPosition);
+    console.groupEnd();
     
     // Inicio con null para asegurar que siempre devuelvo null o VisibleObject
     let artifact: VisibleObject | null = null;

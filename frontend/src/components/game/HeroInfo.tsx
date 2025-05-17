@@ -19,6 +19,9 @@ interface HeroInfoProps {
 }
 
 const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
+  // Log hero artifacts when component renders
+  console.log(`HeroInfo: Rendering hero ${hero.id} with artifacts:`, hero.artifacts);
+  
   // Renderizar una unidad del ejército
   const renderUnit = (unit: ArmyUnit) => {
     return (
@@ -103,17 +106,20 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
       <h3>Artefactos</h3>
       <div className="hero-artifacts">
         {hero.artifacts.length > 0 ? (
-          hero.artifacts.map(artifact => (
-            <div key={artifact.id} className="hero-artifact">
-              <div className={`artifact-icon artifact-${artifact.subtype}`}>
-                {getArtifactIcon(artifact.subtype)}
+          hero.artifacts.map(artifact => {
+            console.log(`HeroInfo: Rendering artifact:`, artifact);
+            return (
+              <div key={artifact.id} className="hero-artifact">
+                <div className={`artifact-icon artifact-${artifact.subtype}`}>
+                  {getArtifactIcon(artifact.subtype)}
+                </div>
+                <div className="artifact-details">
+                  <div className="artifact-name">{artifact.name}</div>
+                  <div className="artifact-effect">{getArtifactDescription(artifact.subtype)}</div>
+                </div>
               </div>
-              <div className="artifact-details">
-                <div className="artifact-name">{artifact.name}</div>
-                <div className="artifact-effect">{getArtifactDescription(artifact.subtype)}</div>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="empty-artifacts">No hay artefactos equipados</div>
         )}
