@@ -99,9 +99,6 @@
 }
 
 .register-button {
-<<<<<<< HEAD
-  margin-top: 16px;
-=======
   margin-top: 24px;
   padding: 14px !important;
   font-size: 18px !important;
@@ -115,7 +112,6 @@
   transition: all 0.3s ease !important;
   border-radius: 6px !important;
   font-family: 'MedievalSharp', serif !important;
->>>>>>> 606143adb2d2748d03a92848ea2cf4b53921e0cb
 }
 
 .register-button:hover {

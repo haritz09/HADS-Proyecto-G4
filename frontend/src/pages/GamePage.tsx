@@ -19,6 +19,7 @@ import BuildingInfo from '../components/game/BuildingInfo';
 import Button from '../components/ui/Button';
 import RecruitmentMenu from '../components/game/RecruitmentMenu';
 import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
+import { syncArtifactsWithTiles } from '../utils/gameMapUtils';
 import '../styles/pages/GamePage.css';
 
 const GamePage: React.FC = () => {
@@ -59,7 +60,10 @@ const GamePage: React.FC = () => {
           throw new Error("Game state is missing map data");
         }
         
-        setGameState(response.data.game_state);
+        // Sincronizar artefactos con tiles
+        const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
+        
+        setGameState(syncedGameState);
         setGameMessage(`¡Partida cargada! Turno ${response.data.game_state.turn}`);
       } catch (err) {
         console.error("Error loading game:", err);
@@ -139,6 +143,15 @@ const GamePage: React.FC = () => {
         // Primero animamos el movimiento
         const currentPath = response.data.path;
         handleHeroMovement(selectedHero.id, currentPath);
+        
+        // Verificar si hay interacción con objetos en la casilla
+        if (response.data.interaction && response.data.interaction.interaction === 'artifact_collected') {
+          // Mostrar mensaje de artefacto recogido
+          setGameMessage(`¡Has recogido el artefacto: ${response.data.interaction.artifact}!`);
+          
+          // Reproducir sonido o efecto visual (opcional)
+          // playCollectionSound();
+        }
         
         // Después de la animación, actualizamos el estado
         setTimeout(() => {

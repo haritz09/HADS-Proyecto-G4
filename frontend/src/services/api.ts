@@ -127,6 +127,213 @@ const INITIAL_BUILDINGS = [
   // Añadir más edificios según necesites
 ];
 
+// Función para generar artefactos aleatorios
+const generateRandomArtifacts = (mapSize: number, mapTiles: any[], count = 10) => {
+  const artifacts = [];
+  const subtypes = ['totemDeGuerra', 'totemVelocidad', 'totemReclutamiento'];
+  const names = {
+    'totemDeGuerra': 'Tótem de Guerra',
+    'totemVelocidad': 'Tótem de Velocidad',
+    'totemReclutamiento': 'Tótem de Reclutamiento'
+  };
+  
+  // Evitar posiciones de ciudades y héroes
+  const usedPositions = [
+    {x: 5, y: 5},    // Posición del héroe inicial
+    {x: 48, y: 48},  // Castillo central
+    {x: 48, y: 52},  // Ciudad de caballería
+    {x: 5, y: 90},   // Ciudad de dragones
+    {x: 50, y: 50},  // Ciudad cuartel
+    {x: 52, y: 52},  // Ciudad arquería
+    {x: 70, y: 58}   // Ciudad mágica
+  ];
+  
+  // Crear una copia de los tiles para modificarlos sin mutar el original
+  const updatedTiles = [...mapTiles];
+  
+  for (let i = 0; i < count; i++) {
+    // Generar posición aleatoria que no esté ya ocupada
+    let x = 0, y = 0;
+    do {
+      x = Math.floor(Math.random() * (mapSize - 10)) + 5; // Evitar bordes
+      y = Math.floor(Math.random() * (mapSize - 10)) + 5;
+    } while (usedPositions.some(pos => 
+      Math.abs(pos.x - x) < 3 && Math.abs(pos.y - y) < 3
+    ));
+    
+    // Registrar posición usada
+    usedPositions.push({x, y});
+    
+    // Seleccionar subtipo aleatorio
+    const subtype = subtypes[Math.floor(Math.random() * subtypes.length)];
+    
+    // Crear artefacto con todas las propiedades necesarias
+    const artifactId = `artifact-${i}-${Date.now()}`;
+    
+    // Crear artefacto en visible_objects
+    artifacts.push({
+      id: artifactId,
+      name: names[subtype as keyof typeof names],
+      type: "artifact",
+      subtype: subtype,
+      position: { x, y },
+      effect: {},
+      owner: null
+    });
+
+    // CORREGIDO: Actualizar los tiles reales para marcar la posición del artefacto
+    const idx = y * mapSize + x;
+    if (idx >= 0 && idx < mapSize * mapSize) {
+      updatedTiles[idx] = {
+        ...updatedTiles[idx],
+        object_type: 'artifact',
+        object_id: artifactId
+      };
+    }
+  }
+  
+  return { artifacts, updatedTiles };
+};
+
+// Crear un nuevo método para sincronizar artefactos al cargar juegos guardados
+const syncArtifactsWithTiles = (gameState: any) => {
+  // Verificar la estructura del gameState recibido
+  console.log("syncArtifactsWithTiles - Estado del juego:", {
+    hasMap: !!gameState?.map,
+    visibleObjectsLength: gameState?.map?.visible_objects?.length || 0,
+    tilesLength: gameState?.map?.tiles?.length || 0
+  });
+  
+  if (!gameState?.map?.visible_objects?.length || !gameState?.map?.tiles?.length) return gameState;
+
+  // Crear copias profundas para evitar mutación
+  const updatedGameState = JSON.parse(JSON.stringify(gameState));
+  const mapSize = gameState.map.size.width;
+  
+  // Examinar los objetos visibles antes del filtrado
+  console.log("Objetos visibles antes del filtrado:", 
+    gameState.map.visible_objects.map((obj: any) => ({
+      id: obj.id,
+      type: obj.type,
+      hasPosition: !!obj.position,
+      subtype: obj.subtype
+    }))
+  );
+  
+  // CRÍTICO: Restaurar el tipo 'artifact' para cualquier objeto que tenga subtype
+  // Este paso es necesario porque el backend no está preservando la propiedad 'type'
+  updatedGameState.map.visible_objects.forEach((obj: any) => {
+    if ('subtype' in obj && obj.subtype && !obj.type) {
+      console.log(`Restaurando tipo 'artifact' para objeto con id ${obj.id} y subtipo ${obj.subtype}`);
+      obj.type = 'artifact';
+    }
+  });
+  
+  // PROBLEMA CRÍTICO: Las posiciones de los artefactos son undefined
+  console.log("⚠️ Reconstruyendo posiciones perdidas de artefactos...");
+  
+  // Reconstruir la información de posición desde los tiles
+  const reconstructArtifactPositions = () => {
+    // Clone los objetos visibles
+    const updatedVisibleObjects = [...updatedGameState.map.visible_objects];
+    
+    // Crear un mapa de ID de artefacto a su posición
+    const artifactPositions: {[key: string]: {x: number, y: number}} = {};
+    
+    // Buscar en cada tile por artefactos
+    updatedGameState.map.tiles.forEach((tile: any, index: number) => {
+      if (tile.object_type === 'artifact' && tile.object_id) {
+        // Calcular la posición (x,y) desde el índice lineal
+        const y = Math.floor(index / updatedGameState.map.size.width);
+        const x = index % updatedGameState.map.size.width;
+        
+        // Guardar la posición para este ID de artefacto
+        artifactPositions[tile.object_id] = { x, y };
+        console.log(`⚠️ Reconstruida posición (${x},${y}) para artefacto ${tile.object_id}`);
+      }
+    });
+    
+    // Actualizar los objetos visibles con las posiciones reconstruidas
+    const updatedObjects = updatedVisibleObjects.map((obj: any) => {
+      if (obj.type === 'artifact' && !obj.position && artifactPositions[obj.id]) {
+        return {
+          ...obj,
+          position: artifactPositions[obj.id]
+        };
+      }
+      return obj;
+    });
+    
+    // Si no pudimos reconstruir todas las posiciones desde los tiles,
+    // como fallback, generamos nuevas posiciones aleatorias para los artefactos restantes
+    const objectsWithPositions = updatedObjects.map((obj: any, index: number) => {
+      if (obj.type === 'artifact' && !obj.position) {
+        // Generar posición aleatoria y asegurarse de que no colisiona
+        // Usar el índice para distribuirlos en el mapa
+        const x = 10 + (index * 5) % (updatedGameState.map.size.width - 20);
+        const y = 10 + Math.floor(index / 10) * 5;
+        
+        console.log(`⚠️ Generando posición aleatoria (${x},${y}) para artefacto ${obj.id}`);
+        
+        // También actualizar el tile correspondiente
+        const tileIdx = y * updatedGameState.map.size.width + x;
+        if (tileIdx >= 0 && tileIdx < updatedGameState.map.tiles.length) {
+          updatedGameState.map.tiles[tileIdx] = {
+            ...updatedGameState.map.tiles[tileIdx],
+            object_type: 'artifact',
+            object_id: obj.id
+          };
+        }
+        
+        // Devolver objeto con posición generada
+        return {
+          ...obj,
+          position: { x, y }
+        };
+      }
+      return obj;
+    });
+    
+    return objectsWithPositions;
+  };
+  
+  // Actualizar los objetos visibles con posiciones reconstruidas
+  updatedGameState.map.visible_objects = reconstructArtifactPositions();
+  
+  // Verificar que todos los artefactos ahora tienen posición
+  console.log("Artefactos con posiciones reconstruidas:", 
+    updatedGameState.map.visible_objects.map((obj: any) => ({
+      id: obj.id, 
+      hasPosition: !!obj.position,
+      position: obj.position
+    }))
+  );
+  
+  // Ahora buscar artefactos con tipo restaurado
+  const artifacts = updatedGameState.map.visible_objects.filter((obj: any) => 
+    obj.type === 'artifact' && obj.position
+  );
+  
+  console.log(`Sincronizando ${artifacts.length} artefactos con tiles (después de reconstruir posiciones)`);
+  
+  // Marcar posiciones de artefactos en los tiles
+  artifacts.forEach((artifact: any) => {
+    const { x, y } = artifact.position;
+    const idx = y * mapSize + x;
+    
+    if (idx >= 0 && idx < updatedGameState.map.tiles.length) {
+      // Actualizar el tile sin mutar el original
+      updatedGameState.map.tiles[idx] = {
+        ...updatedGameState.map.tiles[idx],
+        object_type: 'artifact',
+        object_id: artifact.id
+      };
+    }
+  });
+  
+  return updatedGameState;
+};
+
 export const gameService = {
   getScenarios: async () => {
     return await API.get('/scenarios');
@@ -140,7 +347,29 @@ export const gameService = {
       // Crear mapa 100x100
       const mapSize = 100;
       const totalTiles = mapSize * mapSize;
+      
+      // Crear tiles iniciales
+      const initialTiles = Array(totalTiles).fill(null).map(() => ({
+        terrain: 'grass',
+        passable: true,
+        object_type: null,
+        object_id: null
+      }));
 
+      // Generar artefactos y actualizar tiles
+      const { artifacts, updatedTiles } = generateRandomArtifacts(mapSize, initialTiles, 15);
+
+      // Verificar los artefactos generados
+      console.log("Artefactos generados:", {
+        count: artifacts.length,
+        firstFew: artifacts.slice(0, 3).map(a => ({
+          id: a.id,
+          type: a.type,
+          subtype: a.subtype,
+          position: a.position
+        }))
+      });
+      
       const defaultGameState = {
         turn: 1,
         current_player: "player",
@@ -281,19 +510,20 @@ export const gameService = {
         },
         map: {
           size: { width: mapSize, height: mapSize },
-          tiles: Array(totalTiles).fill({
-            terrain: 'grass',
-            passable: true,
-            object_type: null,
-            object_id: null
-          }),
+          tiles: updatedTiles, // Usar los tiles actualizados con artefactos marcados
           fog_of_war: Array(totalTiles).fill(false),
           explored: Array(totalTiles).fill(true),
-          visible_objects: []
+          visible_objects: artifacts // Usar los artefactos generados
         },
         cities: [] // Array global de ciudades según schema.py
       };
 
+      // Verificar el estado del juego antes de enviarlo
+      console.log("Estado del juego a enviar:", {
+        visibleObjectsCount: defaultGameState.map.visible_objects.length,
+        tilesWithArtifacts: updatedTiles.filter((t: any) => t.object_type === 'artifact').length
+      });
+      
       const gameData = {
         user_id: userId,
         name: `Nueva partida - ${new Date().toISOString()}`,
@@ -328,7 +558,21 @@ export const gameService = {
   },
   
   loadGame: async (gameId: string) => {
-    return await API.get(`/games/${gameId}`);
+    const response = await API.get(`/games/${gameId}`);
+    
+    // Verificar los datos recibidos del servidor
+    console.log("Datos recibidos del servidor:", {
+      hasGameState: !!response.data?.game_state,
+      hasMap: !!response.data?.game_state?.map,
+      visibleObjectsCount: response.data?.game_state?.map?.visible_objects?.length || 0,
+      visibleObjectsTypes: response.data?.game_state?.map?.visible_objects?.map((o: any) => o.type) || []
+    });
+    
+    // Sincronizar artefactos al cargar el juego
+    if (response.data && response.data.game_state) {
+      response.data.game_state = syncArtifactsWithTiles(response.data.game_state);
+    }
+    return response;
   },
   
   saveGame: async (gameId: string, gameState: any) => {

@@ -10,6 +10,7 @@ import React, { createContext, useState, useContext } from 'react';
 import { GameState, Hero, Position, Resources, MapTile } from '../types/game';
 import { gameService } from '../services/api';
 import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
+import { syncArtifactsWithTiles } from '../utils/gameMapUtils';
 
 interface GameContextType {
   gameState: GameState | null;
@@ -62,7 +63,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       
       const response = await gameService.loadGame(id);
-      setGameState(response.data);
+      
+      // Sincronizar artefactos con tiles
+      if (response.data && response.data.game_state) {
+        const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
+        setGameState(syncedGameState);
+      } else {
+        setGameState(response.data);
+      }
+      
       setGameId(id);
       setGameMessage(`Partida cargada. Turno ${response.data.turn}`);
     } catch (err: any) {
