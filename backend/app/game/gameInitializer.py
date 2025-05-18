@@ -191,6 +191,97 @@ def initialize_game_cities():
     
     return cities
 
+def generate_resource_mines():
+    """Generate resource mines to be placed on the map."""
+    mines = [
+        # Gold mines (with proper visible symbols)
+        {
+            "id": "goldmine_1",
+            "type": "goldmine",
+            "position": {"x": 15, "y": 15},
+            "owner": None,
+            "resource_type": "gold",
+            "resource_per_turn": 500,
+            "symbol": "💰"  # Explicit emoji will ensure it's visible
+        },
+        {
+            "id": "goldmine_2",
+            "type": "goldmine", 
+            "position": {"x": 30, "y": 30},
+            "owner": None,
+            "resource_type": "gold",
+            "resource_per_turn": 250,
+            "symbol": "💰"
+        },
+        {
+            "id": "goldmine_3",
+            "type": "goldmine", 
+            "position": {"x": 70, "y": 20},
+            "owner": None,
+            "resource_type": "gold",
+            "resource_per_turn": 300,
+            "symbol": "💰"
+        },
+        # Wood mines (sawmills)
+        {
+            "id": "sawmill_1",
+            "type": "sawmill",
+            "position": {"x": 25, "y": 10},
+            "owner": None,
+            "resource_type": "wood",
+            "resource_per_turn": 100,
+            "symbol": "🪵"
+        },
+        {
+            "id": "sawmill_2",
+            "type": "sawmill",
+            "position": {"x": 40, "y": 40},
+            "owner": None,
+            "resource_type": "wood",
+            "resource_per_turn": 75,
+            "symbol": "🪵"
+        },
+        {
+            "id": "sawmill_3",
+            "type": "sawmill",
+            "position": {"x": 12, "y": 60},
+            "owner": None,
+            "resource_type": "wood",
+            "resource_per_turn": 120,
+            "symbol": "🪵"
+        },
+        # Stone mines (quarries)
+        {
+            "id": "quarry_1",
+            "type": "quarry",
+            "position": {"x": 10, "y": 25},
+            "owner": None,
+            "resource_type": "stone",
+            "resource_per_turn": 100,
+            "symbol": "⛏️"
+        },
+        {
+            "id": "quarry_2",
+            "type": "quarry",
+            "position": {"x": 60, "y": 60},
+            "owner": None,
+            "resource_type": "stone",
+            "resource_per_turn": 50,
+            "symbol": "⛏️"
+        },
+        {
+            "id": "quarry_3",
+            "type": "quarry",
+            "position": {"x": 35, "y": 65},
+            "owner": None,
+            "resource_type": "stone",
+            "resource_per_turn": 80,
+            "symbol": "⛏️"
+        }
+    ]
+    print(f"Generated {len(mines)} resource mines for game map")
+    return mines
+
 def initialize_game_state():
     """Inicializa el estado del juego."""
     # Inicializar héroes del jugador y la IA
@@ -201,6 +292,12 @@ def initialize_game_state():
     player_cities = initialize_game_cities()
     
     ai_cities = []
+    
+    # Generate resource mines
+    resource_mines = generate_resource_mines()
+    
+    # Create a basic map with dimensions
+    map_size = 100
     
     return {
         "turn": 1,
@@ -215,4 +312,11 @@ def initialize_game_state():
             "cities": ai_cities,
             "resources": {"gold": 5000, "wood": 200, "stone": 200}
         },
+        "map": {
+            "size": {"width": map_size, "height": map_size},
+            "tiles": [],  # Will be populated later
+            "fog_of_war": [],  # Will be populated later
+            "explored": [],  # Will be populated later
+            "visible_objects": resource_mines  # Place mines on the map
+        }
     }

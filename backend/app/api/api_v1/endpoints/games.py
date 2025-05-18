@@ -246,6 +246,27 @@ async def crear_nueva_partida(
         ]
         game_data["game_state"]["map"]["fog_of_war"] = [False] * total_tiles
         game_data["game_state"]["map"]["explored"] = [True] * total_tiles
+        
+        # Mark tiles containing resource mines
+        if "visible_objects" in game_data["game_state"]["map"]:
+            for obj in game_data["game_state"]["map"]["visible_objects"]:
+                if "position" in obj and "type" in obj:
+                    # Check if it's a resource mine by type or properties
+                    is_mine = (obj["type"] in ["goldmine", "sawmill", "quarry"] or 
+                              ("resource_type" in obj and obj["resource_type"] in ["gold", "wood", "stone"]))
+                    
+                    if is_mine and "position" in obj:
+                        x = obj["position"]["x"]
+                        y = obj["position"]["y"]
+                        idx = y * map_size + x
+                        
+                        if 0 <= idx < len(game_data["game_state"]["map"]["tiles"]):
+                            # Mark the tile with the object type and ID
+                            game_data["game_state"]["map"]["tiles"][idx]["object_type"] = obj["type"]
+                            game_data["game_state"]["map"]["tiles"][idx]["object_id"] = obj["id"]
+                            
+                            # Print for debugging
+                            print(f"Marked mine ({obj['type']}) at position ({x}, {y})")
     
     game_data["created_at"] = datetime.now(UTC)
     game_data["last_saved"] = datetime.now(UTC)
