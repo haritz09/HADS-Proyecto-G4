@@ -1,27 +1,82 @@
 .building-construction-menu {
-  position: fixed;
+  background-color: rgba(0, 0, 0, 0.85);
+  border: 2px solid #666;
+  border-radius: 6px;
+  width: 300px;
+  max-height: 500px;
+  overflow-y: auto;
+  position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--ui-background);
-  border: 2px solid var(--ui-border);
-  padding: 20px;
-  z-index: 1000;
-  min-width: 300px;
+  z-index: 100;
+  color: white;
+  padding: 10px;
+}
+
+.construction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #555;
+  margin-bottom: 10px;
+  padding-bottom: 5px;
+}
+
+.construction-header h3 {
+  margin: 0;
+}
+
+.construction-header button {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.construction-header button:hover {
+  color: white;
+}
+
+.construction-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
 }
 
 .building-option {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 10px 0;
-  padding: 10px;
-  border: 1px solid var(--ui-border);
+  padding: 8px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.building-info {
+  display: flex;
+  flex-direction: column;
 }
 
 .cost-info {
   display: flex;
-  gap: 10px;
-  font-size: 0.9em;
-  color: var(--text-secondary);
+  gap: 5px;
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+.affordable {
+  color: #6fd46f;
+}
+
+.unaffordable {
+  color: #f55;
+}
+
+.building-option button.owned {
+  background-color: #444;
+  color: #aaa;
+  cursor: not-allowed;
 }

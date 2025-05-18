@@ -214,8 +214,8 @@ const GameMap: React.FC<GameMapProps> = ({
       case 'castle': return '🏰';
       case 'barracks': return '⚔️';
       case 'archery': return '🏹';
-      case 'knights': return '🐎';
-      case 'dragon': return '🐉';
+      case 'knights_tower': return '🐎';  // Manejar ambos nombres
+      case 'dragons_lair': return '🐉';    // Manejar ambos nombres
       case 'mage_tower': return '🔮';
       default: return '🏛️';
     }
@@ -353,6 +353,73 @@ const GameMap: React.FC<GameMapProps> = ({
     return { name, subtype };
   };
 
+  const renderBuilding = (building: Building, cityId: string) => {
+    const heroes = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])];
+
+    const isHeroNearby = heroes.some(hero => {
+      const dx = Math.abs(hero.position.x - building.position.x);
+      const dy = Math.abs(hero.position.y - building.position.y);
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance <= 2;
+    });
+
+    const isCastle = building.is_castle || 
+                   (building.position.x === 48 && building.position.y === 48);
+    
+    const isPlayerOwned = building.owner === 'player';
+    
+    // Corregir: Un edificio es interactivo si:
+    // 1. Está construido Y (es un castillo O puede reclutar) Y le pertenece al jugador Y hay un héroe cerca
+    // O
+    // 2. Es un castillo Y hay un héroe cerca (para el menú de construcción)
+    const isInteractive = (building.built && (isCastle || building.can_recruit) && isPlayerOwned && isHeroNearby) ||
+                         (isCastle && isHeroNearby);
+    
+    const selectedHero = heroes.find(h => h.id === selectedHeroId);
+    const distance = selectedHero ? 
+      Math.sqrt(
+        Math.pow(selectedHero.position.x - building.position.x, 2) + 
+        Math.pow(selectedHero.position.y - building.position.y, 2)
+      ) : 
+      Infinity;
+    
+    const buildingClasses = [
+      'building',
+      isCastle ? 'building-castle' : '',
+      isInteractive ? 'building-interactive' : '',
+      isPlayerOwned ? 'building-player-owned' : '',
+      building.built ? 'building-built' : '',
+      building.can_recruit && building.built ? 'building-can-recruit' : '',
+      `building-${building.building_type}`
+    ].filter(Boolean).join(' ');
+
+    const handleBuildingClick = () => {
+      console.log(`GameMap: Building clicked: ${building.name}, ${building.building_type}, ${isInteractive ? 'interactive' : 'no interactivo'}, isNearCastle: ${isHeroNearby}, distance: ${distance.toFixed(2)}, can_recruit: ${building.can_recruit}, built: ${building.built}, owner: ${building.owner}`);
+      
+      if (isInteractive) {
+        onBuildingClick(building, cityId);
+      } else {
+        console.log(`GameMap: Building not interactive. Distance: ${distance.toFixed(2)}, isHeroNearby: ${isHeroNearby}, built: ${building.built}, can_recruit: ${building.can_recruit}, owner: ${building.owner}`);
+      }
+    };
+
+    return (
+      <div
+        key={building.id}
+        className={buildingClasses}
+        style={{
+          left: `${building.position.x * 32}px`,
+          top: `${building.position.y * 32}px`,
+          width: `32px`,
+          height: `32px`,
+        }}
+        onClick={handleBuildingClick}
+      >
+        {getBuildingIcon(building.building_type)}
+      </div>
+    );
+  };
+
   const renderTile = (x: number, y: number) => {
     const index = y * gameState.map.size.width + x;
     const tile = gameState.map.tiles[index];
@@ -457,42 +524,7 @@ const GameMap: React.FC<GameMapProps> = ({
           </div>
         )}
 
-        {building && (
-          <div 
-            className={`
-              building-sprite 
-              ${building.built ? 'built' : 'not-built'}
-              ${isBuildingInteractive ? 'interactive' : ''}
-              ${(isCastleBuilding && isNearCastle) ? 'castle-near-hero' : ''}
-              ${isPlayerOwned ? 'player-owned-building' : ''}
-              ${isAIOwned ? 'ai-owned-building' : ''}
-            `}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (isBuildingInteractive) {
-                console.log(`✅ CLIC PROCESADO: ${building.name || building.building_type}, interactivo: ${isBuildingInteractive}, es castillo: ${isCastleBuilding}, cerca: ${isNearCastle}`);
-                onBuildingClick(building, city?.id || '');
-              } else {
-                console.log(`❌ CLIC RECHAZADO: ${building.name || building.building_type}, no interactivo, isNearCastle: ${isNearCastle}, distance: ${
-                  selectedHero ? calculateDistance(selectedHero.position, building.position).toFixed(2) : 'N/A'
-                }`);
-              }
-            }}
-            title={
-              isBuildingInteractive 
-                ? isCastleBuilding 
-                  ? isNearCastle 
-                    ? "Construir edificios (a distancia)" 
-                    : "Construir edificios" 
-                  : "Reclutar unidades"
-                : building.built 
-                  ? "Edificio construido" 
-                  : "Necesitas construir este edificio"
-            }
-          >
-            {getBuildingIcon(building.building_type)}
-          </div>
-        )}
+        {building && renderBuilding(building, city?.id || '')}
       </div>
     );
   };

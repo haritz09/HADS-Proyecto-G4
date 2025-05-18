@@ -600,13 +600,13 @@ export const gameService = {
   
   // Acciones del juego usando el sistema unificado de acciones
   executeAction: async (gameId: string, action: any) => {
+    console.log(`API: Executing action of type ${action.type} for game ${gameId}`);
     try {
-      console.log('Sending action:', action);
       const response = await API.post(`/games/${gameId}/action`, action);
       return response;
-    } catch (error) {
-      console.error('Error executing action:', error);
-      throw error;
+    } catch (err) {
+      console.error('Error executing game action:', err);
+      throw err;
     }
   },
   
@@ -622,15 +622,19 @@ export const gameService = {
   },
   
   recruitUnits: async (gameId: string, cityId: string, unitType: string, amount: number, heroId?: string) => {
-    return await API.post(`/games/${gameId}/action`, {
+    console.log(`API: Recruiting ${amount} ${unitType} units in city ${cityId}${heroId ? ` for hero ${heroId}` : ''}`);
+    
+    const action = {
       type: 'recruitUnits',
       details: {
         cityId,
         unitType,
-        amount,
+        count: amount, // Usar 'count' en lugar de 'amount' para coincidir con el backend
         heroId
       }
-    });
+    };
+    
+    return await gameService.executeAction(gameId, action);
   },
 
   transferTroops: async (gameId: string, sourceId: string, targetId: string, units: any[]) => {

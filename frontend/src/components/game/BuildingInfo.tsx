@@ -76,8 +76,8 @@ const BuildingInfo: React.FC<BuildingInfoProps> = ({
               {building.available_creatures.map((creature, index) => (
                 <li key={index}>
                   {creature.type}: {creature.count} disponibles
-                  {creature.recruit_cost && (
-                    <span> (Costo: {Object.entries(creature.recruit_cost || {}).map(([res, amt]) => 
+                  {creature.unit_cost && (
+                    <span> (Costo: {Object.entries(creature.unit_cost || {}).map(([res, amt]) => 
                       `${res}: ${amt}`).join(', ')})</span>
                   )}
                 </li>

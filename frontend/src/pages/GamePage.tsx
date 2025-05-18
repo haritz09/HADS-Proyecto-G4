@@ -389,50 +389,74 @@ const GamePage: React.FC = () => {
     // Comprobar si es un castillo
     const isCastleBuilding = safeBuilding.is_castle || buildingIsAt4848;
 
-    // Comprobar si el héroe está a 2 o menos casillas del castillo
-    const isNearCastle = isCastleBuilding && distance <= 2;
+    // Comprobar si el héroe está a 2 o menos casillas del edificio
+    const isNearBuilding = distance <= 2;
+    
+    // Verificar si el jugador es dueño del edificio
+    const isPlayerOwned = safeBuilding.owner === 'player';
 
-    console.log('GamePage: ¿ESTÁ CERCA DEL CASTILLO?', {
-      isNearCastle,
+    console.log('GamePage: ¿ESTÁ CERCA DEL EDIFICIO?', {
+      isNearBuilding,
       isCastleBuilding,
       distance,
       maxDistanceAllowed: 2,
       heroPosition: `(${heroPosition.x}, ${heroPosition.y})`,
-      buildingPosition: `(${safeBuilding.position.x}, ${safeBuilding.position.y})`
+      buildingPosition: `(${safeBuilding.position.x}, ${safeBuilding.position.y})`,
+      isPlayerOwned,
+      built: safeBuilding.built,
+      can_recruit: safeBuilding.can_recruit
     });
 
-    // Si el héroe está en la misma posición O si está cerca del castillo y es un castillo
-    if ((heroAtSamePosition || isNearCastle) && isCastleBuilding) {
-      console.log('GamePage: ✅ ABRIENDO MENÚ DE CONSTRUCCIÓN. Distancia al castillo:', distance.toFixed(2));
-      // Si el edificio está en (48,48), siempre tratarlo como castillo
-      if (buildingIsAt4848 && !safeBuilding.is_castle) {
-        console.log('GamePage: Edificio en (48,48) tratado como castillo independientemente de su propiedad is_castle');
-        safeBuilding.is_castle = true;
+    // Simplificar la lógica: Si es un castillo o es un edificio que puede reclutar
+    if (isNearBuilding || heroAtSamePosition) {
+      if (isCastleBuilding) {
+        console.log('GamePage: ✅ ABRIENDO MENÚ DE CONSTRUCCIÓN. Distancia al castillo:', distance.toFixed(2));
+        // Si el edificio está en (48,48), siempre tratarlo como castillo
+        if (buildingIsAt4848 && !safeBuilding.is_castle) {
+          console.log('GamePage: Edificio en (48,48) tratado como castillo independientemente de su propiedad is_castle');
+          safeBuilding.is_castle = true;
+          
+          // Asegurarnos que tiene cost para el menú de construcción
+          if (!safeBuilding.cost) {
+            safeBuilding.cost = { gold: 0, wood: 0, stone: 0 };
+          }
+        }
         
-        // Asegurarnos que tiene cost para el menú de construcción
-        if (!safeBuilding.cost) {
-          safeBuilding.cost = { gold: 0, wood: 0, stone: 0 };
+        // Completar datos faltantes para el castillo antes de mostrar el menú
+        if (!safeBuilding.available_creatures) {
+          safeBuilding.available_creatures = [];
+        }
+        
+        setActiveBuilding(safeBuilding);
+        setShowConstructionMenu(true);
+        setGameMessage(heroAtSamePosition ? 
+          '¡Has llegado al castillo central!' : 
+          '¡Puedes construir edificios en el castillo cercano!');
+      } 
+      // Lógica corregida para edificios de reclutamiento
+      else if (safeBuilding.built && safeBuilding.can_recruit && isPlayerOwned) {
+        console.log('GamePage: ✅ ABRIENDO MENÚ DE RECLUTAMIENTO. Héroe cerca de edificio reclutable.');
+        setActiveBuilding(safeBuilding);
+        setShowRecruitmentMenu(true);
+        setGameMessage(`¡Puedes reclutar unidades en ${safeBuilding.name}!`);
+      } else {
+        console.log('GamePage: ❌ NO SE ABRIRÁ MENÚ: Condiciones no cumplidas:', 
+                  { heroAtSamePosition, isNearBuilding, isCastleBuilding, isBuilt: safeBuilding.built, 
+                    canRecruit: safeBuilding.can_recruit, distance, isPlayerOwned });
+        
+        // Mostrar mensaje relevante según la causa
+        if (!isPlayerOwned && safeBuilding.built) {
+          setGameMessage('Este edificio no te pertenece.');
+        } else if (!safeBuilding.built) {
+          setGameMessage('Este edificio aún no está construido.');
+        } else if (!safeBuilding.can_recruit) {
+          setGameMessage('Este edificio no permite reclutar unidades.');
+        } else {
+          setGameMessage('No es posible interactuar con este edificio.');
         }
       }
-      
-      // Completar datos faltantes para el castillo antes de mostrar el menú
-      if (!safeBuilding.available_creatures) {
-        safeBuilding.available_creatures = [];
-      }
-      
-      setActiveBuilding(safeBuilding);
-      setShowConstructionMenu(true);
-      setGameMessage(heroAtSamePosition ? 
-        '¡Has llegado al castillo central!' : 
-        '¡Puedes construir edificios en el castillo cercano!');
-    } else if (heroAtSamePosition && safeBuilding.built && safeBuilding.can_recruit) {
-      console.log('GamePage: ✅ ABRIENDO MENÚ DE RECLUTAMIENTO. Héroe en mismo lugar que edificio reclutable.');
-      setActiveBuilding(safeBuilding);
-      setShowRecruitmentMenu(true);
     } else {
-      console.log('GamePage: ❌ NO SE ABRIRÁ MENÚ: Condiciones no cumplidas:', 
-                  { heroAtSamePosition, isCastleBuilding, isBuilt: safeBuilding.built, 
-                    canRecruit: safeBuilding.can_recruit, distance, isNearCastle });
+      setGameMessage('Debes acercarte más al edificio para interactuar con él.');
     }
   };
 
@@ -441,8 +465,12 @@ const GamePage: React.FC = () => {
     const isCastleBuilding = building.is_castle || 
                          (building.position.x === 48 && building.position.y === 48);
     
+    // Verificar si el jugador es dueño del edificio
+    const isPlayerOwned = building.owner === 'player';
+    
     console.log('GamePage: Checking building for auto-action:', 
-                { buildingPos: building.position, isCastle: building.is_castle, isCastleBuilding });
+                { buildingPos: building.position, isCastle: building.is_castle, 
+                  isCastleBuilding, isPlayerOwned });
                 
     if (isCastleBuilding) {
       console.log('GamePage: Castle detected in handleHeroInBuilding, opening construction menu');
@@ -454,9 +482,12 @@ const GamePage: React.FC = () => {
       setActiveBuilding(building);
       setShowConstructionMenu(true);
       setGameMessage('¡Has llegado al castillo central!');
-    } else if (building.built && building.can_recruit) {
+    } else if (building.built && building.can_recruit && isPlayerOwned) {
+      // Solo abrir menú de reclutamiento si el edificio pertenece al jugador
+      console.log('GamePage: Recruitment building detected, opening recruitment menu');
       setActiveBuilding(building);
       setShowRecruitmentMenu(true);
+      setGameMessage(`¡Has llegado a ${building.name}!`);
     }
   };
 
@@ -464,21 +495,69 @@ const GamePage: React.FC = () => {
     if (!gameId || !activeBuilding) return;
 
     try {
-      await gameService.executeAction(gameId, {
+      console.log(`GamePage: Attempting to recruit ${amount} units of type ${unitType}`);
+      
+      // Mapeo correcto de tipo de edificio a ID de ciudad
+      const buildingTypeToCityId: { [key: string]: string } = {
+        barracks: "barracks_city",
+        archery: "archery_city",
+        knights_tower: "knights_city",
+        mage_tower: "mage_city",
+        dragons_lair: "dragon_city",
+        castle: "central_city"
+      };
+      
+      // Determinar la cityId correcta
+      let cityId = "central_city"; // valor por defecto
+      
+      if (activeBuilding.building_type && buildingTypeToCityId[activeBuilding.building_type]) {
+        cityId = buildingTypeToCityId[activeBuilding.building_type];
+      } else if (activeBuilding.is_castle) {
+        cityId = "central_city";
+      }
+      
+      console.log(`GamePage: Recruiting in city: ${cityId}, for building type: ${activeBuilding.building_type}`);
+      
+      const recruitAction = {
         type: 'recruitUnits',
         details: {
           buildingId: activeBuilding.id,
+          cityId: cityId, // Usar el ID de ciudad correcto
           unitType,
-          amount,
+          count: amount,
           heroId: selectedHero?.id
         }
-      });
+      };
+      
+      console.log('GamePage: Recruitment action:', recruitAction);
+      
+      const response = await gameService.executeAction(gameId, recruitAction);
+      console.log('GamePage: Recruitment response:', response);
+      
+      if (response.data?.success === false) {
+        setGameMessage(`Error al reclutar: ${response.data.error || 'Error desconocido'}`);
+        return;
+      }
+      
       setShowRecruitmentMenu(false);
+      setGameMessage(`Has reclutado ${amount} ${unitType}`);
+      
       // Recargar el estado del juego
-      const response = await gameService.loadGame(gameId);
-      setGameState(response.data.game_state);
+      const gameResponse = await gameService.loadGame(gameId);
+      setGameState(gameResponse.data.game_state);
+      
+      // Actualizar el héroe seleccionado si existe
+      if (selectedHero && gameResponse.data.game_state.player.heroes) {
+        const updatedHero = gameResponse.data.game_state.player.heroes.find(
+          (h: Hero) => h.id === selectedHero.id
+        );
+        if (updatedHero) {
+          setSelectedHero(updatedHero);
+        }
+      }
     } catch (error) {
       console.error('Error recruiting units:', error);
+      setGameMessage('Error al reclutar unidades. Inténtalo de nuevo.');
     }
   };
 
@@ -495,15 +574,18 @@ const GamePage: React.FC = () => {
         dragons_lair: "dragon_city"
       };
 
+      // Fix TypeScript linting error by removing explicit type annotation
+      // TypeScript can infer the type from the string literal assignment
+      let cityId = buildingToCityId[buildingType] || "central_city";
+      
       // Para el castillo central, siempre usar "central_city"
       const isCentralCastle = activeBuilding.position.x === 48 && activeBuilding.position.y === 48;
-      let cityId: string; // Add explicit type annotation
       
       if (isCentralCastle) {
         cityId = "central_city";
         console.log(`Usando ciudad central para construcción en castillo principal (48,48)`);
       } else if (activeBuilding && activeBuilding.position) {
-        // Para otros edificios, buscar la ciudad que contiene el edificio
+        // For other buildings, look for the city that contains the building
         const cityWithBuilding = gameState.player.cities.find(city => 
           city.buildings.some(b => 
             b.position.x === activeBuilding.position.x && 
@@ -515,14 +597,11 @@ const GamePage: React.FC = () => {
           cityId = cityWithBuilding.id;
           console.log(`Usando ciudad existente para construcción: ${cityId}`);
         } else {
-          cityId = buildingToCityId[buildingType] || "central_city";
-          console.log(`No se encontró ciudad para el edificio activo, usando mapeo: ${cityId}`);
+          console.log(`No se encontró ciudad para el edificio activo, usando central_city`);
         }
-      } else {
-        cityId = buildingToCityId[buildingType] || "central_city";
       }
       
-      // Obtener el costo del edificio para mostrar en el log
+      // OPTIONAL: Optimistically update resources in UI before server response
       const buildingConfigs = {
         barracks: { cost: { gold: 1000, wood: 50, stone: 50 } },
         archery: { cost: { gold: 1200, wood: 70, stone: 30 } },
@@ -533,31 +612,18 @@ const GamePage: React.FC = () => {
       
       const buildingCost = buildingConfigs[buildingType as keyof typeof buildingConfigs]?.cost;
       
-      console.log('Costo del edificio a construir:', buildingCost);
-      const oldResources = getCurrentPlayerResources();
-      console.log('Recursos ANTES de la construcción:', oldResources);
-      
-      // Realizar una deducción local de recursos para mostrar cambios inmediatos
-      const localUpdatedGameState = JSON.parse(JSON.stringify(gameState));
-      if (buildingCost && localUpdatedGameState.player && localUpdatedGameState.player.resources) {
-        // Deducir recursos localmente para mostrar cambios inmediatos
-        Object.entries(buildingCost).forEach(([resource, amount]) => {
-          const resourceKey = resource as keyof typeof localUpdatedGameState.player.resources;
-          if (localUpdatedGameState.player.resources[resourceKey] !== undefined) {
-            localUpdatedGameState.player.resources[resourceKey] -= amount as number;
+      if (buildingCost && gameState.current_player === 'player') {
+        const updatedGameState = { ...gameState };
+        updatedGameState.player = { 
+          ...updatedGameState.player,
+          resources: {
+            gold: Math.max(0, updatedGameState.player.resources.gold - buildingCost.gold),
+            wood: Math.max(0, updatedGameState.player.resources.wood - buildingCost.wood),
+            stone: Math.max(0, updatedGameState.player.resources.stone - buildingCost.stone)
           }
-        });
-        // Actualizar propiedad del edificio
-        localUpdatedGameState.player.cities.forEach((city: any) => {
-          if (city.id === cityId) {
-            city.buildings.forEach((building: any) => {
-              if (building.building_type === buildingType) {
-                building.built = true;
-                building.owner = "player";
-              }
-            });
-          }
-        });
+        };
+        console.log('Optimistically updating resources before server response:', updatedGameState.player.resources);
+        setGameState(updatedGameState);
       }
       
       const action = {
@@ -569,44 +635,40 @@ const GamePage: React.FC = () => {
       };
 
       console.log('Sending build action:', action);
-
-      // Actualizar inmediatamente el estado para mostrar cambios en la UI
-      setGameState(localUpdatedGameState);
       
       const response = await gameService.executeAction(gameId, action);
       console.log("Build response:", response.data);
       
       if (response.data?.game_state) {
         console.log('New resources after server response:', response.data.game_state.player.resources);
+        // CRITICAL: Use server-side state to ensure data consistency
         setGameState(response.data.game_state);
         setShowConstructionMenu(false);
         setGameMessage(`${buildingType} construido con éxito`);
-      } else if (response.data?.success) {
-        // Si hay éxito pero no hay game_state, recargar el estado del juego completo
-        console.log("La construcción fue exitosa pero no se recibió el estado del juego. Recargando estado...");
+      } else if (response.data?.success === false) {
+        // Handle errors from the server
+        setGameMessage(`Error: ${response.data.error || "Error desconocido"}`);
+        
+        // If there was an error, reload the game state to get correct resources
         const refreshResponse = await gameService.loadGame(gameId);
         if (refreshResponse.data?.game_state) {
-          console.log('Resources after reload:', refreshResponse.data.game_state.player.resources);
+          setGameState(refreshResponse.data.game_state);
+        }
+      } else if (response.data?.success) {
+        // If there's success but no game_state, reload the game
+        console.log("Construction successful but no game state received. Reloading state...");
+        const refreshResponse = await gameService.loadGame(gameId);
+        if (refreshResponse.data?.game_state) {
           setGameState(refreshResponse.data.game_state);
           setShowConstructionMenu(false);
           setGameMessage(`${buildingType} construido con éxito`);
         }
-      } else {
-        // Si algo falló, restaurar el estado original
-        console.error("Build failed:", response.data?.error || "Unknown error");
-        setGameMessage(`Error al construir: ${response.data?.error || "Error desconocido"}`);
-        
-        // Recargar el estado para asegurar consistencia
-        const refreshResponse = await gameService.loadGame(gameId);
-        if (refreshResponse.data?.game_state) {
-          setGameState(refreshResponse.data.game_state);
-        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error building structure:', error);
-      setGameMessage("Error al construir el edificio. Comprueba la consola para detalles.");
+      setGameMessage(`Error: ${error?.response?.data?.detail || error.message || "Error desconocido"}`);
       
-      // Recargar el estado en caso de error para asegurar consistencia
+      // Reload the game state to ensure UI consistency
       try {
         const refreshResponse = await gameService.loadGame(gameId);
         if (refreshResponse.data?.game_state) {
@@ -696,7 +758,6 @@ const GamePage: React.FC = () => {
                 <p className="game-message">{gameMessage}</p>
               </div>
               
-
               {selectedHero && (
                 <HeroInfo 
                   hero={selectedHero} 
@@ -718,6 +779,7 @@ const GamePage: React.FC = () => {
                   onBuild={handleConstructBuilding}
                   onClose={() => setShowConstructionMenu(false)}
                   playerResources={getCurrentPlayerResources()}
+                  gameState={gameState}
                 />
               )}
               

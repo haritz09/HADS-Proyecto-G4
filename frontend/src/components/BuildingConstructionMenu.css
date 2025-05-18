@@ -1,0 +1,97 @@
+/* Estilos existentes... */
+
+.building-menu {
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+  padding: 20px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.building-menu h2 {
+  margin-top: 0;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 10px;
+}
+
+.buildings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.building-option {
+  border: 1px solid #ccc;
+  padding: 15px;
+  border-radius: 5px;
+  background-color: white;
+  transition: all 0.3s ease;
+}
+
+.built-building {
+  background-color: rgba(76, 175, 80, 0.2) !important;
+  border-color: #4CAF50 !important;
+  box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+}
+
+.building-costs {
+  margin: 10px 0;
+}
+
+.building-costs ul {
+  list-style-type: none;
+  padding-left: 10px;
+}
+
+.building-costs li {
+  margin: 5px 0;
+}
+
+.building-costs li.insufficient {
+  color: #d32f2f;
+  font-weight: bold;
+}
+
+button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button.already-built {
+  background-color: #4CAF50;
+  color: white;
+  cursor: default;
+}
+
+button.can-build {
+  background-color: #2196F3;
+  color: white;
+}
+
+button.cannot-build {
+  background-color: #9e9e9e;
+  color: #e0e0e0;
+  cursor: not-allowed;
+}
+
+button.building-in-progress {
+  background-color: #FF9800;
+  color: white;
+  cursor: wait;
+}
+
+.close-button {
+  width: 100%;
+  margin-top: 10px;
+  background-color: #f44336;
+  color: white;
+}
+
+.close-button:hover {
+  background-color: #d32f2f;
+}

@@ -60,23 +60,26 @@ const CityView: React.FC<CityViewProps> = ({
     
     // Obtener el edificio que produce esta unidad
     const building = city.buildings.find(b => 
-      b.built && b.can_recruit && b.available_creatures.some(c => c.id === unitId)
+      b.built && b.can_recruit && b.available_creatures.some(c => c.type === unitId)
     );
     
     if (!building) return 0;
     
-    const creature = building.available_creatures.find(c => c.id === unitId);
+    const creature = building.available_creatures.find(c => c.type === unitId);
     if (!creature) return 0;
     
     let maxAmount = Math.min(unit.amount, creature.count);
     
-    Object.entries(creature.unit_cost).forEach(([resource, cost]) => {
-      if (cost && typeof cost === 'number' && cost > 0) {
-        const resourceKey = resource as keyof Resources;
-        const affordableAmount = Math.floor(playerResources[resourceKey] / cost);
-        maxAmount = Math.min(maxAmount, affordableAmount);
-      }
-    });
+    // Corregir: Asegurarse de que unit_cost existe antes de usar Object.entries
+    if (creature.unit_cost) {
+      Object.entries(creature.unit_cost).forEach(([resource, cost]) => {
+        if (cost && typeof cost === 'number' && cost > 0) {
+          const resourceKey = resource as keyof Resources;
+          const affordableAmount = Math.floor(playerResources[resourceKey] / cost);
+          maxAmount = Math.min(maxAmount, affordableAmount);
+        }
+      });
+    }
     
     return maxAmount;
   };
@@ -162,12 +165,12 @@ const CityView: React.FC<CityViewProps> = ({
               
               // Encontrar el edificio que produce esta unidad para obtener más información
               const building = city.buildings.find(b => 
-                b.built && b.can_recruit && b.available_creatures.some(c => c.id === unitId)
+                b.built && b.can_recruit && b.available_creatures.some(c => c.type === unitId)
               );
               
               if (!building) return null;
               
-              const creature = building.available_creatures.find(c => c.id === unitId);
+              const creature = building.available_creatures.find(c => c.type === unitId);
               if (!creature) return null;
               
               return (
@@ -177,12 +180,16 @@ const CityView: React.FC<CityViewProps> = ({
                     <div className="unit-name">{creature.type || 'Unidad'}</div>
                     <div className="unit-available">Disponibles: {availableUnit.amount}</div>
                     <div className="unit-cost">
-                      {Object.entries(creature.unit_cost).map(([resource, amount]) => (
-                        <div key={resource} className="resource-cost">
-                          <div className={`resource-icon ${resource}-icon`}></div>
-                          <span>{String(amount)}</span>
-                        </div>
-                      ))}
+                      {creature.unit_cost ? (
+                        Object.entries(creature.unit_cost).map(([resource, amount]) => (
+                          <div key={resource} className="resource-cost">
+                            <div className={`resource-icon ${resource}-icon`}></div>
+                            <span>{String(amount)}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p>Costo no disponible</p>
+                      )}
                     </div>
                   </div>
                   

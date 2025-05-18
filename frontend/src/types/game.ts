@@ -11,7 +11,7 @@ export interface Resources {
 
 export interface Position {
   x: number;
-  y: number;
+  y: number; // Explicitly set type to number
 }
 
 export interface Stats {
@@ -61,6 +61,17 @@ export interface Creature {
   stats: Stats;
 }
 
+// Nueva interfaz para las criaturas disponibles para reclutamiento
+export interface AvailableCreature {
+  type: string;  // El tipo sirve como identificador único
+  name?: string;
+  count: number;
+  growth_per_week: number;
+  unit_cost?: Resources;  // Opcional, para evitar errors de tipado
+  recruit_cost?: Resources;  // Alias alternativo usado en algunos endpoints
+  stats: Stats;
+}
+
 export interface MapTile {
   terrain: 'grass' | 'forest' | 'mountain' | 'water' | 'desert' | 'snow';
   passable: boolean;
@@ -72,22 +83,22 @@ export interface Building {
   id: string;
   name: string;
   position: Position;
-  building_type: string;
+  building_type: string;  // Incluye 'knights_tower' y 'dragons_lair'
   cost: { gold: number; wood: number; stone: number };
   built: boolean;
   can_recruit: boolean;
   is_castle: boolean;
   has_tavern: boolean;
   requirements: string[];
-  available_creatures: any[];
-  owner: string | null;  // Add this line
+  available_creatures: AvailableCreature[];
+  owner: string | null;
 }
 
 export interface City {
   id: string;
   name: string;
   position: Position;
-  owner: string;
+  owner: string | null; // Cambiado de string a string | null
   buildings: Building[];
   garrison: Creature[]; // Cambiado de Hero[] a Creature[]
   availableUnits: {

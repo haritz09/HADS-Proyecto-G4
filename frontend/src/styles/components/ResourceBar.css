@@ -1,48 +1,47 @@
 .resource-bar {
   display: flex;
+  align-items: center;
   background-color: rgba(0, 0, 0, 0.7);
-  padding: 10px 20px;
-  border-radius: 5px;
-  justify-content: space-around;
-  margin-bottom: 20px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  gap: 16px;
 }
 
-.resource-item {
+.resource {
   display: flex;
   align-items: center;
-  color: white;
+  gap: 6px;
+  transition: color 0.3s;
 }
 
 .resource-icon {
-  width: 24px;
-  height: 24px;
-  margin-right: 8px;
+  font-size: 1.2rem;
 }
 
-.gold-icon {
-  background-color: gold;
+.resource-value {
+  font-weight: bold;
+  color: white;
 }
 
-.wood-icon {
-  background-color: brown;
+.resource.gold .resource-value {
+  color: gold;
 }
 
-.ore-icon {
-  background-color: gray;
+.resource.wood .resource-value {
+  color: #9c6644;
 }
 
-.gems-icon {
-  background-color: purple;
+.resource.stone .resource-value {
+  color: #c0c0c0;
 }
 
-.crystal-icon {
-  background-color: lightblue;
+/* Animation for resource decrease */
+@keyframes highlight-decrease {
+  0% { color: white; }
+  25% { color: #ff5555; }
+  100% { color: inherit; }
 }
 
-.sulfur-icon {
-  background-color: yellow;
-}
-
-.mercury-icon {
-  background-color: silver;
+.resource.highlight-decrease .resource-value {
+  animation: highlight-decrease 1s ease-in-out;
 }

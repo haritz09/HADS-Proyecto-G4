@@ -19,7 +19,7 @@ const INITIAL_BUILDINGS = [
   // Añade más edificios según logic.py
 ];
 
-export function initializeCity(position: Position, owner: string): City {
+export function initializeCity(position: Position, owner: string | null = null): City {
   const centralCastle: Building = {
     id: `building-castle-${position.x}-${position.y}`,
     name: 'Central Castle',
@@ -39,7 +39,7 @@ export function initializeCity(position: Position, owner: string): City {
     id: `city-${position.x}-${position.y}`,
     name: 'Central City',
     position: position,
-    owner: owner,
+    owner: owner, // <-- Ahora owner puede ser string | null
     buildings: [centralCastle],
     garrison: [],
     availableUnits: []
@@ -53,7 +53,7 @@ export function initializeGameWithCities(baseGameState: GameState): GameState {
   
   const centralCity = initializeCity(
     { x: centerX, y: centerY },
-    'player'
+    null
   );
 
   return {

@@ -50,11 +50,11 @@ export const createSampleHero = (playerId: string, name: string, position: Posit
 });
 
 // Crear ciudad
-export const createCity = (position: Position, name: string, owner: string): City => ({
+export const createCity = (position: Position, name: string, owner: string | null): City => ({
   id: `city-${position.x}-${position.y}`,
   name,
   position,
-  owner: owner || 'player',
+  owner: owner, // <-- Cambiado: no usar '|| "player"'
   buildings: [
     {
       id: 'town_hall',

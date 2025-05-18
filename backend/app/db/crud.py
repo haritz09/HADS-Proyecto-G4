@@ -62,11 +62,59 @@ def delete_user(user_id: str) -> bool:
         return result.deleted_count > 0
 
 # CRUD Operaciones para Partidas
+def _sanitize_city_owners(game_data):
+    # Limpia owner en todas las ciudades y edificios del game_state inicial
+    if "game_state" in game_data:
+        for side in ["player", "ai"]:
+            entity = game_data["game_state"].get(side)
+            if entity and "cities" in entity:
+                for city in entity["cities"]:
+                    # Solo el castillo central debe tener owner="player" inicialmente
+                    if city.get("id") == "central_city":
+                        city["owner"] = "player"
+                        for building in city.get("buildings", []):
+                            if building.get("building_type") == "castle":
+                                building["owner"] = "player"
+                            elif not building.get("built"):  # Solo limpiar si no está construido
+                                building["owner"] = None
+                    else:
+                        # Para otras ciudades, preservar el owner si algún edificio está construido
+                        if not any(b.get("built") for b in city.get("buildings", [])):
+                            city["owner"] = None
+                        for building in city.get("buildings", []):
+                            # No modificar el owner si el edificio ya está construido
+                            if not building.get("built"):
+                                building["owner"] = None
+
+def sanitize_growth_per_week(game_data):
+    """Asegura que growth_per_week sea un entero en todos los edificios y criaturas."""
+    if not game_data or not isinstance(game_data, dict):
+        return
+    
+    # Sanitizar game_state
+    if "game_state" in game_data:
+        for side in ["player", "ai"]:
+            if side in game_data["game_state"]:
+                entity = game_data["game_state"][side]
+                if "cities" in entity and isinstance(entity["cities"], list):
+                    for city in entity["cities"]:
+                        if "buildings" in city and isinstance(city["buildings"], list):
+                            for building in city["buildings"]:
+                                if "available_creatures" in building and isinstance(building["available_creatures"], list):
+                                    for creature in building["available_creatures"]:
+                                        if "growth_per_week" in creature:
+                                            # Convertir growth_per_week a entero
+                                            try:
+                                                creature["growth_per_week"] = int(creature["growth_per_week"])
+                                            except (ValueError, TypeError):
+                                                creature["growth_per_week"] = 1  # Valor predeterminado seguro
+
 def create_game(game_data: Dict[str, Any]) -> Dict[str, Any]:
     game_data.pop("_id", None)  # Eliminar _id si existe
     with get_db_client() as db:
         if "user_id" in game_data and isinstance(game_data["user_id"], str):
             game_data["user_id"] = ObjectId(game_data["user_id"])
+        _sanitize_city_owners(game_data)  # <-- Añadido: limpia owners antes de guardar
         _fix_hero_positions(game_data)
         result = db.games.insert_one(game_data)
         # Recuperar el juego recién creado y convertir ObjectId a str
@@ -84,6 +132,10 @@ def get_game(game_id: str) -> Optional[Dict[str, Any]]:
             game["_id"] = str(game["_id"])
             if "user_id" in game:
                 game["user_id"] = str(game["user_id"])
+            
+            # Sanitizar los datos antes de devolverlos
+            sanitize_growth_per_week(game)
+            
         return game
 
 def _fix_hero_positions(game_data):
@@ -141,10 +193,14 @@ def list_saved_games(user_id: str) -> List[dict]:
             cursor = db.games.find({"user_id": user_oid})
             games = list(cursor)
             
-            # Convertir ObjectId a str para cada documento
+            # Convertir ObjectId a str para cada documento y sanitizar datos
             for game in games:
                 game["_id"] = str(game["_id"])
                 game["user_id"] = str(game["user_id"])
+                
+                # Sanitizar los datos
+                sanitize_growth_per_week(game)
+                
                 print(f"DEBUG CRUD: Encontrada partida: {game['_id']}")
             
             print(f"DEBUG CRUD: Total partidas encontradas: {len(games)}")

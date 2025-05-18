@@ -94,10 +94,17 @@ class Building(BaseModel):
     id: str
     name: str
     position: Position
-    available_creatures: List[AvailableCreature] = []
+    building_type: str
     is_castle: bool = False
-    has_tavern: bool = False
+    built: bool = False
+    owner: Optional[str] = None
     can_recruit: bool = False
+    has_tavern: bool = False
+    requirements: List[str] = []
+    available_creatures: List[AvailableCreature] = []
+
+    class Config:
+        arbitrary_types_allowed = True
 
 class CastleBuilding(Building):
     is_castle: bool = True

@@ -22,6 +22,160 @@ from ai_service.client.groq_client import GroqClient
 
 router = APIRouter()
 
+def ensure_buildings_have_building_type(game_state):
+    """Ensure all buildings have a building_type field to avoid validation errors."""
+    if not game_state:
+        return game_state
+        
+    # Handle both object and dictionary versions
+    is_dict = isinstance(game_state, dict)
+    
+    # Helper function to get attribute from either dict or object
+    def get_attr(obj, attr):
+        if is_dict:
+            return obj.get(attr)
+        return getattr(obj, attr, None) if hasattr(obj, attr) else None
+    
+    # Helper function to set attribute on either dict or object
+    def set_attr(obj, attr, value):
+        if is_dict:
+            obj[attr] = value
+        else:
+            setattr(obj, attr, value)
+    
+    # Process player cities
+    player = get_attr(game_state, 'player')
+    if player:
+        cities = get_attr(player, 'cities')
+        if cities:
+            for city in cities:
+                buildings = get_attr(city, 'buildings')
+                if buildings:
+                    for building in buildings:
+                        # Check if building_type is missing
+                        building_type = get_attr(building, 'building_type')
+                        if not building_type:
+                            # Try to infer from id
+                            building_id = get_attr(building, 'id')
+                            if building_id:
+                                # Use building ID to determine type
+                                id_to_type = {
+                                    'castle': 'castle',
+                                    'barracks': 'barracks',
+                                    'archery': 'archery',
+                                    'knights_tower': 'knights_tower',
+                                    'mage_tower': 'mage_tower',
+                                    'dragons_lair': 'dragons_lair'
+                                }
+                                
+                                # Check if any key matches the id
+                                for key, value in id_to_type.items():
+                                    if key in building_id:
+                                        set_attr(building, 'building_type', value)
+                                        print(f"Set building_type={value} for building with id={building_id}")
+                                        break
+                                
+                                # If still no match, use the id itself
+                                if not get_attr(building, 'building_type'):
+                                    set_attr(building, 'building_type', building_id)
+                                    print(f"Fallback: Set building_type={building_id} (from id)")
+                            else:
+                                # Use building name as fallback
+                                building_name = get_attr(building, 'name')
+                                if building_name:
+                                    name_to_type = {
+                                        'Castillo': 'castle',
+                                        'Cuartel': 'barracks',
+                                        'Campo de Tiro': 'archery', 
+                                        'Torre de Caballeros': 'knights_tower',
+                                        'Torre de Magos': 'mage_tower',
+                                        'Guarida de Dragones': 'dragons_lair'
+                                    }
+                                    if building_name in name_to_type:
+                                        set_attr(building, 'building_type', name_to_type[building_name])
+                                        print(f"Set building_type from name: {name_to_type[building_name]}")
+                                    else:
+                                        # Default fallback
+                                        set_attr(building, 'building_type', 'unknown')
+                                        print(f"Set default building_type='unknown'")
+                                else:
+                                    # Last resort
+                                    set_attr(building, 'building_type', 'unknown')
+                                    print(f"Set default building_type='unknown' (no id or name)")
+    
+    # Process AI cities (same logic)
+    ai = get_attr(game_state, 'ai')
+    if ai:
+        cities = get_attr(ai, 'cities')
+        if cities:
+            for city in cities:
+                buildings = get_attr(city, 'buildings')
+                if buildings:
+                    for building in buildings:
+                        # Same logic as above
+                        building_type = get_attr(building, 'building_type')
+                        if not building_type:
+                            building_id = get_attr(building, 'id')
+                            if building_id:
+                                id_to_type = {
+                                    'castle': 'castle',
+                                    'barracks': 'barracks',
+                                    'archery': 'archery',
+                                    'knights_tower': 'knights_tower',
+                                    'mage_tower': 'mage_tower',
+                                    'dragons_lair': 'dragons_lair'
+                                }
+                                for key, value in id_to_type.items():
+                                    if key in building_id:
+                                        set_attr(building, 'building_type', value)
+                                        break
+                                if not get_attr(building, 'building_type'):
+                                    set_attr(building, 'building_type', building_id)
+                            else:
+                                building_name = get_attr(building, 'name')
+                                if building_name:
+                                    name_to_type = {
+                                        'Castillo': 'castle',
+                                        'Cuartel': 'barracks',
+                                        'Campo de Tiro': 'archery', 
+                                        'Torre de Caballeros': 'knights_tower',
+                                        'Torre de Magos': 'mage_tower',
+                                        'Guarida de Dragones': 'dragons_lair'
+                                    }
+                                    if building_name in name_to_type:
+                                        set_attr(building, 'building_type', name_to_type[building_name])
+                                    else:
+                                        set_attr(building, 'building_type', 'unknown')
+                                else:
+                                    set_attr(building, 'building_type', 'unknown')
+                        
+    return game_state
+
+def sanitize_game_data(game_data):
+    """Sanitiza los datos del juego para evitar errores de validación."""
+    if not game_data or not isinstance(game_data, dict):
+        return game_data
+        
+    # Sanitizar growth_per_week en todas las ciudades
+    if "game_state" in game_data:
+        for side in ["player", "ai"]:
+            if side in game_data["game_state"]:
+                entity = game_data["game_state"][side]
+                if "cities" in entity and isinstance(entity["cities"], list):
+                    for city in entity["cities"]:
+                        if "buildings" in city and isinstance(city["buildings"], list):
+                            for building in city["buildings"]:
+                                if "available_creatures" in building and isinstance(building["available_creatures"], list):
+                                    for creature in building["available_creatures"]:
+                                        if "growth_per_week" in creature:
+                                            # Convertir growth_per_week a entero
+                                            try:
+                                                creature["growth_per_week"] = int(creature["growth_per_week"])
+                                            except (ValueError, TypeError):
+                                                creature["growth_per_week"] = 1  # Valor predeterminado seguro
+    
+    return game_data
+
 @router.get("/", response_model=List[GameRead])
 async def listar_partidas_guardadas(
     current_user: dict = Depends(get_current_user)
@@ -96,6 +250,44 @@ async def crear_nueva_partida(
     game_data["created_at"] = datetime.now(UTC)
     game_data["last_saved"] = datetime.now(UTC)
     
+    # CRITICAL: Fix for city buildings missing building_type
+    if "game_state" in game_data and "player" in game_data["game_state"] and "cities" in game_data["game_state"]["player"]:
+        cities = game_data["game_state"]["player"]["cities"]
+        
+        # Debug information
+        print(f"Processing {len(cities)} cities in game creation")
+        
+        # Process each city
+        for i, city in enumerate(cities):
+            if "buildings" in city:
+                buildings = city["buildings"]
+                print(f"City {i}: {city.get('id', 'unknown')}, Found {len(buildings)} buildings")
+                
+                # Process each building
+                for j, building in enumerate(buildings):
+                    building_id = building.get("id", "unknown")
+                    
+                    # DIRECT FIX: Add building_type if missing
+                    if "building_type" not in building:
+                        # Try to determine building_type from ID
+                        id_parts = building_id.split("_")
+                        if len(id_parts) > 0:
+                            # Use first part of ID as type
+                            if id_parts[0] in ["castle", "barracks", "archery", "knights_tower", "mage_tower", "dragons_lair"]:
+                                building["building_type"] = id_parts[0]
+                            else:
+                                # Use entire ID as building_type
+                                building["building_type"] = building_id
+                        else:
+                            # Default building_type
+                            building["building_type"] = building_id
+                        
+                        print(f"Added building_type={building['building_type']} to building id={building_id}")
+    
+    # Then apply our general function to catch any missed buildings
+    if "game_state" in game_data:
+        game_data["game_state"] = ensure_buildings_have_building_type(game_data["game_state"])
+    
     return create_game(game_data)
 
 @router.get("/{game_id}", response_model=GameRead)
@@ -104,7 +296,7 @@ async def cargar_partida_guardada(
     current_user: dict = Depends(get_current_user)
 ):
     """Cargar una partida guardada por su ID."""
-    game = get_game(game_id)
+    game = get_game_internal(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Partida no encontrada")
     
@@ -113,6 +305,17 @@ async def cargar_partida_guardada(
         raise HTTPException(status_code=403, detail="No autorizado para cargar esta partida")
     
     return game
+
+def get_game_internal(game_id: str):
+    """Encapsulates the logic for getting a game, for reuse in other endpoints."""
+    game = get_game(game_id)
+    if not game:
+        return None
+    
+    # Sanitizar los datos del juego antes de devolverlos
+    sanitized_game = sanitize_game_data(game)
+    
+    return sanitized_game
 
 @router.post("/{game_id}/action")
 async def process_action(

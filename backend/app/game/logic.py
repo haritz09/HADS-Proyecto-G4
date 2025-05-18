@@ -315,7 +315,6 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     }
 
 def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
-    """Procesa la construcción de un edificio en la ciudad."""
     try:
         details = action["details"]
         city_id = details["cityId"]
@@ -324,7 +323,7 @@ def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Di
         
         print(f"DEBUG: Processing build structure. Type: {structure_type}, City ID: {city_id}, Player: {current_player}")
         
-        # Building configurations
+        # Building configurations - asegurarse de incluir TODOS los tipos de edificios
         building_configs = {
             "barracks": {
                 "cost": {"gold": 1000, "wood": 50, "stone": 50},
@@ -352,7 +351,7 @@ def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Di
                     }
                 ]
             },
-            "knights_tower": {  # Ya está correctamente como knights_tower
+            "knights_tower": {
                 "cost": {"gold": 1500, "wood": 100, "stone": 100},
                 "can_recruit": True,
                 "available_creatures": [
@@ -365,100 +364,213 @@ def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Di
                     }
                 ]
             },
+            "mage_tower": {
+                "cost": {"gold": 2000, "wood": 100, "stone": 100},
+                "can_recruit": True,
+                "available_creatures": [
+                    {
+                        "type": "Mago",
+                        "count": 3,
+                        "growth_per_week": 1,
+                        "stats": {"attack": 7, "defense": 2, "speed": 4, "movement_points": 5, "movement_points_left": 5},
+                        "recruit_cost": {"gold": 350}
+                    }
+                ]
+            },
+            "dragons_lair": {
+                "cost": {"gold": 5000, "wood": 200, "stone": 200},
+                "can_recruit": True,
+                "available_creatures": [
+                    {
+                        "type": "Dragón",
+                        "count": 1,
+                        "growth_per_week": 1,  # Cambiado de 0.5 a 1 para evitar el error de validación
+                        "stats": {"attack": 10, "defense": 8, "speed": 8, "movement_points": 10, "movement_points_left": 10},
+                        "recruit_cost": {"gold": 1000}
+                    }
+                ]
+            }
         }
+
+        # Verificar si el structure_type solicitado existe en la configuración
+        if structure_type not in building_configs:
+            print(f"ERROR: Unknown building type requested: {structure_type}")
+            print(f"Available building types: {list(building_configs.keys())}")
+            raise ValueError(f"Unknown building type: {structure_type}")
 
         # Get building configuration
         building_config = building_configs.get(structure_type)
-        if not building_config:
-            print(f"ERROR: Invalid building type: {structure_type}")
-            raise ValueError(f"Invalid building type: {structure_type}")
 
         # Find player resources and cities based on current player
         player = game_state.player if current_player == "player" else game_state.ai
-        cities = player.cities
         
-        # Log initial resources
-        print(f"DEBUG: Player initial resources: Gold={player.resources.gold}, Wood={player.resources.wood}, Stone={player.resources.stone}")
-        print(f"DEBUG: Building cost: {building_config['cost']}")
+        print(f"DEBUG: All player cities: {[c.id for c in player.cities]}")
+        
+        # Mapping of building types to their respective city IDs
+        building_type_to_city_id = {
+            "barracks": "barracks_city",
+            "archery": "archery_city",
+            "knights_tower": "knights_city", 
+            "mage_tower": "mage_city",
+            "dragons_lair": "dragon_city"
+        }
+        
+        # Find the correct city for this building type
+        target_city_id = None
+        
+        # If we're building in the central city, use that
+        if city_id == "central_city" or city_id == "central_castle":
+            target_city_id = "central_city"
+        else:
+            # Otherwise, find the correct city for this building type
+            target_city_id = building_type_to_city_id.get(structure_type, city_id)
+        
+        print(f"DEBUG: Looking for building of type '{structure_type}' in city: {target_city_id}")
         
         # Find the city
-        city = next((c for c in cities if c.id == city_id), None)
-        if not city:
-            print(f"ERROR: City not found: {city_id}")
-            # Try to find an alternative city
-            if cities and len(cities) > 0:
-                city = cities[0]
-                print(f"DEBUG: Using alternative city: {city.id}")
-            else:
-                raise ValueError(f"City not found: {city_id} and no alternative cities available")
-        
-        # Find the building
-        building = next((b for b in city.buildings if b.building_type == structure_type), None)
-        if not building:
-            print(f"DEBUG: Building with type '{structure_type}' not found in city {city.id}.")
-            raise ValueError(f"Building with type '{structure_type}' not found in city {city.id}.")
+        city = None
+        for c in player.cities:
+            if c.id == target_city_id:
+                city = c
+                print(f"DEBUG: Found target city with ID: {c.id}")
+                break
                 
-        # Check if player has enough resources
-        if not has_enough_resources(player.resources, building_config["cost"]):
-            print(f"ERROR: Insufficient resources for {structure_type}")
+        # Fallback to central_city if needed
+        if not city:
+            for c in player.cities:
+                if c.id == "central_city" or (hasattr(c, 'position') and c.position.x == 48 and c.position.y == 48):
+                    city = c
+                    print(f"DEBUG: Falling back to central city: {c.id}")
+                    break
+        
+        if not city:
+            print(f"ERROR: City with ID {target_city_id} not found")
+            print(f"Available cities: {[c.id for c in player.cities]}")
+            raise ValueError(f"City {target_city_id} not found")
+
+        # Find the building of the specified type in the city
+        building = None
+        print(f"DEBUG: Searching for building of type '{structure_type}' in city {city.id}")
+        
+        # List all buildings and their types for diagnostics
+        for i, b in enumerate(city.buildings):
+            building_type = getattr(b, 'building_type', 'no_type')
+            print(f"DEBUG: Building {i}: {getattr(b, 'id', 'no_id')}, type={building_type}")
+            
+            # Check if it matches the requested type
+            if building_type == structure_type:
+                building = b
+                print(f"DEBUG: Found matching building with type {structure_type}")
+                break
+        
+        # If no building is found with the matching type, search in the other cities
+        if not building:
+            print(f"DEBUG: No building of type '{structure_type}' found in {city.id}, checking other cities")
+            for c in player.cities:
+                if c.id != city.id:
+                    for b in c.buildings:
+                        if getattr(b, 'building_type', '') == structure_type:
+                            building = b
+                            city = c
+                            print(f"DEBUG: Found {structure_type} in city {c.id}")
+                            break
+                if building:
+                    break
+        
+        # If we still don't have a building, create a new one
+        if not building:
+            print(f"DEBUG: Creating new {structure_type} building in city {city.id}")
+            
+            # Create a new building with all required fields
+            new_building = Building(
+                id=f"{structure_type}_{city.position.x}_{city.position.y}",
+                name=structure_type.capitalize(),
+                position=city.position,
+                building_type=structure_type,
+                is_castle=False,
+                built=False,
+                owner=None,
+                can_recruit=building_config.get("can_recruit", False),
+                has_tavern=False,
+                requirements=[],
+                available_creatures=[]
+            )
+            
+            # Add to the city
+            city.buildings.append(new_building)
+            building = city.buildings[-1]
+            print(f"DEBUG: Added new building: {building.id}, type={building.building_type}")
+        
+        # Check if building is already built
+        if building.built:
+            print(f"DEBUG: Building is already built. Owner check: built={building.built}, owner={building.owner}, current_player={current_player}")
+            if building.owner == current_player:
+                print(f"ERROR: Building already owned by {current_player}")
+                return {
+                    "success": False,
+                    "error": f"You already own this {structure_type}"
+                }
+            elif building.owner is not None:
+                print(f"DEBUG: Building is owned by {building.owner}, but current player is {current_player} - allowing purchase")
+            else:
+                print(f"DEBUG: Building is built but has no owner (None) - allowing purchase")
             return {
                 "success": False,
-                "error": f"Insufficient resources for {structure_type}. Required: {building_config['cost']}, Available: gold={player.resources.gold}, wood={player.resources.wood}, stone={player.resources.stone}"
+                "error": f"Building already constructed"
             }
-        
-        # 1. DEDUCT RESOURCES FIRST - This is the key part
-        print(f"CRITICAL: Deducting resources for {structure_type}: {building_config['cost']}")
-        # Make a backup of resources before deduction for verification
-        resources_before = {"gold": player.resources.gold, "wood": player.resources.wood, "stone": player.resources.stone}
-        
-        # Deduct resources - use our improved function
-        deduct_resources(player.resources, building_config["cost"])
-        
-        # Verify deduction actually worked
-        resources_after = {"gold": player.resources.gold, "wood": player.resources.wood, "stone": player.resources.stone}
-        print(f"DEBUG: Resources before: {resources_before}")
-        print(f"DEBUG: Resources after: {resources_after}")
-        
-        for resource, amount in building_config["cost"].items():
-            expected = resources_before[resource] - amount
-            actual = resources_after[resource]
-            if expected != actual:
-                print(f"WARNING: Resource {resource} not deducted correctly. Expected: {expected}, Actual: {actual}")
-                # Force the correct value
-                setattr(player.resources, resource, expected)
-                print(f"DEBUG: Forced {resource} to correct value: {expected}")
-        
-        # 2. Update building properties
-        building.built = True
-        building.owner = current_player
-        building.can_recruit = building_config["can_recruit"]
-        if "available_creatures" in building_config:
-            building.available_creatures = building_config["available_creatures"]
-        
-        # 3. If building is part of a city, update city owner as well
-        if city:
-            city.owner = current_player
-            print(f"DEBUG: Updated city {city.id} owner to {current_player}")
-        
-        print(f"SUCCESS: Built {structure_type} in {city.id}. Resources deducted: {building_config['cost']}")
-        print(f"DEBUG: Final resources: Gold={player.resources.gold}, Wood={player.resources.wood}, Stone={player.resources.stone}")
 
-        # Return success with updated resources
+        # Only deduct resources if not built
+        # Make a backup of the resources before deduction for logging
+        if not has_enough_resources(player, building_config["cost"]):
+            raise ValueError("Recursos insuficientes para construir el edificio")
+        deduct_resources(player, building_config["cost"])
+        
+        # Update building properties with better logging
+        try:
+            # Set built status
+            if hasattr(building, 'built'):
+                print(f"DEBUG: Setting building.built = True (was {building.built})")
+                building.built = True
+            
+            # Set owner - explicitly log the change
+            if hasattr(building, 'owner'):
+                print(f"DEBUG: Setting building.owner = {current_player} (was {building.owner})")
+                building.owner = current_player
+                
+            # Set can_recruit
+            if hasattr(building, 'can_recruit'):
+                building.can_recruit = building_config.get("can_recruit", False)
+                
+            # Set creatures
+            if "available_creatures" in building_config and hasattr(building, 'available_creatures'):
+                building.available_creatures = building_config["available_creatures"]
+        except Exception as e:
+            print(f"WARNING: Error updating building properties: {str(e)}")
+
+        # Update city owner only if it doesn't have an owner yet
+        try:
+            if hasattr(city, 'owner') and (city.owner is None or city.owner == ""):
+                print(f"DEBUG: Updating city {city.id} owner from {city.owner} to {current_player}")
+                city.owner = current_player
+            else:
+                print(f"DEBUG: City {city.id} already has owner: {city.owner}, not changing")
+        except Exception as e:
+            print(f"WARNING: Error updating city owner: {str(e)}")
+            
+        print(f"SUCCESS: Built {structure_type} in city {city.id}")
+
         return {
             "success": True,
             "built": structure_type,
             "city": city.id,
-            "building": building.id,
-            "cost": building_config["cost"],
+            "building": getattr(building, 'id', 'unknown'),
             "new_resources": {
                 "gold": player.resources.gold,
                 "wood": player.resources.wood,
                 "stone": player.resources.stone
             },
-            # Include the full game state for proper frontend update
             "game_state": game_state
         }
-
     except Exception as e:
         print(f"CRITICAL ERROR in process_build_structure: {str(e)}")
         import traceback
@@ -728,3 +840,116 @@ def transfer_troops_between_hero_and_castle(game_state: GameState, action: Dict[
         "hero_army": [{"type": u.type, "count": u.count} for u in hero.army],
         "castle_garrison": [{"type": u.type, "count": u.count} for u in castle.garrison]
     }
+
+def build_structure(game_state, city_id, structure_type):
+    """
+    Construye una estructura en una ciudad si hay recursos suficientes
+    """
+    # Encuentra la ciudad y el edificio
+    city = None
+    building = None
+    
+    # Buscar en las ciudades del jugador
+    for player_city in game_state["player"]["cities"]:
+        if player_city["id"] == city_id:
+            city = player_city
+            # Buscar el edificio por tipo
+            for b in city["buildings"]:
+                if b["building_type"] == structure_type:
+                    building = b
+                    break
+            break
+    
+    if not city or not building:
+        return {"success": False, "error": "Ciudad o edificio no encontrado"}
+    
+    # Comprobar si ya está construido
+    if building["built"]:
+        return {"success": False, "error": "El edificio ya está construido"}
+    
+    # Comprobar si hay suficientes recursos
+    player_resources = game_state["player"]["resources"]
+    cost = building.get("cost", {"gold": 0, "wood": 0, "stone": 0})
+    
+    if player_resources["gold"] < cost.get("gold", 0) or \
+       player_resources["wood"] < cost.get("wood", 0) or \
+       player_resources["stone"] < cost.get("stone", 0):
+        return {"success": False, "error": "Recursos insuficientes"}
+    
+    # Deducir recursos
+    player_resources["gold"] -= cost.get("gold", 0)
+    player_resources["wood"] -= cost.get("wood", 0)
+    player_resources["stone"] -= cost.get("stone", 0)
+    
+    # Marcar como construido
+    building["built"] = True
+    building["owner"] = "player"  # Asignar propiedad al jugador
+    
+    # Determinar si el edificio permite reclutar unidades
+    # Los edificios que pueden reclutar son todos excepto el castillo que ya está marcado
+    recruit_buildings = ["barracks", "archery", "knights_tower", "mage_tower", "dragons_lair"]
+    if structure_type in recruit_buildings:
+        building["can_recruit"] = True
+        # Añadir unidades disponibles según el tipo de edificio
+        building["available_creatures"] = get_available_creatures(structure_type)
+    
+    # Actualizar la ciudad
+    city["owner"] = "player"  # La ciudad pertenece al jugador cuando construye un edificio
+    
+    return {
+        "success": True, 
+        "message": f"Edificio {structure_type} construido con éxito",
+        "new_resources": player_resources
+    }
+
+def get_available_creatures(building_type):
+    """Devuelve las criaturas disponibles para un tipo de edificio."""
+    creatures = {
+        "barracks": [
+            {
+                "type": "Soldado",
+                "count": 10,
+                "growth_per_week": 3,
+                "stats": {"attack": 5, "defense": 5, "speed": 3, "movement_points": 5, "movement_points_left": 5},
+                "unit_cost": {"gold": 100}
+            }
+        ],
+        "archery": [
+            {
+                "type": "Arquero",
+                "count": 8,
+                "growth_per_week": 2,
+                "stats": {"attack": 6, "defense": 2, "speed": 4, "movement_points": 5, "movement_points_left": 5},
+                "unit_cost": {"gold": 150}
+            }
+        ],
+        "knights_tower": [
+            {
+                "type": "Caballero",
+                "count": 5,
+                "growth_per_week": 1,
+                "stats": {"attack": 8, "defense": 6, "speed": 6, "movement_points": 7, "movement_points_left": 7},
+                "unit_cost": {"gold": 300}
+            }
+        ],
+        "mage_tower": [
+            {
+                "type": "Mago",
+                "count": 3,
+                "growth_per_week": 1,
+                "stats": {"attack": 10, "defense": 3, "speed": 3, "movement_points": 5, "movement_points_left": 5},
+                "unit_cost": {"gold": 500}
+            }
+        ],
+        "dragons_lair": [
+            {
+                "type": "Dragón",
+                "count": 1,
+                "growth_per_week": 0.5,
+                "stats": {"attack": 15, "defense": 12, "speed": 8, "movement_points": 10, "movement_points_left": 10},
+                "unit_cost": {"gold": 2000}
+            }
+        ]
+    }
+    
+    return creatures.get(building_type, [])
