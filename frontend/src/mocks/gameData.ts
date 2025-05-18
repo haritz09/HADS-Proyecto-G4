@@ -5,7 +5,7 @@
 * - Héroes, ciudades, mapas, etc. de ejemplo
 */
 
-import { GameState, Hero, City, Resources, Position, MapTile } from '../types/game';
+import { GameState, Hero, City, Resources, Position, MapTile, ResourceMine } from '../types/game';
 
 // Determinar tipo de terreno
 const determineTerrainType = (): 'grass' | 'forest' | 'mountain' | 'water' | 'desert' | 'snow' => {
@@ -113,7 +113,7 @@ export const sampleGameState: GameState = {
         owner: null,
         resource_type: 'gold',
         resource_per_turn: 500
-      }
+      } as ResourceMine
     ]
   },
   cities: [] // Añadir array de ciudades vacío

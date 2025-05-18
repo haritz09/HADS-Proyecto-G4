@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GameState, Hero, Position, MapTile, Building, ArtifactObject, VisibleObject } from '../../types/game';
+import { GameState, Hero, Position, MapTile, Building, ArtifactObject, VisibleObject, ResourceMine } from '../../types/game';
 import { useGame } from '../../contexts/GameContext';
 import { findPath, calculatePathCost } from '../../services/gameEngine';
 import '../../styles/components/GameMap.css';
@@ -228,7 +228,7 @@ const GameMap: React.FC<GameMapProps> = ({
     setAnimatingHero({
       heroId,
       currentPosition: startPosition,
-      path: adjustedPath,
+      path, // Use the path parameter instead of the undefined adjustedPath
       step: 0
     });
   };
@@ -407,6 +407,82 @@ const GameMap: React.FC<GameMapProps> = ({
     );
   };
 
+  // Updated getMineIcon function to be more clear and visible
+  const getMineIcon = (type: string, symbol?: string): string => {
+    // If we have a custom symbol from the backend, use it
+    if (symbol) return symbol;
+    
+    // Otherwise, use a clear icon based on type
+    switch (type) {
+      case 'goldmine': return '💰';  // Gold bag for gold mines
+      case 'sawmill': return '🪵';   // Wood for sawmills
+      case 'quarry': return '⛏️';    // Pickaxe for quarries
+      default:
+        // If we don't recognize the type but have resource_type, use that
+        if (type.includes('gold')) return '💰';
+        if (type.includes('wood')) return '🪵';
+        if (type.includes('stone')) return '⛏️';
+        return '🏭'; // Default factory icon
+    }
+  };
+  
+  // Enhanced renderMine function with better logging
+  const renderMine = (mine: VisibleObject) => {
+    if (!mine.position) {
+      console.warn('Trying to render mine without position:', mine);
+      return null;
+    }
+    
+    // Type assertion to access resource properties
+    const resourceMine = mine as ResourceMine;
+    
+    // Extract important properties with fallbacks
+    const mineType = mine.type || 'unknown';
+    const owner = mine.owner;
+    const resourceType = 'resource_type' in mine ? resourceMine.resource_type : 'unknown';
+    const resourcePerTurn = 'resource_per_turn' in mine ? resourceMine.resource_per_turn : 0;
+    const symbol = 'symbol' in mine ? (mine as any).symbol : undefined;
+    
+    // For debugging
+    console.log(`Rendering mine: type=${mineType}, resource=${resourceType}, position=(${mine.position.x},${mine.position.y}), owner=${owner}`);
+    
+    const getTooltip = (): string => {
+      const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+      let tooltip = `Mina de ${resourceName}: +${resourcePerTurn} por turno`;
+      
+      if (owner) {
+        tooltip += `\nPropietario: ${owner === 'player' ? 'Tú' : 'IA'}`;
+      } else {
+        tooltip += '\nSin propietario';
+      }
+      
+      return tooltip;
+    };
+    
+    const mineClasses = [
+      'resource-mine',
+      mineType,
+      owner ? `${owner}-owned` : 'neutral',
+      mine.justCaptured ? 'just-captured' : ''
+    ].filter(Boolean).join(' ');
+    
+    return (
+      <div
+        key={`mine-${mine.id}`}
+        className={mineClasses}
+        style={{
+          left: `${mine.position.x * 32}px`,
+          top: `${mine.position.y * 32}px`,
+          zIndex: 15, // Make sure it's above terrain but below heroes
+        }}
+        title={getTooltip()}
+      >
+        {getMineIcon(mineType, symbol)}
+      </div>
+    );
+  };
+
+  // Actualizar el método renderTile para detectar minas en el tile
   const renderTile = (x: number, y: number) => {
     const index = y * gameState.map.size.width + x;
     const tile = gameState.map.tiles[index];
@@ -423,6 +499,15 @@ const GameMap: React.FC<GameMapProps> = ({
     const city = gameState.player.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
     const aiCity = gameState.ai.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
     const building = city?.buildings?.[0] || aiCity?.buildings?.[0];
+
+    // Find a mine at this position
+    const mineAtPosition = gameState.map.visible_objects?.find(obj => 
+      obj.position && 
+      obj.position.x === x && 
+      obj.position.y === y && 
+      (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+       ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+    ) as ResourceMine | undefined;
 
     const artifact = findArtifactAtPosition(x, y, tile);
     const { name: artifactName, subtype: artifactSubtype } = getArtifactProperties(artifact);
@@ -472,7 +557,9 @@ const GameMap: React.FC<GameMapProps> = ({
       <div
         className={tileClasses}
         onClick={() => handleTileClick({ x, y })}
-        title={artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : tooltipMessage || undefined}
+        title={mineAtPosition ? 
+          `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
+          (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : tooltipMessage || undefined)}
       >
         {artifact && (
           <div 
@@ -595,6 +682,13 @@ const GameMap: React.FC<GameMapProps> = ({
         }}
       >
         {grid}
+        
+        {/* Important: This is where we render all mines to ensure they appear */}
+        {gameState.map.visible_objects?.filter(obj => 
+          obj.position && 
+          (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+        ).map(mine => renderMine(mine))}
       </div>
     </div>
   );

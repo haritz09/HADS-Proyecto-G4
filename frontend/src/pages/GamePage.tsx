@@ -44,7 +44,8 @@ const GamePage: React.FC = () => {
   const [activeBuilding, setActiveBuilding] = useState<Building | null>(null);
   const [showRecruitmentMenu, setShowRecruitmentMenu] = useState(false);
   const [showConstructionMenu, setShowConstructionMenu] = useState(false);
-  
+  const [forceUpdate, setForceUpdate] = useState({}); // Estado para forzar actualización del componente
+
   // Función para actualizar el estado del juego
   const updateGameState = (newState: GameState) => {
     setGameState(newState);
@@ -185,7 +186,7 @@ const GamePage: React.FC = () => {
     }
   };
 
-  // Manejar click en una casilla del mapa
+  // Modificar handleTileClick para manejar interacción con minas
   const handleTileClick = async (position: Position) => {
     if (!gameState || !gameId || !selectedHero) {
       console.warn('GamePage: handleTileClick - Missing gameState, gameId, or selectedHero.');
@@ -352,6 +353,43 @@ const GamePage: React.FC = () => {
           console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
           setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
         }
+
+        // Check for mine capture in the response
+        if (response.data?.result?.interaction === 'resource_site_captured') {
+          const interaction = response.data.result;
+          const resourceType = interaction.resource_type || 'unknown';
+          const resourcePerTurn = interaction.resource_per_turn || 0;
+          
+          // Mensaje formateado con el tipo de recurso y la cantidad
+          const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+          const captureMessage = `¡Has capturado una mina de ${resourceName}! +${resourcePerTurn} por turno`;
+          
+          console.log(`GamePage: Mine capture detected! ${captureMessage}`);
+          setGameMessage(captureMessage);
+          
+          // Marcar la mina como recién capturada para la animación
+          if (gameState?.map?.visible_objects) {
+            const mine = gameState.map.visible_objects.find(obj => 
+              obj.position && 
+              obj.position.x === position.x && 
+              obj.position.y === position.y &&
+              'resource_type' in obj && obj.resource_type === resourceType
+            );
+            
+            if (mine) {
+              // Añadir propiedad para la animación
+              mine.justCaptured = true;
+              
+              // Quitar la propiedad después de la animación
+              setTimeout(() => {
+                if (mine) {
+                  mine.justCaptured = false;
+                  setForceUpdate({}); // Forzar actualización del componente
+                }
+              }, 1500);
+            }
+          }
+        }
       } else {
         console.error('GamePage: Failed to move hero:', response.data?.error || 'Unknown error');
         setGameMessage(response.data?.error || "Error al mover el héroe");
@@ -366,6 +404,38 @@ const GamePage: React.FC = () => {
       console.error("GamePage: Exception during hero movement:", err);
       setGameMessage("Error crítico al mover el héroe");
     }
+  };
+
+  // Añadir este método a tu componente
+  const getCurrentPlayerResourcesInfo = () => {
+    if (!gameState || !gameState.player || !gameState.ai) {
+      return { 
+        resources: { gold: 0, wood: 0, stone: 0 },
+        income: { gold: 0, wood: 0, stone: 0 }
+      };
+    }
+    
+    const resources = gameState.current_player === 'player' ? 
+      gameState.player.resources : 
+      gameState.ai.resources;
+      
+    // Calcular ingresos por turno basado en las minas capturadas
+    const income = { gold: 0, wood: 0, stone: 0 };
+    
+    if (gameState.map?.visible_objects) {
+      const currentOwner = gameState.current_player;
+      
+      gameState.map.visible_objects.forEach(obj => {
+        if (obj.owner === currentOwner && 'resource_type' in obj && 'resource_per_turn' in obj) {
+          const resourceType = obj.resource_type as keyof typeof income;
+          if (resourceType in income) {
+            income[resourceType] += obj.resource_per_turn as number;
+          }
+        }
+      });
+    }
+    
+    return { resources, income };
   };
 
   // Manejar click en un héroe
@@ -822,7 +892,10 @@ const GamePage: React.FC = () => {
         <>
           <div className="game-header">
             <h1>Heroes&Hostias</h1>
-            <ResourceBar resources={getCurrentPlayerResources()} />
+            <ResourceBar 
+              resources={getCurrentPlayerResourcesInfo().resources} 
+              resourcesIncome={getCurrentPlayerResourcesInfo().income}
+            />
             <div className="game-controls">
               <Button onClick={handleSaveGame}>Guardar</Button>
               <Button onClick={() => navigate('/menu')}>Menú</Button>

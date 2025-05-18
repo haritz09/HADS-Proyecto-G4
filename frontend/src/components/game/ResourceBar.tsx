@@ -6,43 +6,46 @@
 * - Animaciones al cambiar recursos
 */
 
-import React, { useState } from 'react';
-import PropTypes from 'prop-types';
+import React from 'react';
 import { Resources } from '../../types/game';
 import '../../styles/components/ResourceBar.css';
 
 interface ResourceBarProps {
   resources: Resources;
+  resourcesIncome?: Resources; // Ingresos por turno (opcional)
 }
 
-const ResourceBar: React.FC<ResourceBarProps> = ({ resources }) => {
-  const [animatedValues, setAnimatedValues] = useState(resources);
-
+const ResourceBar: React.FC<ResourceBarProps> = ({ resources, resourcesIncome }) => {
+  // Si no hay ingresos, mostrar valores en cero
+  const income = resourcesIncome || { gold: 0, wood: 0, stone: 0 };
+  
   return (
     <div className="resource-bar">
-      {/* Solo mostrar recursos básicos */}
-      <div className="resource-item">
-        <div className="resource-icon gold-icon"></div>
-        <span className="resource-value">{Math.floor(animatedValues.gold)}</span>
+      <div className="resource gold">
+        <span className="resource-icon">💰</span>
+        <span className="resource-value">{resources.gold}</span>
+        {income.gold > 0 && (
+          <span className="resource-income">+{income.gold}/turno</span>
+        )}
       </div>
-      <div className="resource-item">
-        <div className="resource-icon wood-icon"></div>
-        <span className="resource-value">{Math.floor(animatedValues.wood)}</span>
+      
+      <div className="resource wood">
+        <span className="resource-icon">🌲</span>
+        <span className="resource-value">{resources.wood}</span>
+        {income.wood > 0 && (
+          <span className="resource-income">+{income.wood}/turno</span>
+        )}
       </div>
-      <div className="resource-item">
-        <div className="resource-icon stone-icon"></div>
-        <span className="resource-value">{Math.floor(animatedValues.stone)}</span>
+      
+      <div className="resource stone">
+        <span className="resource-icon">⛏️</span>
+        <span className="resource-value">{resources.stone}</span>
+        {income.stone > 0 && (
+          <span className="resource-income">+{income.stone}/turno</span>
+        )}
       </div>
     </div>
   );
-};
-
-ResourceBar.propTypes = {
-  resources: PropTypes.shape({
-    gold: PropTypes.number.isRequired,
-    wood: PropTypes.number.isRequired,
-    stone: PropTypes.number.isRequired
-  }).isRequired
 };
 
 export default ResourceBar;

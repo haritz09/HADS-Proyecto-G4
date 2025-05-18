@@ -1,38 +1,48 @@
 .resource-bar {
   display: flex;
-  align-items: center;
-  background-color: rgba(0, 0, 0, 0.7);
-  padding: 8px 16px;
-  border-radius: 4px;
   gap: 16px;
+  padding: 8px 16px;
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .resource {
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: color 0.3s;
+  color: white;
+  font-weight: bold;
 }
 
 .resource-icon {
-  font-size: 1.2rem;
+  font-size: 20px;
 }
 
 .resource-value {
-  font-weight: bold;
-  color: white;
+  font-size: 16px;
+  min-width: 60px;
 }
 
-.resource.gold .resource-value {
+.resource-income {
+  color: #4CAF50;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.resource.gold .resource-icon {
   color: gold;
+  text-shadow: 0 0 3px black;
 }
 
-.resource.wood .resource-value {
-  color: #9c6644;
+.resource.wood .resource-icon {
+  color: #964B00;
+  text-shadow: 0 0 3px black;
 }
 
-.resource.stone .resource-value {
-  color: #c0c0c0;
+.resource.stone .resource-icon {
+  color: #A9A9A9;
+  text-shadow: 0 0 3px black;
 }
 
 /* Animation for resource decrease */

@@ -11,7 +11,7 @@ export interface Resources {
 
 export interface Position {
   x: number;
-  y: number; // Explicitly set type to number
+  y: number;
 }
 
 export interface Stats {
@@ -25,7 +25,7 @@ export interface Stats {
 export interface ArmyUnit {
   type: string;
   count: number;
-  stats: Stats;
+  stats?: Stats;
 }
 
 export interface Unit {
@@ -48,7 +48,7 @@ export interface Hero {
   position: Position;
   stats: Stats;
   army: ArmyUnit[];
-  artifacts: Artifact[];
+  artifacts: any[];
 }
 
 export interface Creature {
@@ -73,10 +73,35 @@ export interface AvailableCreature {
 }
 
 export interface MapTile {
-  terrain: 'grass' | 'forest' | 'mountain' | 'water' | 'desert' | 'snow';
+  terrain: string;
   passable: boolean;
   object_type?: string;
   object_id?: string;
+}
+
+// Base interface for all visible objects on the map
+export interface VisibleObject {
+  id: string;
+  type?: string;
+  position: Position;
+  owner?: string | null;
+  justCaptured?: boolean; // Added property for animation
+}
+
+// Specialized interface for resource mines
+export interface ResourceMine extends VisibleObject {
+  type: 'goldmine' | 'sawmill' | 'quarry' | string;
+  resource_type: 'gold' | 'wood' | 'stone' | string;
+  resource_per_turn: number;
+  symbol?: string; // Símbolo personalizable para mostrar en el mapa
+}
+
+// Specialized interface for artifacts
+export interface ArtifactObject extends VisibleObject {
+  type: 'artifact';
+  subtype: string;
+  name: string;
+  effect?: any;
 }
 
 export interface Building {
@@ -100,16 +125,24 @@ export interface City {
   position: Position;
   owner: string | null; // Cambiado de string a string | null
   buildings: Building[];
-  garrison: Creature[]; // Cambiado de Hero[] a Creature[]
-  availableUnits: {
-    unitId: string;
-    amount: number;
-  }[];
+  garrison?: ArmyUnit[];
+  availableUnits?: any[];
+}
+
+export interface GameMap {
+  size: {
+    width: number;
+    height: number;
+  };
+  tiles: MapTile[];
+  fog_of_war: boolean[];
+  explored: any[];
+  visible_objects: (VisibleObject | ResourceMine | ArtifactObject)[];
 }
 
 export interface GameState {
   turn: number;
-  current_player: 'player' | 'ai';
+  current_player: string;
   player: {
     heroes: Hero[];
     cities: City[];
@@ -120,33 +153,6 @@ export interface GameState {
     cities: City[];
     resources: Resources;
   };
-  map: {
-    size: MapSize;
-    tiles: MapTile[];
-    fog_of_war: boolean[];
-    explored: boolean[];
-    visible_objects: VisibleObject[];
-  };
-  cities: City[];
-}
-
-export interface ResourceMine extends VisibleObject {
-  resource_type: keyof Resources;
-  resource_per_turn: number;
-}
-
-export interface VisibleObject {
-  id: string;
-  type: string;
-  position: Position;
-  owner: string | null;
-  resource_type?: string;
-  resource_per_turn?: number;
-}
-
-// Definir un tipo específico para artefactos que aparecen en el mapa
-export interface ArtifactObject extends VisibleObject {
-  name: string;
-  subtype: 'totemDeGuerra' | 'totemVelocidad' | 'totemReclutamiento';
-  effect: Record<string, any>;
+  map: GameMap;
+  cities?: City[]; // Optional cities directly on gameState
 }

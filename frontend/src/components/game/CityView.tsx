@@ -55,7 +55,7 @@ const CityView: React.FC<CityViewProps> = ({
   
   // Comprobar cuántas unidades pueden reclutarse con los recursos disponibles
   const getMaxRecruitableAmount = (unitId: string): number => {
-    const unit = city.availableUnits.find(u => u.unitId === unitId);
+    const unit = city.availableUnits?.find(u => u.unitId === unitId);
     if (!unit || unit.amount <= 0) return 0;
     
     // Obtener el edificio que produce esta unidad
@@ -159,7 +159,7 @@ const CityView: React.FC<CityViewProps> = ({
           </div>
           
           <div className="available-units">
-            {city.availableUnits.map(availableUnit => {
+            {city.availableUnits?.map(availableUnit => {
               const unitId = availableUnit.unitId;
               const maxAmount = getMaxRecruitableAmount(unitId);
               
@@ -213,17 +213,15 @@ const CityView: React.FC<CityViewProps> = ({
                 </div>
               );
             })}
-            
-            {city.availableUnits.length === 0 && (
+
+            {(!city.availableUnits || city.availableUnits.length === 0) && (
               <div className="no-units">No hay unidades disponibles para reclutar</div>
             )}
           </div>
-        </div>
-        
-        <div className="city-garrison">
+
           <h3>Guarnición</h3>
           <div className="garrison-units">
-            {city.garrison.length > 0 ? (
+            {city.garrison && city.garrison.length > 0 ? (
               city.garrison.map((unit: ArmyUnit) => (
                 <div key={`${unit.type}-${unit.count}`} className="garrison-unit">
                   <div className="unit-icon"></div>
@@ -234,7 +232,7 @@ const CityView: React.FC<CityViewProps> = ({
                 </div>
               ))
             ) : (
-              <div className="empty-garrison">La guarnición está vacía</div>
+              <div className="no-units">No hay unidades en la guarnición</div>
             )}
           </div>
         </div>
