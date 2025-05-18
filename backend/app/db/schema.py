@@ -67,6 +67,7 @@ class Artifact(BaseModel):
     name: str
     subtype: str  # 'totemDeGuerra', 'totemVelocidad', 'reclutamiento'
     effect: Dict[str, Any] = {}  # Efectos del artefacto
+    position: Optional[Position] = None  # Position on the map, None for inventory artifacts
 
 class Heroe(BaseModel):
     id: str

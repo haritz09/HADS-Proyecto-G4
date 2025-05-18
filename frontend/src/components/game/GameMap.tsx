@@ -172,41 +172,29 @@ const GameMap: React.FC<GameMapProps> = ({
       : 'unreachable-path';
   };
 
+  // Manejo de click en tile - ahora requiere doble clic para moverse
   const handleTileClick = (position: Position) => {
     if (!selectedHeroId) return;
     
-    const now = Date.now();
-    const isDoubleClick = now - lastClickTime < 300 && 
-      pendingDestination && 
-      pendingDestination.x === position.x && 
-      pendingDestination.y === position.y;
+    const currentTime = new Date().getTime();
+    const timeSinceLastClick = currentTime - lastClickTime;
     
-    setLastClickTime(now);
+    // Umbral de doble clic - 300ms es bastante estándar
+    const doubleClickThreshold = 300; // milisegundos
     
-    if (isDoubleClick && pendingDestination) {
-      // Ejecutar movimiento en segundo click (esto enviará la acción al backend)
+    if (timeSinceLastClick < doubleClickThreshold) {
+      // Es un doble clic, ejecutar la acción de movimiento
+      console.log('Double click detected, initiating movement');
       onTileClick(position);
-      setPendingDestination(null);
-      setPreviewPath([]); // Limpiar el camino al confirmar movimiento
     } else {
-      // Mostrar camino solo cuando se hace clic en una casilla
-      setPendingDestination(position);
-      
-      // CRÍTICO: Obtener la posición actual más precisa para este movimiento
-      const currentPosition = getHeroCurrentPosition(selectedHeroId, true);
-      if (currentPosition) {
-        const tiles2D = convertMapTo2D();
-        // Calcular el camino desde la posición actual
-        const path = findPath(currentPosition, position, tiles2D);
-        
-        // Solo mostrar animación si hay camino
-        if (path.length > 0) {
-          setPreviewPath(path);
-          console.log(`Camino calculado desde (${currentPosition.x}, ${currentPosition.y}) hasta (${position.x}, ${position.y}), ${path.length} pasos`);
-          handleHeroMovement(selectedHeroId, path);
-        }
-      }
+      // Primer clic - mostrar indicación visual si quieres
+      console.log('First click, waiting for potential double click');
+      // Opcionalmente, podrías establecer un estado para mostrar una indicación visual
+      // setPendingDestination(position);
     }
+    
+    // Actualizar el tiempo del último clic para la siguiente verificación
+    setLastClickTime(currentTime);
   };
 
   const getBuildingIcon = (buildingType: string): string => {
@@ -233,24 +221,10 @@ const GameMap: React.FC<GameMapProps> = ({
   };
 
   const handleHeroMovement = (heroId: string, path: Position[]) => {
-    // Para la animación, obtener la posición inicial más reciente
-    let startPosition: Position;
-    
-    // Si ya hay una animación en curso para este héroe, usar su posición actual
-    if (animatingHero && animatingHero.heroId === heroId && animatingHero.currentPosition) {
-      startPosition = { ...animatingHero.currentPosition };
-      console.log(`Continuando movimiento desde posición animada: (${startPosition.x}, ${startPosition.y})`);
-    } else {
-      // Si no hay animación, usar la posición del estado
-      const hero = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => h.id === heroId);
-      if (!hero?.position) return;
-      startPosition = { ...hero.position };
-      console.log(`Iniciando movimiento desde posición de estado: (${startPosition.x}, ${startPosition.y})`);
-    }
-    
-    // Asegurarse de que el camino empiece desde la posición correcta
-    const adjustedPath = [startPosition, ...path.slice(1)];
+    const startPosition = getHeroCurrentPosition(heroId);
+    if (!startPosition || path.length < 2) return;
 
+    // Now animation will only be triggered after backend confirms successful movement
     setAnimatingHero({
       heroId,
       currentPosition: startPosition,
@@ -300,11 +274,18 @@ const GameMap: React.FC<GameMapProps> = ({
       obj.position && obj.position.x === x && obj.position.y === y
     );
     
+    //console.log(`Artefactos encontrados directamente en (${x},${y}):`, artifactsAtPosition);
+    /*console.groupCollapsed(`Artefactos en (${x},${y})`); 
+    console.log(artifactsAtPosition);
+    console.groupEnd();
+    */
+    // Inicio con null para asegurar que siempre devuelvo null o VisibleObject
     let artifact: VisibleObject | null = null;
     
     if (tile?.object_type === 'artifact' && tile?.object_id) {
       const foundArtifact = gameState.map.visible_objects?.find(obj => obj.id === tile.object_id);
       if (foundArtifact) {
+        //console.log("Artefacto encontrado por ID en tile:", foundArtifact);
         artifact = foundArtifact;
       }
     }
@@ -317,6 +298,7 @@ const GameMap: React.FC<GameMapProps> = ({
       });
       
       if (foundArtifact) {
+        //console.log("Artefacto encontrado por posición:", foundArtifact);
         artifact = foundArtifact;
       }
     }
@@ -329,8 +311,13 @@ const GameMap: React.FC<GameMapProps> = ({
       );
       
       if (exactMatch) {
+       // console.log(`✅ Artefacto encontrado por coincidencia exacta de posición (${x},${y}):`, exactMatch);
         return exactMatch;
       }
+    }
+    
+    if (artifact) {
+      //console.log(`✅ Artefacto encontrado en (${x},${y})`, artifact);
     }
     
     return artifact;
@@ -547,10 +534,20 @@ const GameMap: React.FC<GameMapProps> = ({
         const { x, y } = artifact.position;
         const idx = y * gameState.map.size.width + x;
         
+        // Verificar más detalles sobre la posición y el índice
+        //console.log(`Artefacto ${artifact.id} en posición (${x},${y}), índice: ${idx}`);
+        //console.log(`- Tamaño del mapa: ${gameState.map.size.width}x${gameState.map.size.height}`);
+        //console.log(`- Longitud de tiles: ${gameState.map.tiles.length}`);
+        //console.log(`- ¿Índice válido? ${idx >= 0 && idx < gameState.map.tiles.length}`);
+        
         if (idx >= 0 && idx < gameState.map.tiles.length) {
           const tile = gameState.map.tiles[idx];
+          //console.log(`- Tile actual:`, tile);
           
           if (tile.object_type !== 'artifact') {
+            //console.log(`  > Debería actualizar este tile con object_type='artifact' y object_id='${artifact.id}'`);
+            
+            // Intentar una COPIA PROFUNDA del tile para actualizar
             const updatedTile = JSON.parse(JSON.stringify(tile));
             updatedTile.object_type = 'artifact';
             updatedTile.object_id = artifact.id;

@@ -20,6 +20,7 @@ import Button from '../components/ui/Button';
 import RecruitmentMenu from '../components/game/RecruitmentMenu';
 import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
 import { syncArtifactsWithTiles } from '../utils/gameMapUtils';
+import { findPath } from '../services/gameEngine';
 import '../styles/pages/GamePage.css';
 
 const GamePage: React.FC = () => {
@@ -103,30 +104,47 @@ const GamePage: React.FC = () => {
   };
   
   // Manejar movimiento de héroe
-  const handleHeroMovement = (heroId: string, path: Position[]) => {
+  const handleHeroMovement = (heroId: string, path: Position[]): Promise<void> => {
+    if (!path || path.length < 2) return Promise.resolve();
+    
+    // Debug: Log the full path that will be followed
+    console.log('🚶‍♂️ HERO PATH TO FOLLOW:', path.map(pos => `(${pos.x},${pos.y})`).join(' → '));
+    
     setMovingHero({
       heroId,
       path,
       currentStep: 0
     });
 
-    const animateMovement = async () => {
-      for (let i = 0; i < path.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        setGameState(prev => {
-          if (!prev) return prev;
-          const newState = { ...prev };
-          const hero = newState.player.heroes.find(h => h.id === heroId);
-          if (hero) {
-            hero.position = path[i];
-          }
-          return newState;
-        });
-      }
-      setMovingHero(null);
-    };
+    // Return a Promise that resolves when animation completes
+    return new Promise<void>((resolve) => {
+      const animateMovement = async () => {
+        for (let i = 0; i < path.length; i++) {
+          // Debug: Log each animation step
+          console.log(`🚶‍♂️ HERO ANIMATION STEP ${i}/${path.length-1}: Moving to (${path[i].x},${path[i].y})`);
+          
+          await new Promise(stepResolve => setTimeout(stepResolve, 200));
+          setGameState(prev => {
+            if (!prev) return prev;
+            const newState = { ...prev };
+            const hero = newState.player.heroes.find(h => h.id === heroId);
+            if (hero) {
+              console.log(`🚶‍♂️ Updating hero position to (${path[i].x},${path[i].y})`);
+              hero.position = path[i];
+            } else {
+              console.warn(`❌ Hero ${heroId} not found in game state during animation step ${i}`);
+            }
+            return newState;
+          });
+        }
+        console.log('🚶‍♂️ ANIMATION COMPLETE');
+        setMovingHero(null);
+        setGameMessage("Movimiento completado");
+        resolve(); // Resolve the promise when animation is complete
+      };
 
-    animateMovement();
+      animateMovement();
+    });
   };
 
   const handleMoveHero = async (heroId: string, destination: Position) => {
@@ -183,9 +201,9 @@ const GamePage: React.FC = () => {
     
     // Prevent movement if hero has no movement points left
     if (selectedHero.stats.movement_points_left <= 0) {
-        setGameMessage("El héroe no tiene puntos de movimiento.");
-        console.log(`GamePage: Hero ${selectedHero.id} has no movement points left.`);
-        return;
+      setGameMessage("El héroe no tiene puntos de movimiento.");
+      console.log(`GamePage: Hero ${selectedHero.id} has no movement points left.`);
+      return;
     }
 
     console.log(`GamePage: Attempting to move hero ${selectedHero.id} from: (${selectedHero.position.x},${selectedHero.position.y}) to: (${position.x},${position.y})`);
@@ -202,67 +220,140 @@ const GamePage: React.FC = () => {
     };
 
     try {
+      // First, send the action to the backend WITHOUT animating
+      setGameMessage("Calculando movimiento...");
       const response = await gameService.executeAction(gameId, action);
       console.log('GamePage: Backend response from moveHero action:', response.data);      
       
-      // Handle both successful and failed responses
-      if (response.data && !response.data.success) {
-        console.error('GamePage: Hero movement failed:', response.data.error);
-        setGameMessage(response.data.error || "Error al mover el héroe");
-        return;
-      }
-      
-      // Check for artifact collection in the response
-      if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
-        const artifactName = response.data.result.interaction.artifact;
-        console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
-        setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
-        console.log(`GamePage: Hero collected artifact: ${artifactName}`);
-      }
-      
-      if (response.data && response.data.game_state) {
-        const updatedGameState: GameState = response.data.game_state;
-        // Forzar que la posición de todos los héroes sea un objeto plano {x:number, y:number}
-        updatedGameState.player.heroes.forEach(h => {
-          if (typeof h.position.x !== 'number') h.position.x = Number(h.position.x);
-          if (typeof h.position.y !== 'number') h.position.y = Number(h.position.y);
-        });
+      // Check if movement was successful - UPDATED CONDITION
+      if (response.data?.status === 'success') {
+        const result = response.data.result;
         
-        // IMPORTANTE: Actualizar primero el estado global del juego
-        setGameState(updatedGameState); // Update the main game state first
-
-        const movedHero = updatedGameState.player.heroes.find(
-          (h: Hero) => h.id === selectedHero.id
-        );
-
-        if (movedHero) {
-          console.log(`GamePage: Héroe ${movedHero.id} nueva posición: (${movedHero.position.x},${movedHero.position.y})`);
+        // Only now animate the movement if we have a valid path or new position
+        if (result && result.new_position) {
+          // Create a complete path with intermediate steps
+          const startPosition = { ...selectedHero.position };
+          const endPosition = { x: result.new_position.x, y: result.new_position.y };
+      
           
-          // CRÍTICO: Verificar que la posición se ha actualizado correctamente
-          // Forzar la actualización de la posición del héroe si no coincide con la destino
-          if (movedHero.position.x !== position.x || movedHero.position.y !== position.y) {
-            console.warn(`GamePage: ¡Corrigiendo posición del héroe! Destino real: (${position.x},${position.y})`);
-            // Forzar la actualización de la posición del héroe al destino exacto
-            movedHero.position.x = position.x;
-            movedHero.position.y = position.y;
+          // Convert map to 2D for pathfinding
+          const map2D = convertMapTo2D(gameState.map);
+          
+          // Generate full path with all intermediate positions
+          const fullPath = findPath(startPosition, endPosition, map2D);
+    
+          
+          // Use the full path or fallback to direct path if pathfinding fails
+          const pathToUse = fullPath.length > 0 ? fullPath : [startPosition, endPosition];
+          
+          setGameMessage(`Héroe en movimiento...`);
+          
+          // Animate the movement with the complete path and WAIT for it to finish
+          // before updating the game state
+          handleHeroMovement(selectedHero.id, pathToUse).then(() => {
+  
             
-            // Re-aplicar el estado con la posición corregida
-            setGameState({...updatedGameState});
-          }
-          
-          // IMPORTANTE: Actualizar el héroe seleccionado con todos los datos nuevos
-          setSelectedHero(movedHero);
-          
-          // IMPORTANTE: Forzar una verificación inmediata de proximidad al castillo
-          checkHeroProximityToCastle(movedHero, updatedGameState);
-        } else {
-          console.error('GamePage: Moved hero not found in updated game state from backend. This is unexpected.');
-          // Fallback: refresh selectedHero from the potentially unchanged gameState if hero not found in updated one
-           const currentHeroInOldState = gameState.player.heroes.find(h => h.id === selectedHero.id);
-           if (currentHeroInOldState) setSelectedHero(currentHeroInOldState);
+            // After animation completes (or immediately if no animation), update the game state
+            if (response.data && response.data.game_state) {
+              const updatedGameState: GameState = response.data.game_state;
+              // Forzar que la posición de todos los héroes sea un objeto plano {x:number, y:number}
+              updatedGameState.player.heroes.forEach(h => {
+                if (typeof h.position.x !== 'number') h.position.x = Number(h.position.x);
+                if (typeof h.position.y !== 'number') h.position.y = Number(h.position.y);
+              });
+              
+              // Update game state after animation completes
+              setGameState(updatedGameState);
+              
+              const movedHero = updatedGameState.player.heroes.find(
+                (h: Hero) => h.id === selectedHero.id
+              );
+
+              if (movedHero) {
+                
+                // Verify position was updated correctly
+                if (movedHero.position.x !== position.x || movedHero.position.y !== position.y) {
+                  console.warn(`GamePage: Position mismatch detected. Forcing hero position to match target: (${position.x},${position.y})`);
+                  // Force hero position update
+                  movedHero.position.x = position.x;
+                  movedHero.position.y = position.y;
+                  
+                  // Update game state with corrected position
+                  setGameState({...updatedGameState});
+                }
+                
+                setSelectedHero(movedHero); // IMPORTANT: Update selectedHero with the new data
+                
+                // Special handling for castle position (48,48)
+                if (movedHero.position.x === 48 && movedHero.position.y === 48) {
+                  console.log('GamePage: ¡HÉROE EN POSICIÓN DEL CASTILLO CENTRAL (48,48)!');
+                  
+                  // Find all buildings at position (48,48)
+                  const buildingsAt4848 = updatedGameState.player.cities
+                    .flatMap(city => city.buildings)
+                    .filter(b => b.position.x === 48 && b.position.y === 48);
+                    
+                  
+                  const castleBuilding = updatedGameState.player.cities
+                    .flatMap(city => city.buildings)
+                    .find(b => b.is_castle && b.position.x === 48 && b.position.y === 48);
+                  
+                  // If there's a defined castle, use it
+                  if (castleBuilding) {
+                    console.log('GamePage: Castle building found, opening ConstructionMenu.');
+                    setGameMessage('¡Has llegado al castillo central!');
+                    setActiveBuilding(castleBuilding);
+                    setShowConstructionMenu(true);
+                  } 
+                  // If no castle but other buildings at (48,48), use the first one
+                  else if (buildingsAt4848.length > 0) {
+                    const anyBuilding = buildingsAt4848[0];
+                    console.log('GamePage: Using alternative building at (48,48):', anyBuilding);
+                    // Force building as castle to open construction menu
+                    anyBuilding.is_castle = true;
+                    setActiveBuilding(anyBuilding);
+                    setShowConstructionMenu(true);
+                    setGameMessage('¡Has llegado al castillo central!');
+                  } 
+                  // If no buildings at (48,48), create a temporary one to show menu
+                  else {
+                    console.log('GamePage: No buildings found at (48,48), creating a temporary one');
+                    const temporaryCastle = {
+                      id: "temp_castle",
+                      name: "Castillo Central",
+                      position: { x: 48, y: 48 },
+                      is_castle: true,
+                      can_recruit: false,
+                      built: true,
+                      cost: { gold: 0, wood: 0, stone: 0 },
+                      has_tavern: false,
+                      building_type: 'castle',
+                      requirements: [],
+                      available_creatures: [],
+                      owner: "player"
+                    } as Building;
+                    setActiveBuilding(temporaryCastle);
+                    setShowConstructionMenu(true);
+                    setGameMessage('¡Has llegado al castillo central!');
+                  }
+                }
+              } else {
+                console.error('GamePage: Moved hero not found in updated game state from backend. This is unexpected.');
+                const currentHeroInOldState = gameState.player.heroes.find(h => h.id === selectedHero.id);
+                if (currentHeroInOldState) setSelectedHero(currentHeroInOldState);
+              }
+            }
+          });
+        }
+        
+        // Check for artifact collection in the response
+        if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
+          const artifactName = response.data.result.interaction.artifact;
+          console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
+          setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
         }
       } else {
-        console.error('GamePage: Failed to move hero or game_state missing in response:', response.data?.error || 'Unknown error');
+        console.error('GamePage: Failed to move hero:', response.data?.error || 'Unknown error');
         setGameMessage(response.data?.error || "Error al mover el héroe");
         
         // Keep existing check for artifact collection in the error case
@@ -273,40 +364,8 @@ const GamePage: React.FC = () => {
       }
     } catch (err: any) {
       console.error("GamePage: Exception during hero movement:", err);
-      // Mostrar mensaje de error más descriptivo
-      if (err.response && err.response.status === 500) {
-        setGameMessage("Error del servidor al mover el héroe. Inténtalo de nuevo.");
-      } else {
-        setGameMessage(err.message || "Error crítico al mover el héroe");
-      }
+      setGameMessage("Error crítico al mover el héroe");
     }
-  };
-
-  // Añadir una nueva función para verificar proximidad al castillo
-  const checkHeroProximityToCastle = (hero: Hero, state: GameState) => {
-    // Buscar todos los castillos en el mapa
-    const castles = state.player.cities
-      .flatMap(city => city.buildings)
-      .filter(b => b.is_castle || (b.position.x === 48 && b.position.y === 48));
-    
-    castles.forEach(castle => {
-      // Calcular distancia
-      const calculateDistance = (pos1: Position, pos2: Position): number => {
-        return Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
-      };
-      
-      const distance = calculateDistance(hero.position, castle.position);
-      const isNearCastle = distance <= 2;
-      
-      console.log(`GamePage: Verificación de proximidad - Héroe en (${hero.position.x}, ${hero.position.y}), ` +
-                 `Castillo en (${castle.position.x}, ${castle.position.y}), ` + 
-                 `Distancia = ${distance.toFixed(2)}, Está cerca = ${isNearCastle}`);
-      
-      // Si el héroe está cerca del castillo central, abrir el menú de construcción automáticamente
-      if (isNearCastle && castle.position.x === 48 && castle.position.y === 48) {
-        console.log('GamePage: ¡HÉROE CERCA DEL CASTILLO CENTRAL! Distancia:', distance);
-      }
-    });
   };
 
   // Manejar click en un héroe
@@ -474,7 +533,7 @@ const GamePage: React.FC = () => {
                 
     if (isCastleBuilding) {
       console.log('GamePage: Castle detected in handleHeroInBuilding, opening construction menu');
-      // Asegurar que se trata como castillo para la interfaz de usuario
+      // Asegurar que se trate como castillo para la interfaz de usuario
       if (!building.is_castle && building.position.x === 48 && building.position.y === 48) {
         building.is_castle = true;
         console.log('GamePage: Forced building at (48,48) to be recognized as a castle');
@@ -726,6 +785,26 @@ const GamePage: React.FC = () => {
     }
   };
   
+  // Helper function to convert the flat map to 2D format needed by findPath
+  const convertMapTo2D = (gameMap: any) => {
+    const mapWidth = gameMap.size.width;
+    const mapHeight = gameMap.size.height;
+    const tiles2D: any[][] = [];
+    
+    for (let y = 0; y < mapHeight; y++) {
+      const row: any[] = [];
+      for (let x = 0; x < mapWidth; x++) {
+        const index = y * mapWidth + x;
+        if (index < gameMap.tiles.length) {
+          row.push(gameMap.tiles[index]);
+        }
+      }
+      tiles2D.push(row);
+    }
+    
+    return tiles2D;
+  };
+
   if (loading) {
     return <div className="loading-screen">Cargando partida...</div>;
   }

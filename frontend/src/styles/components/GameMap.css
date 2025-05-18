@@ -96,10 +96,11 @@
   z-index: 5;
 }
 
-/* Resaltado para el camino seleccionado (ahora todo en rojo) */
+/* Resaltado para el camino seleccionado (ahora todo en rojo) con z-index adecuado */
 .reachable-path {
   box-shadow: inset 0 0 0 3px rgba(255, 0, 0, 0.7);
   animation: redPulse 1.5s infinite;
+  z-index: 5;
 }
 
 /* Ya no necesitamos diferente color para unreachable-path */
@@ -115,7 +116,7 @@
   z-index: 6;
 }
 
-/* Indicador visual del camino */
+/* Indicador visual del camino más claro */
 .path-indicator {
   position: absolute;
   width: 10px;
@@ -125,11 +126,30 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  z-index: 8;
 }
 
 /* Estilos para casillas con héroes moviéndose */
 .hero-moving {
   transition: all 0.3s ease-in-out;
+}
+
+/* Mejorar animación para movimiento de héroes */
+@keyframes heroMove {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hero-sprite.moving {
+  animation: heroMove 0.2s ease-in-out;
+  z-index: 25; /* Ensure moving heroes appear above other elements */
 }
 
 /* Resaltado para héroe seleccionado */
