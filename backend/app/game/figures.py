@@ -107,15 +107,45 @@ def render_special_on_map(position: Position, special_type: str, game_map: GameM
 
 def render_artifact_on_map(artifact, game_map):
     """Coloca la figura del artefacto en la posición actual en el mapa (modifica el objeto game_map.tiles)."""
-    idx = artifact.position.y * game_map.size.width + artifact.position.x
-    if game_map.tiles and 0 <= idx < len(game_map.tiles):
-        tile = game_map.tiles[idx]
-        tile.object_type = 'artifact'
-        tile.object_id = artifact.id
+    if not hasattr(artifact, 'position') or not hasattr(game_map, 'tiles'):
+        print(f"DEBUG: Cannot render artifact - missing position or tiles")
+        return
+    
+    try:
+        idx = artifact.position.y * game_map.size.width + artifact.position.x
+        if 0 <= idx < len(game_map.tiles):
+            tile = game_map.tiles[idx]
+            tile.object_type = 'artifact'
+            tile.object_id = getattr(artifact, 'id', f"artifact_{artifact.position.x}_{artifact.position.y}")
+            print(f"DEBUG: Artifact rendered at ({artifact.position.x}, {artifact.position.y})")
+    except Exception as e:
+        print(f"ERROR in render_artifact_on_map: {str(e)}")
 
 def clear_artifact_from_map(artifact, game_map):
     """Elimina la figura del artefacto de su posición en el mapa."""
-    for tile in game_map.tiles or []:
-        if getattr(tile, 'object_type', None) == 'artifact' and getattr(tile, 'object_id', None) == artifact.id:
-            tile.object_type = None
-            tile.object_id = None
+    if not hasattr(artifact, 'position') or not hasattr(game_map, 'tiles'):
+        print(f"DEBUG: Cannot clear artifact - missing position or tiles")
+        return
+    
+    try:
+        # Método 1: Buscar por posición (más confiable)
+        idx = artifact.position.y * game_map.size.width + artifact.position.x
+        if 0 <= idx < len(game_map.tiles):
+            tile = game_map.tiles[idx]
+            if tile.object_type == 'artifact' and (tile.object_id == getattr(artifact, 'id', None) or not tile.object_id):
+                tile.object_type = None
+                tile.object_id = None
+                print(f"DEBUG: Cleared artifact at ({artifact.position.x}, {artifact.position.y})")
+                return
+                
+        # Método 2: Buscar por ID (por si la posición cambió)
+        artifact_id = getattr(artifact, 'id', None)
+        if artifact_id:
+            for tile in game_map.tiles:
+                if getattr(tile, 'object_type', None) == 'artifact' and getattr(tile, 'object_id', None) == artifact_id:
+                    tile.object_type = None
+                    tile.object_id = None
+                    print(f"DEBUG: Cleared artifact with ID {artifact_id} from map")
+                    return
+    except Exception as e:
+        print(f"ERROR in clear_artifact_from_map: {str(e)}")

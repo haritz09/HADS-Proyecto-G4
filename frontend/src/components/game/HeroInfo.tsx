@@ -103,11 +103,18 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
         )}
       </div>
       
+      {/* Debug artifacts outside of JSX hierarchy */}
+      {(() => { 
+        console.log("HeroInfo: Debugging hero artifacts:", hero.artifacts);
+        return null; 
+      })()}
+
       <h3>Artefactos</h3>
       <div className="hero-artifacts">
-        {hero.artifacts.length > 0 ? (
+        {hero.artifacts && hero.artifacts.length > 0 ? (
           hero.artifacts.map(artifact => {
             console.log(`HeroInfo: Rendering artifact:`, artifact);
+            console.log(`HeroInfo: Artifact properties - id: ${artifact.id}, name: ${artifact.name}, subtype: ${artifact.subtype}`);
             return (
               <div key={artifact.id} className="hero-artifact">
                 <div className={`artifact-icon artifact-${artifact.subtype}`}>
@@ -121,7 +128,9 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
             );
           })
         ) : (
-          <div className="empty-artifacts">No hay artefactos equipados</div>
+          <div className="empty-artifacts">
+            No hay artefactos equipados
+          </div>
         )}
       </div>
     </div>

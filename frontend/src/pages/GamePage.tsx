@@ -387,10 +387,37 @@ const GamePage: React.FC = () => {
         }
         
         // Check for artifact collection in the response
-        if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
-          const artifactName = response.data.result.interaction.artifact;
-          console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
-          setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
+        if (response.data) {
+          console.log("GamePage: Complete response data:", JSON.stringify(response.data, null, 2));
+          console.log("GamePage: response.data.result =", response.data.result);
+          console.log("GamePage: response.data.result?.interaction =", response.data.result?.interaction);
+          
+          // Revisar si la estructura de respuesta tiene interaction
+          if (response.data?.result?.interaction === 'artifact_collected') {
+            const artifactName = response.data.result.artifact;
+            console.log(`GamePage: ✅ ARTIFACT COLLECTED! Name: ${artifactName}`);
+            setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
+            
+            // Debug the hero's artifacts to confirm the update
+            if (response.data.game_state && response.data.game_state.player && response.data.game_state.player.heroes) {
+              const heroWithArtifact = response.data.game_state.player.heroes.find(
+                (h: any) => h.id === selectedHero.id
+              );
+              
+              if (heroWithArtifact) {
+                console.log("GamePage: Hero artifacts after collection:", heroWithArtifact.artifacts);
+              }
+            }
+            
+            // Actualizar el estado para reflejar inmediatamente el artefacto recogido
+            if (response.data.game_state) {
+              console.log("GamePage: Updating game state after artifact collection");
+              const updatedGameState = syncArtifactsWithTiles(response.data.game_state);
+              setGameState(updatedGameState);
+            }
+          } else if (response.data?.result?.interaction) {
+            console.log(`GamePage: Got interaction "${response.data.result.interaction}" but not artifact_collected`);
+          }
         }
 
         // Check for mine capture in the response

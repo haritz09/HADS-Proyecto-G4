@@ -47,8 +47,6 @@ export const calculatePathCost = (path: Position[], map: MapTile[][]): number =>
 
 // Encuentra un camino usando el algoritmo A*
 export const findPath = (start: Position, target: Position, map: MapTile[][]): Position[] => {
-  console.log(`[PathFinding] START: Buscando camino desde (${start.x},${start.y}) hasta (${target.x},${target.y})`);
-  console.log(`[PathFinding] Mapa recibido: ${map ? 'Sí' : 'No'}, Dimensiones: ${map ? map.length + 'x' + (map[0] ? map[0].length : 0) : 'N/A'}`);
   
   if (!map || !map.length || !map[0].length) {
     console.error(`[PathFinding] ERROR: Mapa inválido o vacío`);
@@ -58,7 +56,6 @@ export const findPath = (start: Position, target: Position, map: MapTile[][]): P
   const rows = map.length;
   const cols = map[0].length;
   
-  console.log(`[PathFinding] Dimensiones del mapa: ${rows}x${cols}`);
   
   // Verificar límites del mapa
   if (target.x < 0 || target.x >= cols || target.y < 0 || target.y >= rows) {
