@@ -412,6 +412,93 @@ def get_artifact_effect(artifact_type):
     }
     return effects.get(artifact_type, {})
 
+def determine_terrain_type(x: int, y: int) -> str:
+    """
+    Determina el tipo de terreno para una posición específica usando un algoritmo
+    de generación procedural basado en ruido.
+    
+    Args:
+        x: Coordenada X de la posición
+        y: Coordenada Y de la posición
+    
+    Returns:
+        String con el tipo de terreno: 'grass', 'forest', 'mountain', 'water', 'desert', o 'snow'
+    """
+    # Usamos una función de ruido simple basada en seno para crear patrones naturales
+    # Ajustamos las frecuencias para obtener diferentes escalas de variación
+    noise1 = math.sin(x * 0.1) * math.cos(y * 0.1)
+    noise2 = math.sin(x * 0.05 + y * 0.05) * math.cos(x * 0.03 - y * 0.03)
+    noise3 = math.sin(x * 0.02 - y * 0.03) * math.sin(y * 0.01)
+    
+    # Combinamos los diferentes niveles de ruido
+    combined_noise = (noise1 + noise2 + noise3) / 3
+    
+    # Normalizamos el ruido a un valor entre 0 y 1
+    normalized_noise = (combined_noise + 1) / 2
+    
+    # Añadimos un poco de aleatoriedad para romper patrones muy evidentes
+    random_factor = random.random() * 0.2
+    final_value = normalized_noise * 0.8 + random_factor
+    
+    # Determinamos el tipo de terreno basado en el valor final
+    if final_value < 0.55:
+        # Planicie - el terreno más común
+        terrain = 'grass'
+        passable = True
+    elif final_value < 0.70:
+        # Bosques - común
+        terrain = 'forest'
+        passable = True
+    elif final_value < 0.80:
+        # Montañas - menos común, ralentiza el movimiento
+        terrain = 'mountain'
+        passable = True  # Pasable pero con mayor costo
+    elif final_value < 0.9:
+        # Agua - barrera natural
+        terrain = 'water'
+        passable = False  # Impassable para unidades normales
+    elif final_value < 0.95:
+        # Desierto - área diferente
+        terrain = 'desert'
+        passable = True
+    else:
+        # Nieve - raro, área especial
+        terrain = 'snow'
+        passable = True
+    
+    return terrain, passable
+
+def generate_map_tiles(width: int, height: int) -> list:
+    """
+    Genera un array de MapTile para un mapa de las dimensiones especificadas.
+    
+    Args:
+        width: Ancho del mapa
+        height: Alto del mapa
+    
+    Returns:
+        Array de MapTile representando el terreno del mapa
+    """
+    tiles = []
+    
+    # Generar tiles para cada posición en el mapa
+    for y in range(height):
+        for x in range(width):
+            terrain, passable = determine_terrain_type(x, y)
+            
+            # Crear MapTile según la estructura definida
+            tile = {
+                "terrain": terrain,
+                "passable": passable,
+                "object_id": None,
+                "object_type": None
+            }
+            
+            tiles.append(tile)
+    
+    print(f"Generated map with {len(tiles)} tiles ({width}x{height})")
+    return tiles
+
 def initialize_game_state():
     """Inicializa el estado del juego."""
     # Generar héroes iniciales
@@ -455,6 +542,9 @@ def initialize_game_state():
                 if 0 <= idx < total_tiles:  # Asegurar índice válido
                     fog_of_war[idx] = False
     
+    # Generar los tiles del mapa
+    map_tiles = generate_map_tiles(map_size, map_size)
+    
     # Crear estado de juego completo
     return {
         "turn": 1,
@@ -471,7 +561,7 @@ def initialize_game_state():
         },
         "map": {
             "size": {"width": map_size, "height": map_size},
-            "tiles": [],  # Se poblará después
+            "tiles": map_tiles,  # Aquí incluimos los tiles generados
             "fog_of_war": fog_of_war,
             "explored": [],  # Se poblará después
             "visible_objects": resource_mines + artifacts  # Combinar minas y artefactos

@@ -185,7 +185,7 @@ const GameMap: React.FC<GameMapProps> = ({
     const timeSinceLastClick = currentTime - lastClickTime;
     
     // Umbral de doble clic - 300ms es bastante estándar
-    const doubleClickThreshold = 300; // milisegundos
+    const doubleClickThreshold = 600; // milisegundos
     
     if (timeSinceLastClick < doubleClickThreshold) {
       // Es un doble clic, ejecutar la acción de movimiento
@@ -758,7 +758,6 @@ const GameMap: React.FC<GameMapProps> = ({
              ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
           ) || [];
           
-          console.log(`GameMap: Rendering ${minesToRender.length} mines in map`);
           return null;
         })()}
         
@@ -768,7 +767,6 @@ const GameMap: React.FC<GameMapProps> = ({
           (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
            ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
         ).map(mine => {
-          console.log(`GameMap: Rendering mine: type=${mine.type}, position=(${mine.position.x}, ${mine.position.y})`);
           return renderMine(mine);
         })}
       </div>

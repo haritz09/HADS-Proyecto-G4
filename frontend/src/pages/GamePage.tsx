@@ -280,6 +280,10 @@ const GamePage: React.FC = () => {
           // Use the full path or fallback to direct path if pathfinding fails
           const pathToUse = fullPath.length > 0 ? fullPath : [startPosition, endPosition];
           
+          // Debug: Mostrar el path completo para verificar el cálculo correcto del camino
+          console.log(`🛣️ PATH COMPLETO CALCULADO (${fullPath.length} pasos):`, 
+            fullPath.map(pos => `(${pos.x},${pos.y})`).join(' → '));
+          
           setGameMessage(`Héroe en movimiento...`);
           
           // Animate the movement with the complete path and WAIT for it to finish
@@ -897,18 +901,54 @@ const GamePage: React.FC = () => {
   const convertMapTo2D = (gameMap: any) => {
     const mapWidth = gameMap.size.width;
     const mapHeight = gameMap.size.height;
+    
+    // Verificación y logging extensivo para depuración
+    console.log(`[MapConversion] Convirtiendo mapa de ${mapWidth}x${mapHeight} con ${gameMap.tiles.length} tiles`);
+    
+    // Validar que las dimensiones sean correctas
+    if (!mapWidth || !mapHeight || mapWidth <= 0 || mapHeight <= 0) {
+      console.error(`[MapConversion] ERROR: Dimensiones de mapa inválidas: ${mapWidth}x${mapHeight}`);
+      return []; // Devolver un array vacío para evitar errores posteriores
+    }
+    
+    // Verificar que tiles sea un array válido
+    if (!Array.isArray(gameMap.tiles) || gameMap.tiles.length === 0) {
+      console.error(`[MapConversion] ERROR: No hay tiles en el mapa`);
+      return [];
+    }
+    
     const tiles2D: any[][] = [];
-    // Helper function to convert the flat map to 2D format needed by findPath
+    
+    // Generar el mapa 2D fila por fila
     for (let y = 0; y < mapHeight; y++) {
       const row: any[] = [];
+      
       for (let x = 0; x < mapWidth; x++) {
         const index = y * mapWidth + x;
+        
+        // Verificar si estamos dentro de los límites del array de tiles
         if (index < gameMap.tiles.length) {
-          row.push(gameMap.tiles[index]);
+          // Añadir el tile a la fila actual
+          const tile = gameMap.tiles[index];
+          row.push(tile);
+        } else {
+          // Si el índice está fuera de límites, añadir un tile "default" para evitar filas vacías
+          // Este es un caso que no debería ocurrir con datos correctos
+          console.warn(`[MapConversion] ADVERTENCIA: Índice fuera de límites ${index} para tile en (${x},${y})`);
+          row.push({ terrain: 'grass', passable: true });
         }
       }
-      tiles2D.push(row);
+      
+      // Solo añadir la fila si tiene elementos (para evitar filas vacías)
+      if (row.length > 0) {
+        tiles2D.push(row);
+      } else {
+        console.warn(`[MapConversion] ADVERTENCIA: La fila ${y} está vacía`);
+      }
     }
+    
+    // Verificación final de la matriz generada
+    console.log(`[MapConversion] Matriz generada: ${tiles2D.length} filas x ${tiles2D[0]?.length || 0} columnas`);
     
     return tiles2D;
   };
