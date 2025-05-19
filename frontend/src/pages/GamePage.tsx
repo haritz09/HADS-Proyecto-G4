@@ -78,7 +78,6 @@ const GamePage: React.FC = () => {
       try {
         console.log("Loading game with ID:", gameId);
         const response = await gameService.loadGame(gameId);
-        console.log("Loaded game data:", response.data);
         
         // Asegurarse de que el estado del juego tiene la estructura correcta
         if (!response.data.game_state?.map) {
@@ -388,9 +387,6 @@ const GamePage: React.FC = () => {
         
         // Check for artifact collection in the response
         if (response.data) {
-          console.log("GamePage: Complete response data:", JSON.stringify(response.data, null, 2));
-          console.log("GamePage: response.data.result =", response.data.result);
-          console.log("GamePage: response.data.result?.interaction =", response.data.result?.interaction);
           
           // Revisar si la estructura de respuesta tiene interaction
           if (response.data?.result?.interaction === 'artifact_collected') {

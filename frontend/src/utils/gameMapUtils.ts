@@ -17,7 +17,6 @@ export const syncArtifactsWithTiles = (gameState: GameState): GameState => {
     (obj && typeof obj === 'object' && 'subtype' in obj && typeof obj.subtype === 'string')
   );
   
-  console.log(`DEBUG syncArtifactsWithTiles: Encontrados ${artifacts.length} artefactos para sincronizar`);
   
   // Crear copias de los tiles para no modificar directamente el estado
   const updatedTiles = [...gameState.map.tiles];
@@ -35,7 +34,6 @@ export const syncArtifactsWithTiles = (gameState: GameState): GameState => {
           object_type: 'artifact',
           object_id: artifact.id
         };
-        console.log(`DEBUG syncArtifactsWithTiles: Marcado tile (${x},${y}) como artefacto con id ${artifact.id}`);
       }
     }
   });
@@ -63,14 +61,7 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
   const updatedGameState = { ...gameState };
   const mapWidth = gameState.map.size.width;
   
-  // Log complete list of visible_objects for debugging
-  console.log("DEBUG syncMinesWithTiles [2]: All visible objects:", gameState.map.visible_objects.map(obj => ({
-    id: obj.id,
-    type: obj.type,
-    resource_type: 'resource_type' in obj ? obj.resource_type : undefined,
-    position: obj.position,
-    owner: obj.owner
-  })));
+
   
   // CRÍTICO: Restaurar los tipos faltantes si solo tienen resource_type
   let mineRestorationCount = 0;
@@ -83,12 +74,11 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
       };
       obj.type = resourceMapping[obj.resource_type as keyof typeof resourceMapping] || 'mine';
       mineRestorationCount++;
-      console.log(`DEBUG syncMinesWithTiles [3]: Restaurando tipo '${obj.type}' para mina con resource_type ${obj.resource_type} at position:`, obj.position);
     }
   });
   
   if (mineRestorationCount > 0) {
-    console.log(`DEBUG syncMinesWithTiles [4]: Restored type for ${mineRestorationCount} mines that were missing type`);
+    console.log(`DEBUG syncMinesWithTiles [2]: Restored ${mineRestorationCount} mine types`);
   }
   
   // Identificar minas en visible_objects con mucho detalle en el criterio de filtrado
@@ -100,7 +90,6 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
     return isMineByType || isMineByResourceType;
   });
   
-  console.log(`DEBUG syncMinesWithTiles [5]: Found ${mines.length} mines after filtering`);
   
   // Crear copias de los tiles para no modificar directamente el estado
   const updatedTiles = [...gameState.map.tiles];
@@ -118,7 +107,6 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
           object_type: 'mine',
           object_id: mine.id
         };
-        console.log(`DEBUG syncMinesWithTiles [6]: Marcado tile (${x},${y}) como mina con id ${mine.id}`);
       }
     }
   });
