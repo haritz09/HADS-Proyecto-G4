@@ -738,3 +738,30 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Error procesando acciones de IA: {str(e)}")
+
+@router.post("/initialize", response_model=GameRead, status_code=201)
+async def initialize_new_game(
+    scenario_id: str = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Inicializa una nueva partida con nuestro estado personalizado."""
+    # Obtener el user_id del usuario autenticado
+    user_id = str(current_user["_id"])
+    
+    # Importar nuestra función de inicialización
+    from backend.app.game.gameInitializer import initialize_game_state
+    
+    # Crear datos de la partida con nuestro estado personalizado
+    game_data = {
+        "user_id": user_id,
+        "name": f"Nueva partida - {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')}",
+        "scenario_id": scenario_id,
+        "created_at": datetime.now(UTC),
+        "last_saved": datetime.now(UTC),
+        "is_autosave": False,
+        "cheats_used": [],
+        "game_state": initialize_game_state()  # ¡Usar nuestra función personalizada!
+    }
+    
+    # Crear la partida usando el CRUD existente
+    return create_game(game_data)

@@ -844,6 +844,16 @@ export const gameService = {
       throw err;
     }
   },
+
+  initializeGame: async (scenarioId: string) => {
+    try {
+      const response = await API.post(`/games/initialize?scenario_id=${scenarioId}`);
+      return response;
+    } catch (error) {
+      console.error("Error initializing game:", error);
+      throw error;
+    }
+  },
 };
 
 export default API;

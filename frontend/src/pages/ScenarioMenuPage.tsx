@@ -57,8 +57,9 @@ const ScenarioMenuPage: React.FC = () => {
       const defaultScenario = scenarios[0]._id;
       console.log("Creando nueva partida con escenario:", defaultScenario);
 
-      const response = await gameService.createGame(defaultScenario);
-      console.log("Respuesta de createGame:", response);
+      // Usar nuestro nuevo método que inicializa en el backend
+      const response = await gameService.initializeGame(defaultScenario);
+      console.log("Respuesta de initializeGame:", response);
 
       if (response.data && response.data._id) {
         console.log("Redirigiendo a /game con ID:", response.data._id);

@@ -1,3 +1,6 @@
+import random
+import math
+
 def initialize_city(position: dict, owner=None):
     """Inicializa una ciudad en la posición dada."""
     # Ensure position coordinates are integers
@@ -77,25 +80,72 @@ def get_initial_creatures(building_type: str) -> list:
         ]
     return []
 
+def generate_initial_heroes():
+    """Genera héroes iniciales para jugador y IA con ejército básico."""
+    player_hero = {
+        "id": "player_hero_1",
+        "name": "Caballero Roland",
+        "position": {"x": 21, "y": 20},  # Adyacente al castillo del jugador (20,20)
+        "stats": {
+            "attack": 4,
+            "defense": 3,
+            "speed": 3,
+            "power": 2,
+            "knowledge": 2,
+            "movement_points": 20,
+            "movement_points_left": 20
+        },
+        "army": [
+            {"type": "Milicia", "count": 15, "stats": {"attack": 3, "defense": 2, "speed": 3, "movement_points": 5, "movement_points_left": 5}},
+            {"type": "Arquero", "count": 8, "stats": {"attack": 4, "defense": 2, "speed": 4, "movement_points": 6, "movement_points_left": 6}}
+        ],
+        "artifacts": []
+    }
+    
+    ai_hero = {
+        "id": "ai_hero_1",
+        "name": "Señor Oscuro Vokial",
+        "position": {"x": 81, "y": 80},  # Adyacente al castillo de la IA (80,80)
+        "stats": {
+            "attack": 3,
+            "defense": 4,
+            "speed": 3,
+            "power": 3,
+            "knowledge": 2,
+            "movement_points": 20,
+            "movement_points_left": 20
+        },
+        "army": [
+            {"type": "Esqueleto", "count": 12, "stats": {"attack": 2, "defense": 3, "speed": 2, "movement_points": 4, "movement_points_left": 4}},
+            {"type": "Zombie", "count": 10, "stats": {"attack": 3, "defense": 3, "speed": 2, "movement_points": 3, "movement_points_left": 3}}
+        ],
+        "artifacts": []
+    }
+    
+    return player_hero, ai_hero
+
 def initialize_game_cities():
     """Initialize all cities with properly configured buildings."""
     cities = []
     
-    # Central city with castle
-    central_city = initialize_city({"x": 48, "y": 48}, owner=None)
+    # Central city with castle - Relocated to strategic position
+    player_castle_pos = {"x": 20, "y": 20}  # Posición estratégica con buen acceso a recursos
+    central_city = initialize_city(player_castle_pos, owner="player")
     central_city["id"] = "central_city"  # Ensure consistent ID
     cities.append(central_city)
     
-    # Barracks city
-    barracks_city = initialize_city({"x": 50, "y": 50}, owner=None)
+    # Repositioned buildings in strategic locations
+    
+    # Barracks city - closer to player castle
+    barracks_pos = {"x": 22, "y": 22}  # Cerca del castillo del jugador
+    barracks_city = initialize_city(barracks_pos, owner=None)
     barracks_city["id"] = "barracks_city"
-    # Replace default castle with barracks building
     barracks_city["buildings"] = [
         {
             "id": "barracks",
             "name": "Cuartel",
-            "position": {"x": 50, "y": 50},
-            "building_type": "barracks",  # Make sure building_type is set
+            "position": barracks_pos,
+            "building_type": "barracks",
             "is_castle": False,
             "built": False,
             "owner": None,
@@ -107,16 +157,16 @@ def initialize_game_cities():
     ]
     cities.append(barracks_city)
     
-    # Add other cities with specific building types
-    # Archery city
-    archery_city = initialize_city({"x": 52, "y": 52}, owner=None)
+    # Archery city - Strategic position near forest
+    archery_pos = {"x": 25, "y": 30}
+    archery_city = initialize_city(archery_pos, owner=None)
     archery_city["id"] = "archery_city"
     archery_city["buildings"] = [
         {
             "id": "archery",
             "name": "Campo de Tiro",
-            "position": {"x": 52, "y": 52},
-            "building_type": "archery",  # Make sure building_type is set
+            "position": archery_pos,
+            "building_type": "archery",
             "is_castle": False,
             "built": False,
             "owner": None,
@@ -128,15 +178,15 @@ def initialize_game_cities():
     ]
     cities.append(archery_city)
     
-    # Repeat for other building types
-    # Knights city
-    knights_city = initialize_city({"x": 55, "y": 55}, owner=None)
+    # Knights city - position near plains
+    knights_pos = {"x": 35, "y": 25}
+    knights_city = initialize_city(knights_pos, owner=None)
     knights_city["id"] = "knights_city"
     knights_city["buildings"] = [
         {
             "id": "knights_tower",
             "name": "Torre de Caballeros",
-            "position": {"x": 55, "y": 55},
+            "position": knights_pos,
             "building_type": "knights_tower",
             "is_castle": False,
             "built": False,
@@ -149,14 +199,15 @@ def initialize_game_cities():
     ]
     cities.append(knights_city)
     
-    # Mage city
-    mage_city = initialize_city({"x": 70, "y": 58}, owner=None)
+    # Mage city - near magical ley lines
+    mage_pos = {"x": 40, "y": 40}
+    mage_city = initialize_city(mage_pos, owner=None)
     mage_city["id"] = "mage_city"
     mage_city["buildings"] = [
         {
             "id": "mage_tower",
             "name": "Torre de Magos",
-            "position": {"x": 70, "y": 58},
+            "position": mage_pos,
             "building_type": "mage_tower",
             "is_castle": False,
             "built": False,
@@ -169,14 +220,15 @@ def initialize_game_cities():
     ]
     cities.append(mage_city)
     
-    # Dragon city
-    dragon_city = initialize_city({"x": 65, "y": 65}, owner=None)
+    # Dragon city - Isolated in mountains
+    dragon_pos = {"x": 65, "y": 65}
+    dragon_city = initialize_city(dragon_pos, owner=None)
     dragon_city["id"] = "dragon_city"
     dragon_city["buildings"] = [
         {
             "id": "dragons_lair",
             "name": "Guarida de Dragones",
-            "position": {"x": 65, "y": 65},
+            "position": dragon_pos,
             "building_type": "dragons_lair",
             "is_castle": False,
             "built": False,
@@ -282,41 +334,146 @@ def generate_resource_mines():
     print(f"Generated {len(mines)} resource mines for game map")
     return mines
 
+def generate_random_artifacts(map_size=100, count=3):
+    """Genera artefactos aleatorios en el mapa."""
+    artifacts = []
+    artifact_types = ["totemDeGuerra", "totemVelocidad", "totemReclutamiento"]
+    artifact_names = ["Tótem de Guerra", "Tótem de Velocidad", "Tótem de Reclutamiento"]
+    
+    # Lista para evitar posicionar artefactos cerca de otros objetos
+    used_positions = []
+    
+    # Obtener posiciones de ciudades y minas para evitarlas
+    cities_pos = [
+        {"x": 20, "y": 20},  # castillo jugador
+        {"x": 22, "y": 22},  # barracks
+        {"x": 25, "y": 30},  # archery
+        {"x": 35, "y": 25},  # knights
+        {"x": 40, "y": 40},  # mage
+        {"x": 65, "y": 65},  # dragon
+        {"x": 80, "y": 80},  # castillo IA
+    ]
+    
+    # Añadir posiciones de minas (hardcoded para simplificar)
+    mines_pos = [
+        {"x": 15, "y": 15}, {"x": 30, "y": 30}, {"x": 70, "y": 20},  # goldmines
+        {"x": 25, "y": 10}, {"x": 40, "y": 40}, {"x": 12, "y": 60},  # sawmills
+        {"x": 10, "y": 25}, {"x": 60, "y": 60}, {"x": 35, "y": 65},  # quarries
+    ]
+    
+    used_positions = cities_pos + mines_pos
+    
+    for i in range(count):
+        # Intentar encontrar una posición válida (no cercana a objetos existentes)
+        valid_position = False
+        attempts = 0
+        x, y = 0, 0
+        
+        while not valid_position and attempts < 50:
+            # Generar posición aleatoria
+            x = random.randint(10, map_size-10)
+            y = random.randint(10, map_size-10)
+            
+            # Verificar distancia a posiciones usadas
+            valid_position = True
+            for pos in used_positions:
+                distance = math.sqrt((x - pos["x"])**2 + (y - pos["y"])**2)
+                if distance < 8:  # Mínimo 8 casillas de distancia
+                    valid_position = False
+                    break
+            
+            attempts += 1
+        
+        if valid_position:
+            # Usar índice cíclico para distribuir tipos de artefactos
+            type_index = i % len(artifact_types)
+            
+            artifact = {
+                "id": f"artifact_{i+1}",
+                "type": "artifact",
+                "subtype": artifact_types[type_index],
+                "name": artifact_names[type_index],
+                "position": {"x": x, "y": y},
+                "effect": get_artifact_effect(artifact_types[type_index])
+            }
+            
+            artifacts.append(artifact)
+            used_positions.append({"x": x, "y": y})
+    
+    print(f"Generated {len(artifacts)} random artifacts for game map")
+    return artifacts
+
+def get_artifact_effect(artifact_type):
+    """Devuelve el efecto asociado a un tipo de artefacto."""
+    effects = {
+        "totemDeGuerra": {"army_buff": "+20% attack and defense"},
+        "totemVelocidad": {"movement_buff": "+30% movement points"},
+        "totemReclutamiento": {"recruitment_discount": "-30% unit cost"}
+    }
+    return effects.get(artifact_type, {})
+
 def initialize_game_state():
     """Inicializa el estado del juego."""
-    # Inicializar héroes del jugador y la IA
-    player_heroes = []
-    ai_heroes = []
+    # Generar héroes iniciales
+    player_hero, ai_hero = generate_initial_heroes()
     
-    # Use the new helper function to initialize cities properly
+    # Inicializar ciudades estratégicamente
     player_cities = initialize_game_cities()
     
-    ai_cities = []
+    # Castillo de IA en posición estratégica
+    ai_castle = initialize_city({"x": 80, "y": 80}, owner="ai")
+    ai_castle["id"] = "ai_castle"
+    ai_cities = [ai_castle]
     
-    # Generate resource mines
+    # Generar minas de recursos
     resource_mines = generate_resource_mines()
     
-    # Create a basic map with dimensions
-    map_size = 100
+    # Generar artefactos aleatorios
+    artifacts = generate_random_artifacts()
     
+    # Crear mapa con niebla de guerra
+    map_size = 100
+    total_tiles = map_size * map_size
+    
+    # Inicialmente todo oculto
+    fog_of_war = [True] * total_tiles
+    
+    # Revelar área alrededor del héroe del jugador y su castillo
+    player_pos = player_hero["position"]
+    castle_pos = player_cities[0]["position"]  # Central castle
+    reveal_radius = 5
+    
+    for y in range(map_size):
+        for x in range(map_size):
+            # Distancia al héroe y al castillo
+            hero_dist = math.sqrt((x - player_pos["x"])**2 + (y - player_pos["y"])**2)
+            castle_dist = math.sqrt((x - castle_pos["x"])**2 + (y - castle_pos["y"])**2)
+            
+            # Revelar si está cerca del héroe o del castillo
+            if hero_dist <= reveal_radius or castle_dist <= reveal_radius:
+                idx = y * map_size + x
+                if 0 <= idx < total_tiles:  # Asegurar índice válido
+                    fog_of_war[idx] = False
+    
+    # Crear estado de juego completo
     return {
         "turn": 1,
         "current_player": "player",
         "player": {
-            "heroes": player_heroes,
+            "heroes": [player_hero],
             "cities": player_cities,
-            "resources": {"gold": 5000, "wood": 500, "stone": 300}
+            "resources": {"gold": 2500, "wood": 10, "stone": 10}
         },
         "ai": {
-            "heroes": ai_heroes,
+            "heroes": [ai_hero],
             "cities": ai_cities,
-            "resources": {"gold": 5000, "wood": 200, "stone": 200}
+            "resources": {"gold": 2500, "wood": 10, "stone": 10}
         },
         "map": {
             "size": {"width": map_size, "height": map_size},
-            "tiles": [],  # Will be populated later
-            "fog_of_war": [],  # Will be populated later
-            "explored": [],  # Will be populated later
-            "visible_objects": resource_mines  # Place mines on the map
+            "tiles": [],  # Se poblará después
+            "fog_of_war": fog_of_war,
+            "explored": [],  # Se poblará después
+            "visible_objects": resource_mines + artifacts  # Combinar minas y artefactos
         }
     }
