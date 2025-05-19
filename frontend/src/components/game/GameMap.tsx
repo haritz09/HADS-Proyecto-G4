@@ -29,7 +29,8 @@ const GameMap: React.FC<GameMapProps> = ({
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  // Remove zoom state and set fixed zoom of 1
+  const fixedZoom = 1;
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [startY, setStartY] = useState(0);
@@ -117,23 +118,20 @@ const GameMap: React.FC<GameMapProps> = ({
     return tiles2D;
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(prev => Math.max(0.5, Math.min(2, prev * delta)));
-  };
+  // Remove handleWheel function completely
 
+  // Modify handleMouseDown to work with any mouse button
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 2) { // Solo botón derecho
-      e.preventDefault();
-      setIsDragging(true);
-      setStartX(e.pageX - mapRef.current!.offsetLeft);
-      setStartY(e.pageY - mapRef.current!.offsetTop);
-      setScrollLeft(mapRef.current!.scrollLeft);
-      setScrollTop(mapRef.current!.scrollTop);
-    }
+    // Remove check for right button only
+    e.preventDefault();
+    setIsDragging(true);
+    setStartX(e.pageX - mapRef.current!.offsetLeft);
+    setStartY(e.pageY - mapRef.current!.offsetTop);
+    setScrollLeft(mapRef.current!.scrollLeft);
+    setScrollTop(mapRef.current!.scrollTop);
   };
 
+  // Keep handleMouseMove as is
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
     
@@ -149,6 +147,7 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   };
 
+  // Keep handleMouseUp unchanged
   const handleMouseUp = () => {
     setIsDragging(false);
   };
@@ -684,20 +683,20 @@ const GameMap: React.FC<GameMapProps> = ({
       );
       
       if (minas.length > 0) {
-        console.log(`GameMap: Encontradas ${minas.length} minas para renderizar`);
+        //console.log(`GameMap: Encontradas ${minas.length} minas para renderizar`);
         // Log detailed mine info
         minas.forEach((mina, index) => {
           //console.log(`GameMap: Mina ${index+1} - type=${mina.type}, resource_type=${'resource_type' in mina ? mina.resource_type : 'N/A'}, position=(${mina.position.x}, ${mina.position.y})`);
         });
       } else {
-        console.warn("GameMap: No se encontraron minas en visible_objects");
+        //console.warn("GameMap: No se encontraron minas en visible_objects");
         // Log all visible objects to see what we're working with
-        console.log("GameMap: Todos los visible_objects:", gameState.map.visible_objects.map(obj => ({
+        /*console.log("GameMap: Todos los visible_objects:", gameState.map.visible_objects.map(obj => ({
           id: obj.id,
           type: obj.type,
           hasResourceType: 'resource_type' in obj,
           position: obj.position
-        })));
+        }))); */
       }
     }
   }, [gameState?.map?.visible_objects]);
@@ -715,21 +714,37 @@ const GameMap: React.FC<GameMapProps> = ({
     );
   }
 
+  // Make the preventWheel handler more robust
+  const preventWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Also block native scrolling that might happen outside the handler
+    if (mapRef.current) {
+      mapRef.current.scrollLeft = scrollLeft;
+      mapRef.current.scrollTop = scrollTop;
+    }
+    
+    return false;
+  };
+
   return (
     <div 
       ref={mapRef}
       className={`game-map-wrapper ${isDragging ? 'dragging' : ''}`}
-      onWheel={handleWheel}
+      onWheel={preventWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onContextMenu={handleContextMenu}
+      // Add this to prevent scrolling on touch devices
+      onTouchMove={(e) => e.preventDefault()}
     >
       <div 
         className="game-map"
         style={{
-          transform: `scale(${zoom})`,
+          transform: `scale(${fixedZoom})`, // Keep fixed zoom
           transformOrigin: '0 0'
         }}
       >

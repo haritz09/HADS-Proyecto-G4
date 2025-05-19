@@ -22,7 +22,7 @@
 
 .game-map-container {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   position: relative;
 }
 

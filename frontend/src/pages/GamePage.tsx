@@ -16,6 +16,9 @@ import GameControls from '../components/game/GameControls';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
 import AIViewModeSettings from '../components/game/AIViewModeSettings';
+import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
+import AIActionsSummary from '../components/game/AIActionsSummary';
+import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
@@ -43,13 +46,23 @@ const GamePage: React.FC = () => {
   const [forceUpdate, setForceUpdate] = useState<Record<string, unknown>>({});
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const [showRecruitmentMenu, setShowRecruitmentMenu] = useState<boolean>(false);
+  // Add state for settings modal
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const { 
     selectHero, 
     moveHero, 
     endTurn, 
     aiViewMode, 
-    setAiViewMode
+    setAiViewMode,
+    aiThinking,
+    showAiSummary,
+    setShowAiSummary,
+    aiActions,
+    aiStrategicInfo,
+    playbackSpeed,
+    setPlaybackSpeed,
+    skipAnimation
   } = useGame();
   
   // Estado local para UI
@@ -913,6 +926,18 @@ const GamePage: React.FC = () => {
     setShowSettings(!showSettings);
   };
 
+  // Add the missing handler functions
+  const handleOpenMenu = () => {
+    if (window.confirm('¿Estás seguro que deseas salir al menú principal? Todo el progreso no guardado se perderá.')) {
+      navigate('/menu');
+    }
+  };
+
+  const handleOpenSettings = () => {
+    // Open settings modal
+    setShowSettingsModal(true);
+  };
+
   if (loading) {
     return <div className="loading-screen">Cargando partida...</div>;
   }
@@ -926,51 +951,51 @@ const GamePage: React.FC = () => {
 
   return (
     <div className={`game-page ${aiViewMode !== 'normal' ? `ai-view-mode-${aiViewMode}` : ''}`}>
-      {loading && <div className="loading-overlay">Cargando...</div>}
-      {error && <div className="error-message">{error}</div>}
-      <ResourceBar resources={gameState.player.resources} />
+      <div className="game-header">
+        <ResourceBar resources={getCurrentPlayerResources()} />
+      </div>
       
-      {gameState && (
-        <>
-          <ResourceBar resources={gameState.player.resources} />
-          <div className="game-container">
-            <GameMap
+      <div className="game-content">
+        <div className="game-map-container">
+          {/* Existing map component */}
+          {gameState && (
+            <GameMap 
               gameState={gameState}
               selectedHeroId={selectedHero?.id}
               onHeroClick={handleHeroClick}
-              isPlayerTurn={isPlayerTurn}
               onCityClick={handleCityClick}
               onTileClick={handleTileClick}
               onBuildingClick={handleBuildingClick}
-            />
-          </div>
-          
-          <GameControls
-            turn={gameState.turn}
-            currentPlayer={gameState.current_player}
-            gameMessage={gameMessage}
-            onEndTurn={handleEndTurn}
-            onOpenMenu={() => navigate('/menu')}
-            onOpenSettings={toggleSettingsPanel}
-            onSaveGame={handleSaveGame}
-            isPlayerTurn={isPlayerTurn}
-          />
-          
-          {selectedHero && (
-            <HeroInfo
-              hero={selectedHero}
-              onClose={() => selectHero(null)}
+              isPlayerTurn={isPlayerTurnValue}
             />
           )}
-          
-          {showSettings && (
-            <AIViewModeSettings
-              currentMode={aiViewMode}
-              onModeChange={handleAIViewModeChange}
-              onClose={() => setShowSettings(false)}
-            />
-          )}
-        </>
+        </div>
+        
+        {/* Sidebar content */}
+        {/* ...existing code... */}
+      </div>
+      
+      <div className="game-controls-container">
+        <GameControls 
+          turn={gameState?.turn || 1}
+          currentPlayer={gameState?.current_player || 'player'}
+          gameMessage={gameMessage}
+          onEndTurn={handleEndTurn}
+          onSaveGame={handleSaveGame}
+          onOpenMenu={handleOpenMenu}
+          isPlayerTurn={isPlayerTurnValue}
+          onOpenSettings={handleOpenSettings}
+        />
+      </div>
+      
+      {/* These components will be conditionally rendered based on their visibility props */}
+      {/* AIThinkingIndicator and AIActionsSummary are managed by the GameContext */}
+      {showSettingsModal && (
+        <AIViewModeSettings
+          currentMode={aiViewMode}
+          onModeChange={setAiViewMode}
+          onClose={() => setShowSettingsModal(false)}
+        />
       )}
     </div>
   );

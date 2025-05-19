@@ -40,6 +40,8 @@ interface GameContextType {
   playbackSpeed: number;
   setPlaybackSpeed: (speed: number) => void;
   skipAnimation: () => void;
+  aiActions: any[]; // Added missing property
+  aiStrategicInfo: Record<string, string> | undefined; // Added missing property
 }
 
 const GameContext = createContext<GameContextType>({
@@ -66,6 +68,8 @@ const GameContext = createContext<GameContextType>({
   playbackSpeed: 1.0,
   setPlaybackSpeed: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
   skipAnimation: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
+  aiActions: [], // Add default value
+  aiStrategicInfo: undefined, // Add default value
 });
 
 export const useGame = () => useContext(GameContext);
@@ -314,261 +318,52 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Nueva función para procesar el turno de la IA con mejor feedback visual y manejo de errores
   const processAITurn = async () => {
-    if (!gameId) return;
+    if (!gameId) {
+      console.error("No hay ID de juego disponible para procesar el turno de la IA");
+      return;
+    }
     
     try {
-      setLoading(true);
+      // Indicar que la IA está pensando
       setAiThinking(true);
       setAiThinkingMessage("La IA está analizando el estado del juego...");
       
-      // Obtener acciones de la IA
-      const aiResponse = await gameService.getAIActions(gameId);
+      // Llamar al endpoint con execute_actions=true para que el backend ejecute las acciones
+      const response = await gameService.executeAIActions(gameId);
       
-      // Verificar si hay respuesta y acciones
-      if (!aiResponse.data || !aiResponse.data.ai_response) {
-        setGameMessage('La IA no pudo determinar sus acciones');
-        setAiThinking(false);
-        setLoading(false);
+      // Verificar que la respuesta tiene la estructura esperada
+      if (!response.data) {
+        console.error("Respuesta vacía del servidor para executeAIActions");
+        setGameMessage('Error al procesar el turno de la IA: Respuesta vacía');
         return;
       }
       
-      try {
-        // Parsear la respuesta JSON y preparar acciones
-        let aiDecision;
-        try {
-          aiDecision = JSON.parse(aiResponse.data.ai_response);
-        } catch (parseError) {
-          // Intentar extraer solo la parte JSON si hay código markdown
-          const jsonMatch = aiResponse.data.ai_response.match(/```json\s*([\s\S]*?)\s*```/);
-          if (jsonMatch && jsonMatch[1]) {
-            aiDecision = JSON.parse(jsonMatch[1]);
-          } else {
-            // Si aún no funciona, buscar la primera { hasta la última }
-            const jsonContentMatch = aiResponse.data.ai_response.match(/(\{[\s\S]*\})/);
-            if (jsonContentMatch && jsonContentMatch[1]) {
-              aiDecision = JSON.parse(jsonContentMatch[1]);
-            } else {
-              throw new Error('No se pudo extraer JSON válido de la respuesta');
-            }
-          }
-        }
-        
-        // Verificar si hay acciones para ejecutar (podría ser 'actions' o 'acciones')
-        const actions = aiDecision.actions || aiDecision.acciones || [];
-        if (!Array.isArray(actions) || actions.length === 0) {
-          setGameMessage('La IA no definió acciones para este turno');
-          setAiThinking(false);
-          setLoading(false);
-          return;
-        }
-        
-        // Extraer información estratégica para mostrar en el resumen
-        const strategicInfo: Record<string, string> = {};
-        for (const key of ['reasoning', 'strategic_planning', 'analysis']) {
-          if (typeof aiDecision[key] === 'string') {
-            strategicInfo[key] = aiDecision[key];
-          } else if (typeof aiDecision[key]?.summary === 'string') {
-            strategicInfo[key] = aiDecision[key].summary;
-          }
-        }
-        
-        // Guardar para el resumen final
-        setAiStrategicInfo(Object.keys(strategicInfo).length > 0 ? strategicInfo : undefined);
-        
-        // Prepare for visualización del turno de la IA
-        if (aiViewMode !== 'normal') {
-          // Crear una copia del estado para la perspectiva de la IA invirtiendo player/ai
-          const aiPerspectiveState = JSON.parse(JSON.stringify(gameState));
-          
-          // Intercambiar player y ai para mostrar desde la perspectiva de la IA
-          const temp = aiPerspectiveState.player;
-          aiPerspectiveState.player = aiPerspectiveState.ai;
-          aiPerspectiveState.ai = temp;
-          
-          // Actualizar el estado para la vista de la IA
-          setAiGameState(aiPerspectiveState);
-          
-          // Si estamos en cambio de vista, mostrar la vista de la IA completamente
-          if (aiViewMode === 'changeView') {
-            // Método temporal para cambiar la vista completa
-            // En una implementación real, probablemente utilizarías un enfoque diferente
-            const originalGameState = gameState;
-            setGameState(aiPerspectiveState);
-            
-            // Restaurar al finalizar el turno
-            setTimeout(() => {
-              setGameState(originalGameState);
-            }, 100); // Este tiempo se debe ajustar según tus necesidades
-          }
-        }
-        
-        // Mostrar el razonamiento de la IA
-        if (strategicInfo.reasoning || strategicInfo.strategic_planning) {
-          const reasoning = strategicInfo.reasoning || strategicInfo.strategic_planning;
-          setAiThinkingMessage(`Estrategia de la IA: ${reasoning.substring(0, 120)}...`);
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Mostrar la estrategia brevemente
-        }
-        
-        // Prepare for executing actions - reset the actions array
-        setAiActions([]);
-        const actionsForSummary: any[] = [];
-        
-        // Iniciar controles de reproducción
-        setSkipAiAnimation(false);
-        
-        // Actualizar mensaje
-        setAiThinkingMessage("Ejecutando acciones...");
-        
-        // Calcular tiempo de espera base según la velocidad de reproducción
-        const getWaitTime = (baseTime: number) => baseTime / playbackSpeed;
-        
-        // Ejecutar cada acción secuencialmente
-        for (const action of actions) {
-          // Actualizar la acción actual para visualización
-          setCurrentAiAction(getActionDescription(action));
-          
-          // Si es el final del turno o el usuario decidió saltar la animación
-          if (action.type === 'endTurn' || skipAiAnimation) {
-            // Ejecutar la acción sin animación
-            try {
-              const actionResponse = await executeAction(gameId, action);
-              
-              // Actualizar el estado del juego con el resultado final
-              if (actionResponse.data && actionResponse.data.game_state) {
-                setGameState(actionResponse.data.game_state);
-              }
-              
-              // Registrar para el resumen
-              actionsForSummary.push({
-                action: action.type,
-                details: action.details || {},
-                result: actionResponse.data?.result
-              });
-              
-            } catch (err) {
-              console.error(`Error en acción de IA (modo skip): ${action.type}`, err);
-              actionsForSummary.push({
-                action: action.type,
-                details: action.details || {},
-                error: err instanceof Error ? err.message : 'Error desconocido'
-              });
-            }
-            
-            // Si es endTurn, finalizar
-            if (action.type === 'endTurn') {
-              break;
-            }
-            
-            continue; // Skip animation and proceed to next action
-          }
-          
-          // Descripción visual de la acción que se está ejecutando
-          const actionDescription = getActionDescription(action);
-          setGameMessage(`🤖 ${actionDescription}`);
-          
-          // Esperar un momento para que el jugador pueda ver qué acción se ejecutará
-          await new Promise(resolve => setTimeout(resolve, getWaitTime(1200)));
-          
-          try {
-            // Ejecutar la acción
-            const actionResponse = await executeAction(gameId, action);
-            
-            // Actualizar el estado del juego
-            if (actionResponse.data && actionResponse.data.game_state) {
-              setGameState(actionResponse.data.game_state);
-              
-              // Mostrar mensaje de resultado si está disponible
-              if (actionResponse.data.result?.message) {
-                setGameMessage(`✅ ${actionResponse.data.result.message}`);
-                await new Promise(resolve => setTimeout(resolve, getWaitTime(800)));
-              }
-            }
-            
-            // Registrar la acción para el resumen
-            actionsForSummary.push({
-              action: action.type,
-              details: action.details || {},
-              result: actionResponse.data?.result
-            });
-            
-            // Para movimientos de héroes, simular la animación
-            if (action.type === 'moveHero' && action.details) {
-              await animateAIHeroMovement(action, actionResponse);
-            }
-            
-            // Para construcciones, mostrar un efecto especial
-            if (action.type === 'buildStructure' && action.details) {
-              await visualizeBuildingConstruction(action, actionResponse);
-            }
-            
-            // Para combates, mostrar efectos de combate
-            if ((action.type === 'combat' || action.type === 'attack') && action.details) {
-              await visualizeCombat(action, actionResponse);
-            }
-            
-            // Para reclutamiento, mostrar efectos de reclutamiento
-            if (action.type === 'recruitUnits' && action.details) {
-              await visualizeRecruitment(action, actionResponse);
-            }
-            
-            // Esperar un poco antes de la siguiente acción
-            await new Promise(resolve => setTimeout(resolve, getWaitTime(1000)));
-            
-          } catch (actionErr: any) {
-            console.error(`Error ejecutando acción de IA: ${action.type}`, actionErr);
-            setGameMessage(`⚠️ La IA falló al ejecutar ${action.type}: ${actionErr.message || 'Error desconocido'}`);
-            
-            // Registrar el error para el resumen
-            actionsForSummary.push({
-              action: action.type,
-              details: action.details || {},
-              error: actionErr.message || 'Error desconocido'
-            });
-            
-            // Continuar con la siguiente acción a pesar del error
-            await new Promise(resolve => setTimeout(resolve, getWaitTime(1500)));
-          }
-          
-          // Si es el final del turno, terminar
-          if (action.type === 'endTurn') {
-            setGameMessage('🏁 La IA finaliza su turno');
-            await new Promise(resolve => setTimeout(resolve, getWaitTime(1500)));
-            break;
-          }
-        }
-        
-        // Actualizar la lista de acciones para el resumen
-        setAiActions(actionsForSummary);
-        
-        // Mostrar resumen si hay al menos una acción
-        if (actionsForSummary.length > 0) {
-          setShowAiSummary(true);
-        }
-        
-        // Mensaje final
-        setGameMessage('🎮 Turno de la IA finalizado. Es tu turno');
-        
-      } catch (parseErr: any) {
-        console.error('Error parseando respuesta de IA:', parseErr);
-        setGameMessage('❌ Error en la respuesta de la IA');
+      // Extraer acciones y estrategia de la respuesta
+      const aiActionsData = response.data.actions_executed || [];
+      const strategicInfo = response.data.strategic_info || {};
+      
+      // Actualizar estado con acciones ejecutadas y información estratégica
+      setAiActions(aiActionsData);
+      setAiStrategicInfo(strategicInfo);
+      
+      // Actualizar el estado del juego con el resultado final
+      if (response.data.game_state) {
+        setGameState(response.data.game_state);
       }
+      
+      // Mostrar mensaje de finalización
+      setGameMessage('La IA ha completado su turno');
+      
+      // Mostrar el resumen de acciones de la IA
+      setShowAiSummary(true);
       
     } catch (err: any) {
-      console.error('Error obteniendo acciones de IA:', err);
-      setGameMessage('❌ Error comunicando con la IA');
-      
-      // Si falla la comunicación con la IA, simplemente finalizar su turno
-      try {
-        const endTurnResponse = await executeAction(gameId, {type: 'endTurn', details: {}});
-        setGameState(endTurnResponse.data.game_state);
-        setGameMessage('🎮 Turno finalizado. Es tu turno');
-      } catch (endTurnErr) {
-        console.error('Error finalizando turno de IA:', endTurnErr);
-      }
+      console.error("Error procesando el turno de la IA:", err);
+      setError(err.response?.data?.detail || 'Error procesando el turno de la IA');
+      setGameMessage('Error durante el turno de la IA. Es tu turno');
     } finally {
+      // Finalizar el indicador de pensamiento de la IA
       setAiThinking(false);
-      setLoading(false);
-      setCurrentAiAction('');
     }
   };
   
@@ -864,6 +659,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentPath,
     endTurn,
     setGameMessage,
+    aiActions, // Expose this state value
+    aiStrategicInfo, // Expose this state value
   };
   
   return (

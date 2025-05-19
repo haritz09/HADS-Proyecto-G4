@@ -823,19 +823,25 @@ export const gameService = {
 
   getAIActions: async (gameId: string) => {
     try {
-      return await API.post(`/games/${gameId}/ai`, { execute_actions: false });
-    } catch (error) {
-      console.error('Error al obtener acciones de la IA:', error);
-      throw error;
+      console.log(`API: Getting AI actions for game ${gameId}`);
+      // This only gets the actions without executing them
+      const response = await API.post(`/games/${gameId}/ai?execute_actions=false`);
+      return response;
+    } catch (err) {
+      console.error('Error getting AI actions:', err);
+      throw err;
     }
   },
   
   executeAIActions: async (gameId: string) => {
     try {
-      return await API.post(`/games/${gameId}/ai`, { execute_actions: true });
-    } catch (error) {
-      console.error('Error al ejecutar acciones de la IA:', error);
-      throw error;
+      console.log(`API: Executing AI actions for game ${gameId}`);
+      // This gets and executes the actions in one call
+      const response = await API.post(`/games/${gameId}/ai?execute_actions=true`);
+      return response;
+    } catch (err) {
+      console.error('Error executing AI actions:', err);
+      throw err;
     }
   },
 };
