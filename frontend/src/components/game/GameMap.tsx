@@ -442,9 +442,7 @@ const GameMap: React.FC<GameMapProps> = ({
     const resourceType = 'resource_type' in mine ? resourceMine.resource_type : 'unknown';
     const resourcePerTurn = 'resource_per_turn' in mine ? resourceMine.resource_per_turn : 0;
     const symbol = 'symbol' in mine ? (mine as any).symbol : undefined;
-    
-    // For debugging
-    console.log(`Rendering mine: type=${mineType}, resource=${resourceType}, position=(${mine.position.x},${mine.position.y}), owner=${owner}`);
+    const ownerClass = owner === 'player' ? 'player-owned' : owner === 'ai' ? 'ai-owned' : 'neutral';
     
     const getTooltip = (): string => {
       const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
@@ -462,7 +460,7 @@ const GameMap: React.FC<GameMapProps> = ({
     const mineClasses = [
       'resource-mine',
       mineType,
-      owner ? `${owner}-owned` : 'neutral',
+      ownerClass,
       mine.justCaptured ? 'just-captured' : ''
     ].filter(Boolean).join(' ');
     
@@ -473,9 +471,9 @@ const GameMap: React.FC<GameMapProps> = ({
         style={{
           left: `${mine.position.x * 32}px`,
           top: `${mine.position.y * 32}px`,
-          zIndex: 15, // Make sure it's above terrain but below heroes
         }}
         title={getTooltip()}
+        data-income={`+${resourcePerTurn}`}
       >
         {getMineIcon(mineType, symbol)}
       </div>
@@ -650,6 +648,34 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   }, [gameState?.map?.visible_objects]);
 
+  // Nueva useEffect para asegurar que las minas se detectan y renderizan correctamente
+  useEffect(() => {
+    // Sincronizar minas con el renderizado
+    if (gameState?.map?.visible_objects?.length > 0) {
+      const minas = gameState.map.visible_objects.filter(obj => 
+        obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+        ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
+      );
+      
+      if (minas.length > 0) {
+        console.log(`GameMap: Encontradas ${minas.length} minas para renderizar`);
+        // Log detailed mine info
+        minas.forEach((mina, index) => {
+          //console.log(`GameMap: Mina ${index+1} - type=${mina.type}, resource_type=${'resource_type' in mina ? mina.resource_type : 'N/A'}, position=(${mina.position.x}, ${mina.position.y})`);
+        });
+      } else {
+        console.warn("GameMap: No se encontraron minas en visible_objects");
+        // Log all visible objects to see what we're working with
+        console.log("GameMap: Todos los visible_objects:", gameState.map.visible_objects.map(obj => ({
+          id: obj.id,
+          type: obj.type,
+          hasResourceType: 'resource_type' in obj,
+          position: obj.position
+        })));
+      }
+    }
+  }, [gameState?.map?.visible_objects]);
+
   const grid = [];
   for (let y = 0; y < gameState.map.size.height; y++) {
     const row = [];
@@ -683,12 +709,27 @@ const GameMap: React.FC<GameMapProps> = ({
       >
         {grid}
         
-        {/* Important: This is where we render all mines to ensure they appear */}
+        {/* CRITICAL DEBUG: Add logging to show how many mines we're about to render */}
+        {(() => {
+          const minesToRender = gameState.map.visible_objects?.filter(obj => 
+            obj.position && 
+            (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+             ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+          ) || [];
+          
+          console.log(`GameMap: Rendering ${minesToRender.length} mines in map`);
+          return null;
+        })()}
+        
+        {/* Renderizado explícito de todas las minas */}
         {gameState.map.visible_objects?.filter(obj => 
           obj.position && 
           (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
            ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
-        ).map(mine => renderMine(mine))}
+        ).map(mine => {
+          console.log(`GameMap: Rendering mine: type=${mine.type}, position=(${mine.position.x}, ${mine.position.y})`);
+          return renderMine(mine);
+        })}
       </div>
     </div>
   );

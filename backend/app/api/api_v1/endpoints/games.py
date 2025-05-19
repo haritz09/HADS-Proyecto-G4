@@ -237,6 +237,19 @@ async def crear_nueva_partida(
     map_size = 100
     total_tiles = map_size * map_size
     
+    # CRITICAL DEBUG: Log the initial visible_objects before any processing
+    visible_objects_count = len(game_data.get("game_state", {}).get("map", {}).get("visible_objects", []))
+    print(f"DEBUG CREATE_GAME [1]: Initial visible_objects count: {visible_objects_count}")
+    
+    # Log mine data specifically
+    mines = [obj for obj in game_data.get("game_state", {}).get("map", {}).get("visible_objects", []) 
+             if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    print(f"DEBUG CREATE_GAME [2]: Found {len(mines)} mines in initial data")
+    
+    for i, mine in enumerate(mines):
+        print(f"DEBUG CREATE_GAME [3]: Mine {i+1}: type={mine.get('type')}, resource_type={mine.get('resource_type')}, position={mine.get('position')}")
+    
     # Actualizar el tamaño del mapa en game_state
     if "game_state" in game_data and "map" in game_data["game_state"]:
         game_data["game_state"]["map"]["size"] = {"width": map_size, "height": map_size}
@@ -249,24 +262,38 @@ async def crear_nueva_partida(
         
         # Mark tiles containing resource mines
         if "visible_objects" in game_data["game_state"]["map"]:
-            for obj in game_data["game_state"]["map"]["visible_objects"]:
-                if "position" in obj and "type" in obj:
+            visible_objects = game_data["game_state"]["map"]["visible_objects"]
+            mine_count = 0
+            for obj in visible_objects:
+                if "position" in obj and ("type" in obj or "resource_type" in obj):
                     # Check if it's a resource mine by type or properties
-                    is_mine = (obj["type"] in ["goldmine", "sawmill", "quarry"] or 
-                              ("resource_type" in obj and obj["resource_type"] in ["gold", "wood", "stone"]))
+                    is_mine = (obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                              ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"]))
                     
                     if is_mine and "position" in obj:
+                        mine_count += 1
                         x = obj["position"]["x"]
                         y = obj["position"]["y"]
                         idx = y * map_size + x
                         
                         if 0 <= idx < len(game_data["game_state"]["map"]["tiles"]):
                             # Mark the tile with the object type and ID
-                            game_data["game_state"]["map"]["tiles"][idx]["object_type"] = obj["type"]
-                            game_data["game_state"]["map"]["tiles"][idx]["object_id"] = obj["id"]
+                            game_data["game_state"]["map"]["tiles"][idx]["object_type"] = obj.get("type", "mine")
+                            game_data["game_state"]["map"]["tiles"][idx]["object_id"] = obj.get("id")
                             
                             # Print for debugging
-                            print(f"Marked mine ({obj['type']}) at position ({x}, {y})")
+                            print(f"DEBUG CREATE_GAME [4]: Marked mine ({obj.get('type', 'unknown')}) at position ({x}, {y}), resource_type={obj.get('resource_type')}")
+            
+            print(f"DEBUG CREATE_GAME [5]: Processed {mine_count} of {len(visible_objects)} visible objects as mines")
+    
+    # CRITICAL: Verify mines are still present after all processing
+    final_visible_objects = game_data.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    final_mines = [obj for obj in final_visible_objects 
+                  if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                     ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    
+    print(f"DEBUG CREATE_GAME [6]: Final visible_objects count before DB save: {len(final_visible_objects)}")
+    print(f"DEBUG CREATE_GAME [7]: Final mines count before DB save: {len(final_mines)}")
     
     game_data["created_at"] = datetime.now(UTC)
     game_data["last_saved"] = datetime.now(UTC)
@@ -321,6 +348,18 @@ async def cargar_partida_guardada(
     if not game:
         raise HTTPException(status_code=404, detail="Partida no encontrada")
     
+    # DEBUG: Verify visible_objects in the response
+    visible_objects = game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    mines = [obj for obj in visible_objects 
+             if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    
+    print(f"DEBUG LOAD_GAME [1]: Returning game with {len(visible_objects)} visible objects")
+    print(f"DEBUG LOAD_GAME [2]: Found {len(mines)} mines in response")
+    
+    for i, mine in enumerate(mines):
+        print(f"DEBUG LOAD_GAME [3]: Mine {i+1}: type={mine.get('type')}, resource_type={mine.get('resource_type')}, position={mine.get('position')}")
+    
     # Verificar que el usuario es dueño de la partida
     if str(game["user_id"]) != str(current_user["_id"]):
         raise HTTPException(status_code=403, detail="No autorizado para cargar esta partida")
@@ -333,8 +372,22 @@ def get_game_internal(game_id: str):
     if not game:
         return None
     
+    # DEBUG: Check if visible_objects exists in the database record
+    visible_objects = game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    print(f"DEBUG GET_GAME_INTERNAL [1]: Retrieved game from DB with {len(visible_objects)} visible objects")
+    
+    # Check for mines specifically
+    mines = [obj for obj in visible_objects 
+             if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    print(f"DEBUG GET_GAME_INTERNAL [2]: Found {len(mines)} mines in DB record")
+    
     # Sanitizar los datos del juego antes de devolverlos
     sanitized_game = sanitize_game_data(game)
+    
+    # Check if sanitization affected visible_objects
+    sanitized_visible_objects = sanitized_game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    print(f"DEBUG GET_GAME_INTERNAL [3]: After sanitization: {len(sanitized_visible_objects)} visible objects")
     
     return sanitized_game
 

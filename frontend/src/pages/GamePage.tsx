@@ -67,10 +67,28 @@ const GamePage: React.FC = () => {
           throw new Error("Game state is missing map data");
         }
         
+        // Log detallado de minas en visible_objects
+        const minas = response.data.game_state.map.visible_objects?.filter((obj: any) => 
+          obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+          ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type))
+        ) || [];
+        
+        console.log("Minas encontradas en visible_objects:", minas.map((m: any) => ({
+          id: m.id,
+          type: m.type,
+          resource_type: m.resource_type,
+          position: m.position,
+          owner: m.owner
+        })));
+        
         // Sincronizar artefactos con tiles
         const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
         
-        setGameState(syncedGameState);
+        // Sincronizar minas con tiles
+        const { syncMinesWithTiles } = await import('../utils/gameMapUtils');
+        const fullySyncedGameState = syncMinesWithTiles(syncedGameState);
+        
+        setGameState(fullySyncedGameState);
         setGameMessage(`¡Partida cargada! Turno ${response.data.game_state.turn}`);
       } catch (err) {
         console.error("Error loading game:", err);
@@ -106,11 +124,7 @@ const GamePage: React.FC = () => {
   
   // Manejar movimiento de héroe
   const handleHeroMovement = (heroId: string, path: Position[]): Promise<void> => {
-    if (!path || path.length < 2) return Promise.resolve();
-    
-    // Debug: Log the full path that will be followed
-    console.log('🚶‍♂️ HERO PATH TO FOLLOW:', path.map(pos => `(${pos.x},${pos.y})`).join(' → '));
-    
+    if (!path || path.length < 2) return Promise.resolve();  
     setMovingHero({
       heroId,
       path,
@@ -121,8 +135,7 @@ const GamePage: React.FC = () => {
     return new Promise<void>((resolve) => {
       const animateMovement = async () => {
         for (let i = 0; i < path.length; i++) {
-          // Debug: Log each animation step
-          console.log(`🚶‍♂️ HERO ANIMATION STEP ${i}/${path.length-1}: Moving to (${path[i].x},${path[i].y})`);
+
           
           await new Promise(stepResolve => setTimeout(stepResolve, 200));
           setGameState(prev => {
@@ -130,15 +143,14 @@ const GamePage: React.FC = () => {
             const newState = { ...prev };
             const hero = newState.player.heroes.find(h => h.id === heroId);
             if (hero) {
-              console.log(`🚶‍♂️ Updating hero position to (${path[i].x},${path[i].y})`);
               hero.position = path[i];
             } else {
-              console.warn(`❌ Hero ${heroId} not found in game state during animation step ${i}`);
+              // Log a warning if hero not found - fixes empty block statement ESLint error
+              console.warn(`Hero with ID ${heroId} not found in game state during animation`);
             }
             return newState;
           });
         }
-        console.log('🚶‍♂️ ANIMATION COMPLETE');
         setMovingHero(null);
         setGameMessage("Movimiento completado");
         resolve(); // Resolve the promise when animation is complete
@@ -379,6 +391,11 @@ const GamePage: React.FC = () => {
             if (mine) {
               // Añadir propiedad para la animación
               mine.justCaptured = true;
+              
+              // Reproducir sonido de captura (opcional)
+              const captureSound = new Audio('/sounds/resource-capture.mp3');
+              captureSound.volume = 0.3;
+              captureSound.play().catch(() => console.log('Sound play failed'));
               
               // Quitar la propiedad después de la animación
               setTimeout(() => {
