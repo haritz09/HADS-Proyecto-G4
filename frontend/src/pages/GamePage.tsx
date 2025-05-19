@@ -20,6 +20,8 @@ import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
 import AIActionsSummary from '../components/game/AIActionsSummary';
 import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
+import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu'; // Import the component from game folder
+import RecruitmentMenu from '../components/game/RecruitmentMenu'; // Make sure this is imported too
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
@@ -1028,8 +1030,112 @@ const GamePage: React.FC = () => {
         />
       </div>
       
+      {/* Add conditional rendering for BuildingConstructionMenu */}
+      {showConstructionMenu && activeBuilding && (
+        <BuildingConstructionMenu
+          availableBuildings={[
+            { 
+              id: 'barracks',
+              name: 'Cuartel',
+              building_type: 'barracks',
+              position: activeBuilding.position,
+              cost: { gold: 1000, wood: 50, stone: 50 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'archery',
+              name: 'Campo de Tiro',
+              building_type: 'archery',
+              position: activeBuilding.position,
+              cost: { gold: 1200, wood: 70, stone: 30 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'knights_tower',
+              name: 'Torre de Caballeros',
+              building_type: 'knights_tower',
+              position: activeBuilding.position,
+              cost: { gold: 1500, wood: 100, stone: 100 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'mage_tower',
+              name: 'Torre de Magos',
+              building_type: 'mage_tower',
+              position: activeBuilding.position,
+              cost: { gold: 2000, wood: 100, stone: 100 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'dragons_lair',
+              name: 'Guarida de Dragones',
+              building_type: 'dragons_lair',
+              position: activeBuilding.position,
+              cost: { gold: 5000, wood: 200, stone: 200 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            }
+          ]}
+          onBuild={handleConstructBuilding}
+          onClose={() => setShowConstructionMenu(false)}
+          playerResources={getCurrentPlayerResources()}
+          gameState={gameState}
+        />
+      )}
+
+      {/* This section also needs to be preserved for the recruitment menu */}
+      {showRecruitmentMenu && activeBuilding && selectedHero && (
+        <RecruitmentMenu 
+          building={activeBuilding}
+          hero={selectedHero}
+          onRecruit={handleRecruit}
+          onClose={() => setShowRecruitmentMenu(false)}
+        />
+      )}
+      
+      {/* AI thinking indicator */}
+      {aiThinking && <AIThinkingIndicator isThinking={true} />}
+      
+      {/* AI Actions Summary */}
+      {showAiSummary && aiActions && (
+        <AIActionsSummary
+          actions={aiActions}
+          strategicInfo={aiStrategicInfo}
+          isVisible={true}
+          onClose={() => setShowAiSummary(false)}
+        />
+      )}
+      
       {/* These components will be conditionally rendered based on their visibility props */}
-      {/* AIThinkingIndicator and AIActionsSummary are managed by the GameContext */}
       {showSettingsModal && (
         <AIViewModeSettings
           currentMode={aiViewMode}
