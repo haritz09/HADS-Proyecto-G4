@@ -1,0 +1,93 @@
+.game-controls {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: rgba(28, 21, 9, 0.9);
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+  border-top: 2px solid #8b5a2b;
+}
+
+.turn-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.turn-info h2 {
+  margin: 0;
+  color: #e2a54c;
+  font-size: 1.2rem;
+}
+
+.current-player {
+  margin: 5px 0 0 0;
+  font-size: 0.9rem;
+  color: #e0d0b0;
+}
+
+.player-player {
+  color: #4CAF50;
+  font-weight: bold;
+}
+
+.player-ai {
+  color: #F44336;
+  font-weight: bold;
+}
+
+.game-message {
+  flex: 1;
+  text-align: center;
+  color: #e0d0b0;
+  font-style: italic;
+  max-width: 40%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0 10px;
+  padding: 5px 10px;
+  background-color: rgba(139, 90, 43, 0.2);
+  border-radius: 4px;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.end-turn-button {
+  background-color: #a35b0c !important;
+}
+
+.end-turn-button:hover {
+  background-color: #c77e2b !important;
+}
+
+.settings-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+@media (max-width: 768px) {
+  .game-controls {
+    flex-direction: column;
+    padding: 5px;
+  }
+  
+  .turn-info, .game-message, .control-buttons {
+    width: 100%;
+    margin: 5px 0;
+    text-align: center;
+  }
+  
+  .control-buttons {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}

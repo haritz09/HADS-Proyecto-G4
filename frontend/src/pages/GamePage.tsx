@@ -7,57 +7,60 @@
 * - Gestión de eventos del juego
 */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { gameService } from '../services/api';
-import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
 import { GameState, Hero, Position, Building } from '../types/game';
+import { useGame } from '../contexts/GameContext';
 import GameMap from '../components/game/GameMap';
+import GameControls from '../components/game/GameControls';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
-import BuildingInfo from '../components/game/BuildingInfo';
+import AIViewModeSettings from '../components/game/AIViewModeSettings';
 import Button from '../components/ui/Button';
-import RecruitmentMenu from '../components/game/RecruitmentMenu';
-import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
-import { syncArtifactsWithTiles } from '../utils/gameMapUtils';
-import { findPath } from '../services/gameEngine';
+import { gameService } from '../services/api';
+import { executeAction, createEndTurnAction } from '../services/actionService';
+import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
+import { findPath, calculateMovementCost } from '../services/gameEngine';
 import '../styles/pages/GamePage.css';
 
 const GamePage: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   
-  // Estado del juego
+  // Add all the missing state variables
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Estado UI
-  const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
   const [gameMessage, setGameMessage] = useState<string>('');
+  const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
+  const [activeBuilding, setActiveBuilding] = useState<Building | null>(null);
+  const [showConstructionMenu, setShowConstructionMenu] = useState<boolean>(false);
   const [movingHero, setMovingHero] = useState<{
     heroId: string;
     path: Position[];
     currentStep: number;
   } | null>(null);
+  const [forceUpdate, setForceUpdate] = useState<Record<string, unknown>>({});
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
-  const [activeBuilding, setActiveBuilding] = useState<Building | null>(null);
-  const [showRecruitmentMenu, setShowRecruitmentMenu] = useState(false);
-  const [showConstructionMenu, setShowConstructionMenu] = useState(false);
-  const [forceUpdate, setForceUpdate] = useState({}); // Estado para forzar actualización del componente
+  const [showRecruitmentMenu, setShowRecruitmentMenu] = useState<boolean>(false);
 
-  // Función para actualizar el estado del juego
-  const updateGameState = (newState: GameState) => {
-    setGameState(newState);
-  };
-
+  const { 
+    selectHero, 
+    moveHero, 
+    endTurn, 
+    aiViewMode, 
+    setAiViewMode
+  } = useGame();
+  
+  // Estado local para UI
+  const [showSettings, setShowSettings] = useState(false);
+  
   // Cargar el estado del juego
   useEffect(() => {
     if (!gameId) return;
     
     const loadGame = async () => {
       try {
-        setLoading(true);
         console.log("Loading game with ID:", gameId);
         const response = await gameService.loadGame(gameId);
         console.log("Loaded game data:", response.data);
@@ -122,6 +125,11 @@ const GamePage: React.FC = () => {
       gameState.ai.heroes;
   };
   
+  // Add a utility function for updating game state
+  const updateGameState = (newState: GameState) => {
+    setGameState(newState);
+  };
+  
   // Manejar movimiento de héroe
   const handleHeroMovement = (heroId: string, path: Position[]): Promise<void> => {
     if (!path || path.length < 2) return Promise.resolve();  
@@ -138,10 +146,10 @@ const GamePage: React.FC = () => {
 
           
           await new Promise(stepResolve => setTimeout(stepResolve, 200));
-          setGameState(prev => {
+          setGameState((prev: GameState | null) => {
             if (!prev) return prev;
             const newState = { ...prev };
-            const hero = newState.player.heroes.find(h => h.id === heroId);
+            const hero = newState.player.heroes.find((h: Hero) => h.id === heroId);
             if (hero) {
               hero.position = path[i];
             } else {
@@ -871,13 +879,13 @@ const GamePage: React.FC = () => {
         setLoading(false);
     }
   };
-  
-  // Helper function to convert the flat map to 2D format needed by findPath
+
+  // Convertir el mapa a formato 2D para el pathfinding
   const convertMapTo2D = (gameMap: any) => {
     const mapWidth = gameMap.size.width;
     const mapHeight = gameMap.size.height;
     const tiles2D: any[][] = [];
-    
+    // Helper function to convert the flat map to 2D format needed by findPath
     for (let y = 0; y < mapHeight; y++) {
       const row: any[] = [];
       for (let x = 0; x < mapWidth; x++) {
@@ -892,6 +900,19 @@ const GamePage: React.FC = () => {
     return tiles2D;
   };
 
+  // Determinar si es el turno del jugador actual
+  const isPlayerTurn = gameState?.current_player === 'player';
+
+  // Handler para cambio de modo de visualización de la IA
+  const handleAIViewModeChange = (mode: string) => {
+    setAiViewMode(mode as any);
+  };
+
+  // Mostrar panel de configuración de visualización
+  const toggleSettingsPanel = () => {
+    setShowSettings(!showSettings);
+  };
+
   if (loading) {
     return <div className="loading-screen">Cargando partida...</div>;
   }
@@ -904,90 +925,52 @@ const GamePage: React.FC = () => {
   }
 
   return (
-    <div className="game-page">
-      {gameState ? (
+    <div className={`game-page ${aiViewMode !== 'normal' ? `ai-view-mode-${aiViewMode}` : ''}`}>
+      {loading && <div className="loading-overlay">Cargando...</div>}
+      {error && <div className="error-message">{error}</div>}
+      <ResourceBar resources={gameState.player.resources} />
+      
+      {gameState && (
         <>
-          <div className="game-header">
-            <h1>Heroes&Hostias</h1>
-            <ResourceBar 
-              resources={getCurrentPlayerResourcesInfo().resources} 
-              resourcesIncome={getCurrentPlayerResourcesInfo().income}
+          <ResourceBar resources={gameState.player.resources} />
+          <div className="game-container">
+            <GameMap
+              gameState={gameState}
+              selectedHeroId={selectedHero?.id}
+              onHeroClick={handleHeroClick}
+              isPlayerTurn={isPlayerTurn}
+              onCityClick={handleCityClick}
+              onTileClick={handleTileClick}
+              onBuildingClick={handleBuildingClick}
             />
-            <div className="game-controls">
-              <Button onClick={handleSaveGame}>Guardar</Button>
-              <Button onClick={() => navigate('/menu')}>Menú</Button>
-            </div>
           </div>
           
-          <div className="game-content">
-            <div className="game-sidebar">
-              <div className="game-info">
-                <h2>Turno {gameState.turn || 1}</h2>
-                <p>Jugador: {gameState.current_player === 'player' ? 'Tú' : 'IA'}</p>
-                <p className="game-message">{gameMessage}</p>
-              </div>
-              
-              {selectedHero && (
-                <HeroInfo 
-                  hero={selectedHero} 
-                  onClose={() => setSelectedHero(null)} 
-                />
-              )}
-              
-              {selectedBuilding && (
-                <BuildingInfo
-                  building={selectedBuilding}
-                  onClose={() => setSelectedBuilding(null)}
-                  playerResources={getCurrentPlayerResources()}
-                />
-              )}
-              
-              {showConstructionMenu && (
-                <BuildingConstructionMenu
-                  availableBuildings={gameState?.player.cities.flatMap(c => c.buildings) || []}
-                  onBuild={handleConstructBuilding}
-                  onClose={() => setShowConstructionMenu(false)}
-                  playerResources={getCurrentPlayerResources()}
-                  gameState={gameState}
-                />
-              )}
-              
-              {isPlayerTurnValue && (
-                <Button 
-                  variant="primary" 
-                  size="large" 
-                  onClick={handleEndTurn}
-                  className="end-turn-button"
-                >
-                  Finalizar Turno
-                </Button>
-              )}
-            </div>
-            
-            <div className="game-map-container">
-              <GameMap 
-                gameState={gameState}
-                selectedHeroId={selectedHero?.id || null}
-                onTileClick={handleTileClick}
-                onHeroClick={handleHeroClick}
-                onCityClick={handleCityClick}
-                onBuildingClick={handleBuildingClick}
-                isPlayerTurn={isPlayerTurnValue}
-              />
-            </div>
-          </div>
+          <GameControls
+            turn={gameState.turn}
+            currentPlayer={gameState.current_player}
+            gameMessage={gameMessage}
+            onEndTurn={handleEndTurn}
+            onOpenMenu={() => navigate('/menu')}
+            onOpenSettings={toggleSettingsPanel}
+            onSaveGame={handleSaveGame}
+            isPlayerTurn={isPlayerTurn}
+          />
           
-          {showRecruitmentMenu && activeBuilding && selectedHero && (
-            <RecruitmentMenu
-              building={activeBuilding}
+          {selectedHero && (
+            <HeroInfo
               hero={selectedHero}
-              onRecruit={handleRecruit}
-              onClose={() => setShowRecruitmentMenu(false)}
+              onClose={() => selectHero(null)}
+            />
+          )}
+          
+          {showSettings && (
+            <AIViewModeSettings
+              currentMode={aiViewMode}
+              onModeChange={handleAIViewModeChange}
+              onClose={() => setShowSettings(false)}
             />
           )}
         </>
-      ) : (
-        <div className="loading-screen">Cargando estado del juego...</div>
       )}
     </div>
   );

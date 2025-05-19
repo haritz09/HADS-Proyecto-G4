@@ -11,7 +11,9 @@ interface GameMapProps {
   onCityClick: (cityId: string) => void;
   onTileClick: (position: Position) => void;
   onBuildingClick: (building: Building, cityId: string) => void;
-  isPlayerTurn: boolean; // Asegurar que es boolean
+  isPlayerTurn: boolean;
+  isReadOnly?: boolean;  // Nueva prop para vistas de solo lectura
+  isAIView?: boolean;    // Nueva prop para indicar vista de IA
 }
 
 const GameMap: React.FC<GameMapProps> = ({
@@ -21,7 +23,9 @@ const GameMap: React.FC<GameMapProps> = ({
   onCityClick,
   onTileClick,
   onBuildingClick,
-  isPlayerTurn
+  isPlayerTurn,
+  isReadOnly = false,
+  isAIView = false
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
@@ -174,6 +178,8 @@ const GameMap: React.FC<GameMapProps> = ({
 
   // Manejo de click en tile - ahora requiere doble clic para moverse
   const handleTileClick = (position: Position) => {
+    if (isReadOnly) return;
+    
     if (!selectedHeroId) return;
     
     const currentTime = new Date().getTime();
@@ -551,10 +557,29 @@ const GameMap: React.FC<GameMapProps> = ({
 
     const tooltipMessage = building ? checkHeroOnBuilding(selectedHero, building) : null;
 
+    // Añadir clases adicionales para la vista de IA
+    const additionalClasses = isAIView ? 'ai-view-tile' : '';
+    
+    const updatedTileClasses = [
+      `map-tile`,
+      `terrain-${tile?.terrain || 'grass'}`,
+      heroAtThisPosition ? 'has-hero' : '',
+      city ? 'has-city' : '',
+      building ? `has-building building-${building.building_type}` : '',
+      isBuildingInteractive ? 'interactive-building' : '',
+      forceCastleInteractive ? 'castle-near-hero' : '',
+      isPlayerOwned ? 'player-owned-building' : '', // Clase para edificios del jugador
+      isAIOwned ? 'ai-owned-building' : '', // Clase para edificios de la IA
+      selectedHero && selectedHero.position.x === x && selectedHero.position.y === y ? 'selected-hero-tile' : '',
+      artifact ? 'has-artifact' : '',
+      additionalClasses
+    ].filter(Boolean).join(' ');
+
+    // Modificar onClick para respetar isReadOnly
     return (
       <div
-        className={tileClasses}
-        onClick={() => handleTileClick({ x, y })}
+        className={updatedTileClasses}
+        onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
         title={mineAtPosition ? 
           `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
           (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : tooltipMessage || undefined)}
@@ -574,8 +599,9 @@ const GameMap: React.FC<GameMapProps> = ({
 
         {heroForRendering && !animatingHero && (
           <div 
-            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''}`}
+            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''} ${isAIView && heroForRendering.id.startsWith('ai_') ? 'ai-perspective' : ''}`}
             onClick={(e) => {
+              if (isReadOnly) return;
               e.stopPropagation();
               onHeroClick(heroForRendering.id);
             }}

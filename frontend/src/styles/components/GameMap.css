@@ -657,3 +657,256 @@
 .resource-mine:hover::after {
   opacity: 1;
 }
+
+/* Añadir animaciones para acciones de la IA */
+/* Animación para construcción de edificios */
+@keyframes buildingConstruction {
+  0% { transform: scale(0.5); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.building-sprite.building-construction {
+  animation: buildingConstruction 2s ease-in-out;
+  filter: brightness(1.5) sepia(0.3);
+}
+
+.building-sprite.building-complete {
+  filter: brightness(1.2);
+  transform: scale(1.1);
+  transition: all 0.5s ease-out;
+}
+
+/* Animación para recolección de recursos */
+@keyframes resourceCollect {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.7); opacity: 0.7; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+.resource-sprite.collecting {
+  animation: resourceCollect 1s forwards;
+}
+
+/* Animación para el combate */
+@keyframes combatEffect {
+  0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+}
+
+.combat-animation {
+  animation: combatEffect 1s ease-out;
+  position: relative;
+}
+
+.combat-animation::before {
+  content: '⚔️';
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 24px;
+  animation: fadeUpAndOut 1s forwards;
+}
+
+@keyframes fadeUpAndOut {
+  0% { transform: translate(-50%, 0); opacity: 1; }
+  100% { transform: translate(-50%, -20px); opacity: 0; }
+}
+
+/* Animación para reclutamiento */
+@keyframes recruitEffect {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.recruiting-animation {
+  animation: recruitEffect 1s ease-in-out;
+}
+
+.recruiting-animation::after {
+  content: '👥';
+  position: absolute;
+  top: -15px;
+  right: -10px;
+  font-size: 16px;
+  animation: fadeIn 0.5s forwards;
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Estilos para el marcador de acción de la IA */
+.ai-action-marker {
+  position: absolute;
+  background-color: rgba(255, 165, 0, 0.7);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: white;
+  z-index: 30;
+  animation: pulseMarker 1s infinite alternate;
+  box-shadow: 0 0 10px rgba(255, 165, 0, 0.5);
+}
+
+@keyframes pulseMarker {
+  0% { transform: scale(0.9); box-shadow: 0 0 5px rgba(255, 165, 0, 0.5); }
+  100% { transform: scale(1.1); box-shadow: 0 0 15px rgba(255, 165, 0, 0.7); }
+}
+
+/* Estilos para la vista de la IA */
+.ai-view-tile .hero-sprite.ai-perspective {
+  filter: brightness(1.3) saturate(1.2);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.7);
+}
+
+.ai-view-tile .building-sprite.ai-owned-building {
+  animation: aiBuildingPulse 2s infinite;
+}
+
+/* Efecto de camino para mostrar movimientos de la IA */
+.ai-movement-path {
+  position: relative;
+}
+
+.ai-movement-path::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  background-color: rgba(255, 165, 0, 0.6);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  animation: pathPulse 1s infinite alternate;
+}
+
+.ai-movement-path.arrow-right::after {
+  content: '→';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 165, 0, 0.8);
+  font-size: 14px;
+  z-index: 6;
+}
+
+.ai-movement-path.arrow-left::after {
+  content: '←';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 165, 0, 0.8);
+  font-size: 14px;
+  z-index: 6;
+}
+
+.ai-movement-path.arrow-up::after {
+  content: '↑';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 165, 0, 0.8);
+  font-size: 14px;
+  z-index: 6;
+}
+
+.ai-movement-path.arrow-down::after {
+  content: '↓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 165, 0, 0.8);
+  font-size: 14px;
+  z-index: 6;
+}
+
+@keyframes pathPulse {
+  0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+  100% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.8; }
+}
+
+/* Efectos adicionales para acciones de la IA */
+.ai-building-construction {
+  position: relative;
+  z-index: 25;
+}
+
+.ai-building-construction::before {
+  content: '🏗️';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 16px;
+  animation: bounce 0.8s infinite alternate;
+  z-index: 26;
+}
+
+.ai-recruiting {
+  position: relative;
+  z-index: 25;
+}
+
+.ai-recruiting::before {
+  content: '👥';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 16px;
+  animation: bounce 0.8s infinite alternate;
+  z-index: 26;
+}
+
+.ai-combat {
+  position: relative;
+  overflow: visible !important;
+  z-index: 25;
+}
+
+.ai-combat::before {
+  content: '⚔️';
+  position: absolute;
+  top: -15px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 20px;
+  animation: bounce 0.5s infinite alternate;
+  z-index: 26;
+}
+
+@keyframes bounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-5px); }
+}
+
+/* Optimización para dispositivos de baja capacidad - clase que se puede aplicar condicionalmente */
+.low-performance-mode .hero-sprite.moving,
+.low-performance-mode .building-sprite.building-construction,
+.low-performance-mode .resource-sprite.collecting,
+.low-performance-mode .combat-animation,
+.low-performance-mode .recruiting-animation {
+  animation: none !important;
+  transition: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.low-performance-mode .ai-action-marker {
+  animation: none !important;
+  background-color: rgba(255, 165, 0, 0.9) !important;
+  box-shadow: none !important;
+}

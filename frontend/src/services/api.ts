@@ -287,8 +287,8 @@ const syncArtifactsWithTiles = (gameState: any) => {
   // CRÍTICO: Restaurar el tipo 'artifact' para cualquier objeto que tenga subtype
   // Este paso es necesario porque el backend no está preservando la propiedad 'type'
   updatedGameState.map.visible_objects.forEach((obj: any) => {
-    if ('subtype' in obj && obj.subtype && !obj.type) {
-      //console.log(`Restaurando tipo 'artifact' para objeto con id ${obj.id} y subtipo ${obj.subtype}`);
+    if ('subtype' in obj && obj.subtipo && !obj.type) {
+      //console.log(`Restaurando tipo 'artifact' para objeto con id ${obj.id} y subtipo ${obj.subtipo}`);
       obj.type = 'artifact';
     }
   });
@@ -819,7 +819,25 @@ export const gameService = {
         defenderId
       }
     });
-  }
+  },
+
+  getAIActions: async (gameId: string) => {
+    try {
+      return await API.post(`/games/${gameId}/ai`, { execute_actions: false });
+    } catch (error) {
+      console.error('Error al obtener acciones de la IA:', error);
+      throw error;
+    }
+  },
+  
+  executeAIActions: async (gameId: string) => {
+    try {
+      return await API.post(`/games/${gameId}/ai`, { execute_actions: true });
+    } catch (error) {
+      console.error('Error al ejecutar acciones de la IA:', error);
+      throw error;
+    }
+  },
 };
 
 export default API;

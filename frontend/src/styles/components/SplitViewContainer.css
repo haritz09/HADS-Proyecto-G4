@@ -1,0 +1,104 @@
+.split-view-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #0c0a08;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.split-view-header {
+  background-color: #1c1509;
+  border-bottom: 2px solid #8b5a2b;
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 60px;
+}
+
+.split-view-title {
+  color: #e2a54c;
+  margin: 0;
+  font-family: 'MedievalSharp', serif;
+  font-size: 1.2rem;
+}
+
+.current-action-description {
+  color: #e0d0b0;
+  font-family: 'MedievalSharp', serif;
+  font-size: 1rem;
+  animation: textPulse 2s infinite;
+  padding: 5px 10px;
+  background-color: rgba(139, 90, 43, 0.2);
+  border-radius: 4px;
+  max-width: 60%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.split-views {
+  display: flex;
+  height: calc(100% - 60px);
+}
+
+.player-view, .ai-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.player-view {
+  border-right: 2px solid #8b5a2b;
+}
+
+.view-label {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(28, 21, 9, 0.8);
+  color: #e2a54c;
+  padding: 5px 15px;
+  border-radius: 15px;
+  font-family: 'MedievalSharp', serif;
+  font-size: 0.9rem;
+  z-index: 10;
+  border: 1px solid #8b5a2b;
+}
+
+.view-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Asegura que cada GameMap dentro de un .view-content tenga dimensiones completas */
+.view-content .game-map-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes textPulse {
+  0% { opacity: 0.8; }
+  50% { opacity: 1; }
+  100% { opacity: 0.8; }
+}
+
+/* Media query para dispositivos móviles */
+@media (max-width: 768px) {
+  .split-views {
+    flex-direction: column;
+  }
+  
+  .player-view {
+    border-right: none;
+    border-bottom: 2px solid #8b5a2b;
+  }
+}
