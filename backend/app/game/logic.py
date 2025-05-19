@@ -294,6 +294,12 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     """Procesa el final del turno"""
     current_player = game_state.current_player
     
+    # Recolectar recursos de las minas para el jugador actual
+    if current_player == "player":
+        collect_resource_income(game_state.player, game_state.map, "player")
+    else:
+        collect_resource_income(game_state.ai, game_state.map, "ai")
+    
     # Restaurar puntos de movimiento
     for hero in game_state.player.heroes:
         hero.stats.movement_points_left = hero.stats.movement_points
@@ -311,7 +317,8 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     
     return {
         "next_player": game_state.current_player,
-        "turn": game_state.turn
+        "turn": game_state.turn,
+        "resources_collected": True
     }
 
 def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
@@ -598,6 +605,38 @@ def process_tile_interaction(hero: Heroe, position: Position, game_state: GameSt
         
         # Captura de minas y sitios de recursos
         for obj in (game_state.map.visible_objects or []):
+            # --- MINAS ---
+            if hasattr(obj, 'position') and obj.position.x == position.x and obj.position.y == position.y:
+                # Asegurarnos de que el objeto tiene type
+                if not hasattr(obj, 'type') and hasattr(obj, 'resource_type'):
+                    resource_mapping = {
+                        'gold': 'goldmine',
+                        'wood': 'sawmill',
+                        'stone': 'quarry'
+                    }
+                    obj.type = resource_mapping.get(obj.resource_type, 'mine')
+                
+                if hasattr(obj, 'owner') and hasattr(obj, 'resource_type') and hasattr(obj, 'resource_per_turn'):
+                    previous_owner = obj.owner
+                    # Determinar si el héroe pertenece al jugador o a la IA
+                    hero_owner = 'player' if hero in game_state.player.heroes else 'ai'
+                    obj.owner = hero_owner
+                    
+                    # Información detallada sobre la mina capturada
+                    resource_name = obj.resource_type.capitalize()
+                    income_per_turn = obj.resource_per_turn
+                    
+                    return {
+                        "interaction": "resource_site_captured", 
+                        "site_type": obj.type, 
+                        "resource_type": obj.resource_type,
+                        "resource_per_turn": income_per_turn,
+                        "previous_owner": previous_owner, 
+                        "new_owner": obj.owner, 
+                        "message": f"¡Has capturado una mina de {resource_name}! +{income_per_turn} {resource_name} por turno.",
+                        "stop_movement": False
+                    }
+                    
             # --- ARTEFACTOS ---
             if isinstance(obj, Artifact) and obj.position.x == position.x and obj.position.y == position.y:
                 print(f"DEBUG: Artifact found at position ({position.x}, {position.y}): {obj}")
@@ -719,18 +758,23 @@ def add_units_to_city_army(city: City, unit_type: str, amount: int) -> None:
     # Implementación simplificada
     pass
 
-def collect_resource_income(player: Entity, game_map: Any, owner: str) -> None:
-    """Recolecta recursos de minas y generadores controlados por el jugador o la ia según el owner."""
+def collect_resource_income(player: Entity, game_map: Any, owner: str) -> Dict[str, int]:
+    """Recolecta recursos de minas y generadores controlados por el jugador o la IA según el owner."""
     if not game_map.visible_objects:
-        return
+        return {}
+    
+    collected_resources = {"gold": 0, "wood": 0, "stone": 0}
+    
     for obj in game_map.visible_objects:
         if hasattr(obj, 'owner') and obj.owner == owner:
-            if getattr(obj, 'resource_type', None) == 'gold':
-                player.resources.gold += getattr(obj, 'resource_per_turn', 0)
-            elif getattr(obj, 'resource_type', None) == 'wood':
-                player.resources.wood += getattr(obj, 'resource_per_turn', 0)
-            elif getattr(obj, 'resource_type', None) == 'stone':
-                player.resources.stone += getattr(obj, 'resource_per_turn', 0)
+            resource_type = getattr(obj, 'resource_type', None)
+            resource_per_turn = getattr(obj, 'resource_per_turn', 0)
+            
+            if resource_type in collected_resources:
+                player.resources.__dict__[resource_type] += resource_per_turn
+                collected_resources[resource_type] += resource_per_turn
+    
+    return collected_resources
 
 def process_weekly_growth(player: Entity, game_map: Any, owner: str) -> None:
     """Procesa el crecimiento semanal de población en los edificios de las ciudades y suma recursos de minas."""

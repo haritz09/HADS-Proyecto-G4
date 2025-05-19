@@ -31,10 +31,10 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
           <div className="unit-name">{unit.type}</div>
           <div className="unit-stats">
             <span className="unit-quantity">{unit.count}</span>
-            <span className="unit-attack">A: {unit.stats.attack}</span>
-            <span className="unit-defense">D: {unit.stats.defense}</span>
-            <span className="unit-speed">S: {unit.stats.speed}</span>
-            <span className="unit-movement">M: {unit.stats.movement_points}</span>
+            <span className="unit-attack">A: {unit.stats?.attack ?? 0}</span>
+            <span className="unit-defense">D: {unit.stats?.defense ?? 0}</span>
+            <span className="unit-speed">S: {unit.stats?.speed ?? 0}</span>
+            <span className="unit-movement">M: {unit.stats?.movement_points ?? 0}</span>
           </div>
         </div>
       </div>

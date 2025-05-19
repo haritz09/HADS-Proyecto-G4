@@ -18,6 +18,7 @@ interface GameControlsProps {
   onSaveGame: () => void;
   onOpenMenu: () => void;
   isPlayerTurn: boolean;
+  onOpenSettings: () => void;  // Nueva prop para abrir panel de configuración
 }
 
 const GameControls: React.FC<GameControlsProps> = ({
@@ -28,13 +29,14 @@ const GameControls: React.FC<GameControlsProps> = ({
   onSaveGame,
   onOpenMenu,
   isPlayerTurn,
+  onOpenSettings
 }) => {
   return (
     <div className="game-controls">
       <div className="turn-info">
         <h2>Turno {turn}</h2>
         <p className="current-player">
-          Jugador: <span className={`player-${currentPlayer}`}>{currentPlayer}</span>
+          Jugador: <span className={`player-${currentPlayer}`}>{currentPlayer === 'player' ? 'Tú' : 'IA'}</span>
         </p>
       </div>
       
@@ -66,6 +68,15 @@ const GameControls: React.FC<GameControlsProps> = ({
           onClick={onOpenMenu}
         >
           Menú Principal
+        </Button>
+        
+        <Button 
+          variant="secondary" 
+          size="medium" 
+          onClick={onOpenSettings}
+          className="settings-button"
+        >
+          Opciones ⚙️
         </Button>
       </div>
     </div>

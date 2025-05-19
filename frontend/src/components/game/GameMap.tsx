@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GameState, Hero, Position, MapTile, Building, ArtifactObject, VisibleObject } from '../../types/game';
+import { GameState, Hero, Position, MapTile, Building, ArtifactObject, VisibleObject, ResourceMine } from '../../types/game';
 import { useGame } from '../../contexts/GameContext';
 import { findPath, calculatePathCost } from '../../services/gameEngine';
 import '../../styles/components/GameMap.css';
@@ -11,7 +11,9 @@ interface GameMapProps {
   onCityClick: (cityId: string) => void;
   onTileClick: (position: Position) => void;
   onBuildingClick: (building: Building, cityId: string) => void;
-  isPlayerTurn: boolean; // Asegurar que es boolean
+  isPlayerTurn: boolean;
+  isReadOnly?: boolean;  // Nueva prop para vistas de solo lectura
+  isAIView?: boolean;    // Nueva prop para indicar vista de IA
 }
 
 const GameMap: React.FC<GameMapProps> = ({
@@ -21,11 +23,14 @@ const GameMap: React.FC<GameMapProps> = ({
   onCityClick,
   onTileClick,
   onBuildingClick,
-  isPlayerTurn
+  isPlayerTurn,
+  isReadOnly = false,
+  isAIView = false
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
-  const [zoom, setZoom] = useState(1);
+  // Remove zoom state and set fixed zoom of 1
+  const fixedZoom = 1;
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [startY, setStartY] = useState(0);
@@ -113,23 +118,20 @@ const GameMap: React.FC<GameMapProps> = ({
     return tiles2D;
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(prev => Math.max(0.5, Math.min(2, prev * delta)));
-  };
+  // Remove handleWheel function completely
 
+  // Modify handleMouseDown to work with any mouse button
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 2) { // Solo botón derecho
-      e.preventDefault();
-      setIsDragging(true);
-      setStartX(e.pageX - mapRef.current!.offsetLeft);
-      setStartY(e.pageY - mapRef.current!.offsetTop);
-      setScrollLeft(mapRef.current!.scrollLeft);
-      setScrollTop(mapRef.current!.scrollTop);
-    }
+    // Remove check for right button only
+    e.preventDefault();
+    setIsDragging(true);
+    setStartX(e.pageX - mapRef.current!.offsetLeft);
+    setStartY(e.pageY - mapRef.current!.offsetTop);
+    setScrollLeft(mapRef.current!.scrollLeft);
+    setScrollTop(mapRef.current!.scrollTop);
   };
 
+  // Keep handleMouseMove as is
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
     
@@ -145,6 +147,7 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   };
 
+  // Keep handleMouseUp unchanged
   const handleMouseUp = () => {
     setIsDragging(false);
   };
@@ -172,41 +175,31 @@ const GameMap: React.FC<GameMapProps> = ({
       : 'unreachable-path';
   };
 
+  // Manejo de click en tile - ahora requiere doble clic para moverse
   const handleTileClick = (position: Position) => {
+    if (isReadOnly) return;
+    
     if (!selectedHeroId) return;
     
-    const now = Date.now();
-    const isDoubleClick = now - lastClickTime < 300 && 
-      pendingDestination && 
-      pendingDestination.x === position.x && 
-      pendingDestination.y === position.y;
+    const currentTime = new Date().getTime();
+    const timeSinceLastClick = currentTime - lastClickTime;
     
-    setLastClickTime(now);
+    // Umbral de doble clic - 300ms es bastante estándar
+    const doubleClickThreshold = 300; // milisegundos
     
-    if (isDoubleClick && pendingDestination) {
-      // Ejecutar movimiento en segundo click (esto enviará la acción al backend)
+    if (timeSinceLastClick < doubleClickThreshold) {
+      // Es un doble clic, ejecutar la acción de movimiento
+      console.log('Double click detected, initiating movement');
       onTileClick(position);
-      setPendingDestination(null);
-      setPreviewPath([]); // Limpiar el camino al confirmar movimiento
     } else {
-      // Mostrar camino solo cuando se hace clic en una casilla
-      setPendingDestination(position);
-      
-      // CRÍTICO: Obtener la posición actual más precisa para este movimiento
-      const currentPosition = getHeroCurrentPosition(selectedHeroId, true);
-      if (currentPosition) {
-        const tiles2D = convertMapTo2D();
-        // Calcular el camino desde la posición actual
-        const path = findPath(currentPosition, position, tiles2D);
-        
-        // Solo mostrar animación si hay camino
-        if (path.length > 0) {
-          setPreviewPath(path);
-          console.log(`Camino calculado desde (${currentPosition.x}, ${currentPosition.y}) hasta (${position.x}, ${position.y}), ${path.length} pasos`);
-          handleHeroMovement(selectedHeroId, path);
-        }
-      }
+      // Primer clic - mostrar indicación visual si quieres
+      console.log('First click, waiting for potential double click');
+      // Opcionalmente, podrías establecer un estado para mostrar una indicación visual
+      // setPendingDestination(position);
     }
+    
+    // Actualizar el tiempo del último clic para la siguiente verificación
+    setLastClickTime(currentTime);
   };
 
   const getBuildingIcon = (buildingType: string): string => {
@@ -233,28 +226,14 @@ const GameMap: React.FC<GameMapProps> = ({
   };
 
   const handleHeroMovement = (heroId: string, path: Position[]) => {
-    // Para la animación, obtener la posición inicial más reciente
-    let startPosition: Position;
-    
-    // Si ya hay una animación en curso para este héroe, usar su posición actual
-    if (animatingHero && animatingHero.heroId === heroId && animatingHero.currentPosition) {
-      startPosition = { ...animatingHero.currentPosition };
-      console.log(`Continuando movimiento desde posición animada: (${startPosition.x}, ${startPosition.y})`);
-    } else {
-      // Si no hay animación, usar la posición del estado
-      const hero = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => h.id === heroId);
-      if (!hero?.position) return;
-      startPosition = { ...hero.position };
-      console.log(`Iniciando movimiento desde posición de estado: (${startPosition.x}, ${startPosition.y})`);
-    }
-    
-    // Asegurarse de que el camino empiece desde la posición correcta
-    const adjustedPath = [startPosition, ...path.slice(1)];
+    const startPosition = getHeroCurrentPosition(heroId);
+    if (!startPosition || path.length < 2) return;
 
+    // Now animation will only be triggered after backend confirms successful movement
     setAnimatingHero({
       heroId,
       currentPosition: startPosition,
-      path: adjustedPath,
+      path, // Use the path parameter instead of the undefined adjustedPath
       step: 0
     });
   };
@@ -300,11 +279,18 @@ const GameMap: React.FC<GameMapProps> = ({
       obj.position && obj.position.x === x && obj.position.y === y
     );
     
+    //console.log(`Artefactos encontrados directamente en (${x},${y}):`, artifactsAtPosition);
+    /*console.groupCollapsed(`Artefactos en (${x},${y})`); 
+    console.log(artifactsAtPosition);
+    console.groupEnd();
+    */
+    // Inicio con null para asegurar que siempre devuelvo null o VisibleObject
     let artifact: VisibleObject | null = null;
     
     if (tile?.object_type === 'artifact' && tile?.object_id) {
       const foundArtifact = gameState.map.visible_objects?.find(obj => obj.id === tile.object_id);
       if (foundArtifact) {
+        //console.log("Artefacto encontrado por ID en tile:", foundArtifact);
         artifact = foundArtifact;
       }
     }
@@ -317,6 +303,7 @@ const GameMap: React.FC<GameMapProps> = ({
       });
       
       if (foundArtifact) {
+        //console.log("Artefacto encontrado por posición:", foundArtifact);
         artifact = foundArtifact;
       }
     }
@@ -329,8 +316,13 @@ const GameMap: React.FC<GameMapProps> = ({
       );
       
       if (exactMatch) {
+       // console.log(`✅ Artefacto encontrado por coincidencia exacta de posición (${x},${y}):`, exactMatch);
         return exactMatch;
       }
+    }
+    
+    if (artifact) {
+      //console.log(`✅ Artefacto encontrado en (${x},${y})`, artifact);
     }
     
     return artifact;
@@ -420,6 +412,80 @@ const GameMap: React.FC<GameMapProps> = ({
     );
   };
 
+  // Updated getMineIcon function to be more clear and visible
+  const getMineIcon = (type: string, symbol?: string): string => {
+    // If we have a custom symbol from the backend, use it
+    if (symbol) return symbol;
+    
+    // Otherwise, use a clear icon based on type
+    switch (type) {
+      case 'goldmine': return '💰';  // Gold bag for gold mines
+      case 'sawmill': return '🪵';   // Wood for sawmills
+      case 'quarry': return '⛏️';    // Pickaxe for quarries
+      default:
+        // If we don't recognize the type but have resource_type, use that
+        if (type.includes('gold')) return '💰';
+        if (type.includes('wood')) return '🪵';
+        if (type.includes('stone')) return '⛏️';
+        return '🏭'; // Default factory icon
+    }
+  };
+  
+  // Enhanced renderMine function with better logging
+  const renderMine = (mine: VisibleObject) => {
+    if (!mine.position) {
+      console.warn('Trying to render mine without position:', mine);
+      return null;
+    }
+    
+    // Type assertion to access resource properties
+    const resourceMine = mine as ResourceMine;
+    
+    // Extract important properties with fallbacks
+    const mineType = mine.type || 'unknown';
+    const owner = mine.owner;
+    const resourceType = 'resource_type' in mine ? resourceMine.resource_type : 'unknown';
+    const resourcePerTurn = 'resource_per_turn' in mine ? resourceMine.resource_per_turn : 0;
+    const symbol = 'symbol' in mine ? (mine as any).symbol : undefined;
+    const ownerClass = owner === 'player' ? 'player-owned' : owner === 'ai' ? 'ai-owned' : 'neutral';
+    
+    const getTooltip = (): string => {
+      const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+      let tooltip = `Mina de ${resourceName}: +${resourcePerTurn} por turno`;
+      
+      if (owner) {
+        tooltip += `\nPropietario: ${owner === 'player' ? 'Tú' : 'IA'}`;
+      } else {
+        tooltip += '\nSin propietario';
+      }
+      
+      return tooltip;
+    };
+    
+    const mineClasses = [
+      'resource-mine',
+      mineType,
+      ownerClass,
+      mine.justCaptured ? 'just-captured' : ''
+    ].filter(Boolean).join(' ');
+    
+    return (
+      <div
+        key={`mine-${mine.id}`}
+        className={mineClasses}
+        style={{
+          left: `${mine.position.x * 32}px`,
+          top: `${mine.position.y * 32}px`,
+        }}
+        title={getTooltip()}
+        data-income={`+${resourcePerTurn}`}
+      >
+        {getMineIcon(mineType, symbol)}
+      </div>
+    );
+  };
+
+  // Actualizar el método renderTile para detectar minas en el tile
   const renderTile = (x: number, y: number) => {
     const index = y * gameState.map.size.width + x;
     const tile = gameState.map.tiles[index];
@@ -436,6 +502,15 @@ const GameMap: React.FC<GameMapProps> = ({
     const city = gameState.player.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
     const aiCity = gameState.ai.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
     const building = city?.buildings?.[0] || aiCity?.buildings?.[0];
+
+    // Find a mine at this position
+    const mineAtPosition = gameState.map.visible_objects?.find(obj => 
+      obj.position && 
+      obj.position.x === x && 
+      obj.position.y === y && 
+      (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+       ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+    ) as ResourceMine | undefined;
 
     const artifact = findArtifactAtPosition(x, y, tile);
     const { name: artifactName, subtype: artifactSubtype } = getArtifactProperties(artifact);
@@ -481,11 +556,32 @@ const GameMap: React.FC<GameMapProps> = ({
 
     const tooltipMessage = building ? checkHeroOnBuilding(selectedHero, building) : null;
 
+    // Añadir clases adicionales para la vista de IA
+    const additionalClasses = isAIView ? 'ai-view-tile' : '';
+    
+    const updatedTileClasses = [
+      `map-tile`,
+      `terrain-${tile?.terrain || 'grass'}`,
+      heroAtThisPosition ? 'has-hero' : '',
+      city ? 'has-city' : '',
+      building ? `has-building building-${building.building_type}` : '',
+      isBuildingInteractive ? 'interactive-building' : '',
+      forceCastleInteractive ? 'castle-near-hero' : '',
+      isPlayerOwned ? 'player-owned-building' : '', // Clase para edificios del jugador
+      isAIOwned ? 'ai-owned-building' : '', // Clase para edificios de la IA
+      selectedHero && selectedHero.position.x === x && selectedHero.position.y === y ? 'selected-hero-tile' : '',
+      artifact ? 'has-artifact' : '',
+      additionalClasses
+    ].filter(Boolean).join(' ');
+
+    // Modificar onClick para respetar isReadOnly
     return (
       <div
-        className={tileClasses}
-        onClick={() => handleTileClick({ x, y })}
-        title={artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : tooltipMessage || undefined}
+        className={updatedTileClasses}
+        onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
+        title={mineAtPosition ? 
+          `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
+          (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : tooltipMessage || undefined)}
       >
         {artifact && (
           <div 
@@ -502,8 +598,9 @@ const GameMap: React.FC<GameMapProps> = ({
 
         {heroForRendering && !animatingHero && (
           <div 
-            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''}`}
+            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''} ${isAIView && heroForRendering.id.startsWith('ai_') ? 'ai-perspective' : ''}`}
             onClick={(e) => {
+              if (isReadOnly) return;
               e.stopPropagation();
               onHeroClick(heroForRendering.id);
             }}
@@ -547,10 +644,20 @@ const GameMap: React.FC<GameMapProps> = ({
         const { x, y } = artifact.position;
         const idx = y * gameState.map.size.width + x;
         
+        // Verificar más detalles sobre la posición y el índice
+        //console.log(`Artefacto ${artifact.id} en posición (${x},${y}), índice: ${idx}`);
+        //console.log(`- Tamaño del mapa: ${gameState.map.size.width}x${gameState.map.size.height}`);
+        //console.log(`- Longitud de tiles: ${gameState.map.tiles.length}`);
+        //console.log(`- ¿Índice válido? ${idx >= 0 && idx < gameState.map.tiles.length}`);
+        
         if (idx >= 0 && idx < gameState.map.tiles.length) {
           const tile = gameState.map.tiles[idx];
+          //console.log(`- Tile actual:`, tile);
           
           if (tile.object_type !== 'artifact') {
+            //console.log(`  > Debería actualizar este tile con object_type='artifact' y object_id='${artifact.id}'`);
+            
+            // Intentar una COPIA PROFUNDA del tile para actualizar
             const updatedTile = JSON.parse(JSON.stringify(tile));
             updatedTile.object_type = 'artifact';
             updatedTile.object_id = artifact.id;
@@ -563,6 +670,34 @@ const GameMap: React.FC<GameMapProps> = ({
   useEffect(() => {
     if (gameState?.map?.visible_objects?.length > 0) {
       syncArtifactsWithTiles();
+    }
+  }, [gameState?.map?.visible_objects]);
+
+  // Nueva useEffect para asegurar que las minas se detectan y renderizan correctamente
+  useEffect(() => {
+    // Sincronizar minas con el renderizado
+    if (gameState?.map?.visible_objects?.length > 0) {
+      const minas = gameState.map.visible_objects.filter(obj => 
+        obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+        ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
+      );
+      
+      if (minas.length > 0) {
+        //console.log(`GameMap: Encontradas ${minas.length} minas para renderizar`);
+        // Log detailed mine info
+        minas.forEach((mina, index) => {
+          //console.log(`GameMap: Mina ${index+1} - type=${mina.type}, resource_type=${'resource_type' in mina ? mina.resource_type : 'N/A'}, position=(${mina.position.x}, ${mina.position.y})`);
+        });
+      } else {
+        //console.warn("GameMap: No se encontraron minas en visible_objects");
+        // Log all visible objects to see what we're working with
+        /*console.log("GameMap: Todos los visible_objects:", gameState.map.visible_objects.map(obj => ({
+          id: obj.id,
+          type: obj.type,
+          hasResourceType: 'resource_type' in obj,
+          position: obj.position
+        }))); */
+      }
     }
   }, [gameState?.map?.visible_objects]);
 
@@ -579,25 +714,63 @@ const GameMap: React.FC<GameMapProps> = ({
     );
   }
 
+  // Make the preventWheel handler more robust
+  const preventWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Also block native scrolling that might happen outside the handler
+    if (mapRef.current) {
+      mapRef.current.scrollLeft = scrollLeft;
+      mapRef.current.scrollTop = scrollTop;
+    }
+    
+    return false;
+  };
+
   return (
     <div 
       ref={mapRef}
       className={`game-map-wrapper ${isDragging ? 'dragging' : ''}`}
-      onWheel={handleWheel}
+      onWheel={preventWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onContextMenu={handleContextMenu}
+      // Add this to prevent scrolling on touch devices
+      onTouchMove={(e) => e.preventDefault()}
     >
       <div 
         className="game-map"
         style={{
-          transform: `scale(${zoom})`,
+          transform: `scale(${fixedZoom})`, // Keep fixed zoom
           transformOrigin: '0 0'
         }}
       >
         {grid}
+        
+        {/* CRITICAL DEBUG: Add logging to show how many mines we're about to render */}
+        {(() => {
+          const minesToRender = gameState.map.visible_objects?.filter(obj => 
+            obj.position && 
+            (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+             ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+          ) || [];
+          
+          console.log(`GameMap: Rendering ${minesToRender.length} mines in map`);
+          return null;
+        })()}
+        
+        {/* Renderizado explícito de todas las minas */}
+        {gameState.map.visible_objects?.filter(obj => 
+          obj.position && 
+          (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+        ).map(mine => {
+          console.log(`GameMap: Rendering mine: type=${mine.type}, position=(${mine.position.x}, ${mine.position.y})`);
+          return renderMine(mine);
+        })}
       </div>
     </div>
   );

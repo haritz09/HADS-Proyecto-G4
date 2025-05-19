@@ -1,0 +1,9 @@
+/* Prevent wheel-based scrolling on game elements */
+.game-page, .game-map-wrapper, .game-map {
+  overscroll-behavior: none;
+}
+
+/* Optional: Prevent pull-to-refresh on mobile */
+body {
+  overscroll-behavior-y: none;
+}

@@ -14,6 +14,7 @@ from backend.app.db.crud import (
 from bson import ObjectId
 from datetime import datetime, UTC
 import logging
+import json
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -237,6 +238,19 @@ async def crear_nueva_partida(
     map_size = 100
     total_tiles = map_size * map_size
     
+    # CRITICAL DEBUG: Log the initial visible_objects before any processing
+    visible_objects_count = len(game_data.get("game_state", {}).get("map", {}).get("visible_objects", []))
+    print(f"DEBUG CREATE_GAME [1]: Initial visible_objects count: {visible_objects_count}")
+    
+    # Log mine data specifically
+    mines = [obj for obj in game_data.get("game_state", {}).get("map", {}).get("visible_objects", []) 
+             if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    print(f"DEBUG CREATE_GAME [2]: Found {len(mines)} mines in initial data")
+    
+    for i, mine in enumerate(mines):
+        print(f"DEBUG CREATE_GAME [3]: Mine {i+1}: type={mine.get('type')}, resource_type={mine.get('resource_type')}, position={mine.get('position')}")
+    
     # Actualizar el tamaño del mapa en game_state
     if "game_state" in game_data and "map" in game_data["game_state"]:
         game_data["game_state"]["map"]["size"] = {"width": map_size, "height": map_size}
@@ -246,6 +260,41 @@ async def crear_nueva_partida(
         ]
         game_data["game_state"]["map"]["fog_of_war"] = [False] * total_tiles
         game_data["game_state"]["map"]["explored"] = [True] * total_tiles
+        
+        # Mark tiles containing resource mines
+        if "visible_objects" in game_data["game_state"]["map"]:
+            visible_objects = game_data["game_state"]["map"]["visible_objects"]
+            mine_count = 0
+            for obj in visible_objects:
+                if "position" in obj and ("type" in obj or "resource_type" in obj):
+                    # Check if it's a resource mine by type or properties
+                    is_mine = (obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                              ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"]))
+                    
+                    if is_mine and "position" in obj:
+                        mine_count += 1
+                        x = obj["position"]["x"]
+                        y = obj["position"]["y"]
+                        idx = y * map_size + x
+                        
+                        if 0 <= idx < len(game_data["game_state"]["map"]["tiles"]):
+                            # Mark the tile with the object type and ID
+                            game_data["game_state"]["map"]["tiles"][idx]["object_type"] = obj.get("type", "mine")
+                            game_data["game_state"]["map"]["tiles"][idx]["object_id"] = obj.get("id")
+                            
+                            # Print for debugging
+                            print(f"DEBUG CREATE_GAME [4]: Marked mine ({obj.get('type', 'unknown')}) at position ({x}, {y}), resource_type={obj.get('resource_type')}")
+            
+            print(f"DEBUG CREATE_GAME [5]: Processed {mine_count} of {len(visible_objects)} visible objects as mines")
+    
+    # CRITICAL: Verify mines are still present after all processing
+    final_visible_objects = game_data.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    final_mines = [obj for obj in final_visible_objects 
+                  if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                     ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    
+    print(f"DEBUG CREATE_GAME [6]: Final visible_objects count before DB save: {len(final_visible_objects)}")
+    print(f"DEBUG CREATE_GAME [7]: Final mines count before DB save: {len(final_mines)}")
     
     game_data["created_at"] = datetime.now(UTC)
     game_data["last_saved"] = datetime.now(UTC)
@@ -300,6 +349,18 @@ async def cargar_partida_guardada(
     if not game:
         raise HTTPException(status_code=404, detail="Partida no encontrada")
     
+    # DEBUG: Verify visible_objects in the response
+    visible_objects = game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    mines = [obj for obj in visible_objects 
+             if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    
+    print(f"DEBUG LOAD_GAME [1]: Returning game with {len(visible_objects)} visible objects")
+    print(f"DEBUG LOAD_GAME [2]: Found {len(mines)} mines in response")
+    
+    for i, mine in enumerate(mines):
+        print(f"DEBUG LOAD_GAME [3]: Mine {i+1}: type={mine.get('type')}, resource_type={mine.get('resource_type')}, position={mine.get('position')}")
+    
     # Verificar que el usuario es dueño de la partida
     if str(game["user_id"]) != str(current_user["_id"]):
         raise HTTPException(status_code=403, detail="No autorizado para cargar esta partida")
@@ -312,8 +373,22 @@ def get_game_internal(game_id: str):
     if not game:
         return None
     
+    # DEBUG: Check if visible_objects exists in the database record
+    visible_objects = game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    print(f"DEBUG GET_GAME_INTERNAL [1]: Retrieved game from DB with {len(visible_objects)} visible objects")
+    
+    # Check for mines specifically
+    mines = [obj for obj in visible_objects 
+             if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+    print(f"DEBUG GET_GAME_INTERNAL [2]: Found {len(mines)} mines in DB record")
+    
     # Sanitizar los datos del juego antes de devolverlos
     sanitized_game = sanitize_game_data(game)
+    
+    # Check if sanitization affected visible_objects
+    sanitized_visible_objects = sanitized_game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+    print(f"DEBUG GET_GAME_INTERNAL [3]: After sanitization: {len(sanitized_visible_objects)} visible objects")
     
     return sanitized_game
 
@@ -474,10 +549,12 @@ async def aplicar_cheat(
 @router.post("/{game_id}/ai")
 async def communicate_with_ai(
     game_id: str,
+    execute_actions: bool = False,  # Nuevo parámetro para decidir si ejecutar acciones automáticamente
     current_user: dict = Depends(get_current_user)
 ):
     """
     Comunica el estado actual de la partida a la IA y devuelve la respuesta de la IA.
+    Si execute_actions es True, ejecuta todas las acciones y devuelve el estado final.
     """
     game = get_game(game_id)
     if not game:
@@ -487,11 +564,204 @@ async def communicate_with_ai(
     game_state = game.get("game_state")
     if not game_state:
         raise HTTPException(status_code=400, detail="La partida no tiene estado de juego válido")
+    
     # Obtener instancia singleton de GroqClient
     groq_client = GroqClient()
     try:
+        # Verificar que es el turno de la IA
+        if game_state.get("current_player") != "ai":
+            raise HTTPException(status_code=400, detail="No es el turno de la IA")
+        
+        # Obtener respuesta de la IA
         ai_response = groq_client.send_message(game_state)
-        # Se asume que la respuesta relevante está en ai_response.choices[0].message.content
-        return {"ai_response": ai_response.choices[0].message.content}
+        response_content = ai_response.choices[0].message.content
+        
+        # Si no es necesario ejecutar acciones, devolver solo la respuesta
+        if not execute_actions:
+            return {"ai_response": response_content}
+        
+        # Procesar y ejecutar acciones de la IA
+        return await process_ai_actions(game_id, response_content, game, game_state)
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error comunicando con la IA: {str(e)}")
+
+async def process_ai_actions(game_id: str, ai_response_content: str, game: dict, game_state: dict):
+    """
+    Procesa la respuesta de la IA, extrae las acciones y las ejecuta secuencialmente.
+    
+    Args:
+        game_id: ID de la partida
+        ai_response_content: Respuesta de la IA en formato JSON
+        game: Datos completos del juego
+        game_state: Estado actual del juego
+        
+    Returns:
+        dict: Resultados de las acciones y estado final del juego
+    """
+    try:
+        # Intentar analizar diferentes formatos de respuesta JSON
+        ai_actions = None
+        try:
+            # Intento principal: respuesta completa en formato JSON
+            ai_actions = json.loads(ai_response_content)
+        except json.JSONDecodeError:
+            # Si falla, intentar extraer solo la parte JSON usando expresiones regulares
+            import re
+            json_match = re.search(r'```json\s*(.*?)\s*```', ai_response_content, re.DOTALL)
+            if json_match:
+                try:
+                    ai_actions = json.loads(json_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+            
+            # Si aún no hemos encontrado JSON válido, buscar la primera ocurrencia de { hasta la última de }
+            if not ai_actions:
+                json_match = re.search(r'(\{.*\})', ai_response_content, re.DOTALL)
+                if json_match:
+                    try:
+                        ai_actions = json.loads(json_match.group(1))
+                    except json.JSONDecodeError:
+                        pass
+        
+        # Si después de todos los intentos no tenemos un objeto JSON, mostrar error
+        if not ai_actions:
+            raise ValueError(f"No se pudo parsear la respuesta de la IA: {ai_response_content[:100]}...")
+        
+        # Verificar que la respuesta tiene el formato esperado
+        if not isinstance(ai_actions, dict):
+            raise ValueError(f"La respuesta de la IA no es un objeto JSON: {ai_actions}")
+        
+        # Obtener la lista de acciones (puede estar en actions o en 'acciones' si la IA lo tradujo)
+        actions = ai_actions.get('actions', ai_actions.get('acciones', []))
+        if not isinstance(actions, list):
+            raise ValueError(f"El campo 'actions' debe ser una lista: {actions}")
+        
+        # Logging para depuración
+        logger.info(f"Processing {len(actions)} AI actions")
+        
+        # Convertir game_state a objeto GameState para procesamiento
+        game_state_obj = GameState(**game_state)
+        
+        # Resultados de cada acción
+        action_results = []
+        
+        # Procesar cada acción secuencialmente
+        for i, action in enumerate(actions):
+            # Control logging
+            logger.info(f"Processing AI action {i+1}/{len(actions)}: {action.get('type', 'unknown')}")
+            
+            # Si es el final del turno, terminar el bucle
+            if action.get('type') == 'endTurn':
+                # Procesar fin de turno
+                result = process_end_turn(game_state_obj)
+                action_results.append({
+                    "action": "endTurn",
+                    "result": result
+                })
+                logger.info("AI turn ended")
+                break
+            
+            # Procesar la acción según su tipo
+            try:
+                result = None
+                action_type = action.get('type')
+                
+                # Normalizar tipos de acción para manejar posibles variaciones
+                action_type_normalized = action_type.lower() if action_type else None
+                
+                # Asegurar que details exista
+                if 'details' not in action and action_type_normalized != 'endturn':
+                    # Intentar reconstruir details con campos a nivel raíz
+                    action['details'] = {k: v for k, v in action.items() if k != 'type'}
+                    logger.warning(f"Missing 'details' field, reconstructed: {action['details']}")
+                
+                # Procesar según el tipo normalizado
+                if action_type_normalized in ['movehero', 'move_hero', 'move']:
+                    result = process_hero_movement(game_state_obj, action)
+                elif action_type_normalized in ['buildstructure', 'build_structure', 'build']:
+                    result = process_build_structure(game_state_obj, action)
+                elif action_type_normalized in ['recruitunits', 'recruit_units', 'recruit']:
+                    result = process_recruitment(game_state_obj, action)
+                elif action_type_normalized in ['combat', 'attack', 'attackenemy', 'attack_enemy']:
+                    result = process_hero_attack(game_state_obj, action)
+                elif action_type_normalized in ['transfer', 'transfertroops', 'transfer_troops']:
+                    result = transfer_troops_between_hero_and_castle(game_state_obj, action)
+                else:
+                    # Acción no reconocida o no implementada
+                    logger.warning(f"Action type not implemented: {action_type}")
+                    result = {"error": f"Acción no implementada: {action_type}"}
+                
+                # Guardar el resultado
+                action_results.append({
+                    "action": action_type,
+                    "details": action.get('details', {}),
+                    "result": result
+                })
+                
+                # Logging para cada acción exitosa
+                logger.info(f"AI action {action_type} executed successfully")
+                
+            except Exception as e:
+                # Si una acción falla, registrarla y continuar con la siguiente
+                error_msg = f"Error al procesar acción de IA: {str(e)}"
+                logger.error(error_msg)
+                action_results.append({
+                    "action": action.get('type'),
+                    "error": error_msg
+                })
+                continue
+        
+        # Actualizar el estado del juego en la base de datos
+        game["game_state"] = game_state_obj.model_dump()
+        updated_game = update_game(game_id, game)
+        
+        # Añadir información estratégica si está disponible
+        strategic_info = {}
+        for key in ["strategic_planning", "reasoning", "analysis"]:
+            if key in ai_actions:
+                strategic_info[key] = ai_actions[key]
+        
+        # Devolver resultados y estado actualizado
+        return {
+            "ai_response": ai_response_content,
+            "actions_executed": action_results,
+            "strategic_info": strategic_info,
+            "game_state": updated_game.get("game_state") if updated_game else None
+        }
+    
+    except json.JSONDecodeError:
+        logger.error(f"JSON decode error processing AI response: {ai_response_content[:200]}...")
+        raise ValueError("No se pudo parsear la respuesta de la IA como JSON válido")
+    except Exception as e:
+        logger.error(f"Error procesando acciones de IA: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error procesando acciones de IA: {str(e)}")
+
+@router.post("/initialize", response_model=GameRead, status_code=201)
+async def initialize_new_game(
+    scenario_id: str = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Inicializa una nueva partida con nuestro estado personalizado."""
+    # Obtener el user_id del usuario autenticado
+    user_id = str(current_user["_id"])
+    
+    # Importar nuestra función de inicialización
+    from backend.app.game.gameInitializer import initialize_game_state
+    
+    # Crear datos de la partida con nuestro estado personalizado
+    game_data = {
+        "user_id": user_id,
+        "name": f"Nueva partida - {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')}",
+        "scenario_id": scenario_id,
+        "created_at": datetime.now(UTC),
+        "last_saved": datetime.now(UTC),
+        "is_autosave": False,
+        "cheats_used": [],
+        "game_state": initialize_game_state()  # ¡Usar nuestra función personalizada!
+    }
+    
+    # Crear la partida usando el CRUD existente
+    return create_game(game_data)

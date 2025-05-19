@@ -117,12 +117,6 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height }) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      setScale(prevScale => Math.max(0.2, Math.min(5, prevScale * delta)));
-    };
-    
     const handleMouseDown = (e: MouseEvent) => {
       setIsDragging(true);
       setLastPosition({ x: e.clientX, y: e.clientY });
@@ -146,13 +140,11 @@ const WorldMap: React.FC<WorldMapProps> = ({ width, height }) => {
       setIsDragging(false);
     };
     
-    canvas.addEventListener('wheel', handleWheel);
     canvas.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
     
     return () => {
-      canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);

@@ -7,55 +7,73 @@
 * - Gestión de eventos del juego
 */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { gameService } from '../services/api';
-import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
 import { GameState, Hero, Position, Building } from '../types/game';
+import { useGame } from '../contexts/GameContext';
 import GameMap from '../components/game/GameMap';
+import GameControls from '../components/game/GameControls';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
-import BuildingInfo from '../components/game/BuildingInfo';
+import AIViewModeSettings from '../components/game/AIViewModeSettings';
+import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
+import AIActionsSummary from '../components/game/AIActionsSummary';
+import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
-import RecruitmentMenu from '../components/game/RecruitmentMenu';
-import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
-import { syncArtifactsWithTiles } from '../utils/gameMapUtils';
+import { gameService } from '../services/api';
+import { executeAction, createEndTurnAction } from '../services/actionService';
+import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
+import { findPath, calculateMovementCost } from '../services/gameEngine';
 import '../styles/pages/GamePage.css';
 
 const GamePage: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
   
-  // Estado del juego
+  // Add all the missing state variables
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
-  // Estado UI
-  const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
   const [gameMessage, setGameMessage] = useState<string>('');
+  const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
+  const [activeBuilding, setActiveBuilding] = useState<Building | null>(null);
+  const [showConstructionMenu, setShowConstructionMenu] = useState<boolean>(false);
   const [movingHero, setMovingHero] = useState<{
     heroId: string;
     path: Position[];
     currentStep: number;
   } | null>(null);
+  const [forceUpdate, setForceUpdate] = useState<Record<string, unknown>>({});
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
-  const [activeBuilding, setActiveBuilding] = useState<Building | null>(null);
-  const [showRecruitmentMenu, setShowRecruitmentMenu] = useState(false);
-  const [showConstructionMenu, setShowConstructionMenu] = useState(false);
-  
-  // Función para actualizar el estado del juego
-  const updateGameState = (newState: GameState) => {
-    setGameState(newState);
-  };
+  const [showRecruitmentMenu, setShowRecruitmentMenu] = useState<boolean>(false);
+  // Add state for settings modal
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+  const { 
+    selectHero, 
+    moveHero, 
+    endTurn, 
+    aiViewMode, 
+    setAiViewMode,
+    aiThinking,
+    showAiSummary,
+    setShowAiSummary,
+    aiActions,
+    aiStrategicInfo,
+    playbackSpeed,
+    setPlaybackSpeed,
+    skipAnimation
+  } = useGame();
+  
+  // Estado local para UI
+  const [showSettings, setShowSettings] = useState(false);
+  
   // Cargar el estado del juego
   useEffect(() => {
     if (!gameId) return;
     
     const loadGame = async () => {
       try {
-        setLoading(true);
         console.log("Loading game with ID:", gameId);
         const response = await gameService.loadGame(gameId);
         console.log("Loaded game data:", response.data);
@@ -65,10 +83,28 @@ const GamePage: React.FC = () => {
           throw new Error("Game state is missing map data");
         }
         
+        // Log detallado de minas en visible_objects
+        const minas = response.data.game_state.map.visible_objects?.filter((obj: any) => 
+          obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+          ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type))
+        ) || [];
+        
+        console.log("Minas encontradas en visible_objects:", minas.map((m: any) => ({
+          id: m.id,
+          type: m.type,
+          resource_type: m.resource_type,
+          position: m.position,
+          owner: m.owner
+        })));
+        
         // Sincronizar artefactos con tiles
         const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
         
-        setGameState(syncedGameState);
+        // Sincronizar minas con tiles
+        const { syncMinesWithTiles } = await import('../utils/gameMapUtils');
+        const fullySyncedGameState = syncMinesWithTiles(syncedGameState);
+        
+        setGameState(fullySyncedGameState);
         setGameMessage(`¡Partida cargada! Turno ${response.data.game_state.turn}`);
       } catch (err) {
         console.error("Error loading game:", err);
@@ -102,31 +138,47 @@ const GamePage: React.FC = () => {
       gameState.ai.heroes;
   };
   
+  // Add a utility function for updating game state
+  const updateGameState = (newState: GameState) => {
+    setGameState(newState);
+  };
+  
   // Manejar movimiento de héroe
-  const handleHeroMovement = (heroId: string, path: Position[]) => {
+  const handleHeroMovement = (heroId: string, path: Position[]): Promise<void> => {
+    if (!path || path.length < 2) return Promise.resolve();  
     setMovingHero({
       heroId,
       path,
       currentStep: 0
     });
 
-    const animateMovement = async () => {
-      for (let i = 0; i < path.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        setGameState(prev => {
-          if (!prev) return prev;
-          const newState = { ...prev };
-          const hero = newState.player.heroes.find(h => h.id === heroId);
-          if (hero) {
-            hero.position = path[i];
-          }
-          return newState;
-        });
-      }
-      setMovingHero(null);
-    };
+    // Return a Promise that resolves when animation completes
+    return new Promise<void>((resolve) => {
+      const animateMovement = async () => {
+        for (let i = 0; i < path.length; i++) {
 
-    animateMovement();
+          
+          await new Promise(stepResolve => setTimeout(stepResolve, 200));
+          setGameState((prev: GameState | null) => {
+            if (!prev) return prev;
+            const newState = { ...prev };
+            const hero = newState.player.heroes.find((h: Hero) => h.id === heroId);
+            if (hero) {
+              hero.position = path[i];
+            } else {
+              // Log a warning if hero not found - fixes empty block statement ESLint error
+              console.warn(`Hero with ID ${heroId} not found in game state during animation`);
+            }
+            return newState;
+          });
+        }
+        setMovingHero(null);
+        setGameMessage("Movimiento completado");
+        resolve(); // Resolve the promise when animation is complete
+      };
+
+      animateMovement();
+    });
   };
 
   const handleMoveHero = async (heroId: string, destination: Position) => {
@@ -167,7 +219,7 @@ const GamePage: React.FC = () => {
     }
   };
 
-  // Manejar click en una casilla del mapa
+  // Modificar handleTileClick para manejar interacción con minas
   const handleTileClick = async (position: Position) => {
     if (!gameState || !gameId || !selectedHero) {
       console.warn('GamePage: handleTileClick - Missing gameState, gameId, or selectedHero.');
@@ -183,9 +235,9 @@ const GamePage: React.FC = () => {
     
     // Prevent movement if hero has no movement points left
     if (selectedHero.stats.movement_points_left <= 0) {
-        setGameMessage("El héroe no tiene puntos de movimiento.");
-        console.log(`GamePage: Hero ${selectedHero.id} has no movement points left.`);
-        return;
+      setGameMessage("El héroe no tiene puntos de movimiento.");
+      console.log(`GamePage: Hero ${selectedHero.id} has no movement points left.`);
+      return;
     }
 
     console.log(`GamePage: Attempting to move hero ${selectedHero.id} from: (${selectedHero.position.x},${selectedHero.position.y}) to: (${position.x},${position.y})`);
@@ -202,67 +254,182 @@ const GamePage: React.FC = () => {
     };
 
     try {
+      // First, send the action to the backend WITHOUT animating
+      setGameMessage("Calculando movimiento...");
       const response = await gameService.executeAction(gameId, action);
       console.log('GamePage: Backend response from moveHero action:', response.data);      
       
-      // Handle both successful and failed responses
-      if (response.data && !response.data.success) {
-        console.error('GamePage: Hero movement failed:', response.data.error);
-        setGameMessage(response.data.error || "Error al mover el héroe");
-        return;
-      }
-      
-      // Check for artifact collection in the response
-      if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
-        const artifactName = response.data.result.interaction.artifact;
-        console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
-        setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
-        console.log(`GamePage: Hero collected artifact: ${artifactName}`);
-      }
-      
-      if (response.data && response.data.game_state) {
-        const updatedGameState: GameState = response.data.game_state;
-        // Forzar que la posición de todos los héroes sea un objeto plano {x:number, y:number}
-        updatedGameState.player.heroes.forEach(h => {
-          if (typeof h.position.x !== 'number') h.position.x = Number(h.position.x);
-          if (typeof h.position.y !== 'number') h.position.y = Number(h.position.y);
-        });
+      // Check if movement was successful - UPDATED CONDITION
+      if (response.data?.status === 'success') {
+        const result = response.data.result;
         
-        // IMPORTANTE: Actualizar primero el estado global del juego
-        setGameState(updatedGameState); // Update the main game state first
-
-        const movedHero = updatedGameState.player.heroes.find(
-          (h: Hero) => h.id === selectedHero.id
-        );
-
-        if (movedHero) {
-          console.log(`GamePage: Héroe ${movedHero.id} nueva posición: (${movedHero.position.x},${movedHero.position.y})`);
+        // Only now animate the movement if we have a valid path or new position
+        if (result && result.new_position) {
+          // Create a complete path with intermediate steps
+          const startPosition = { ...selectedHero.position };
+          const endPosition = { x: result.new_position.x, y: result.new_position.y };
+      
           
-          // CRÍTICO: Verificar que la posición se ha actualizado correctamente
-          // Forzar la actualización de la posición del héroe si no coincide con la destino
-          if (movedHero.position.x !== position.x || movedHero.position.y !== position.y) {
-            console.warn(`GamePage: ¡Corrigiendo posición del héroe! Destino real: (${position.x},${position.y})`);
-            // Forzar la actualización de la posición del héroe al destino exacto
-            movedHero.position.x = position.x;
-            movedHero.position.y = position.y;
+          // Convert map to 2D for pathfinding
+          const map2D = convertMapTo2D(gameState.map);
+          
+          // Generate full path with all intermediate positions
+          const fullPath = findPath(startPosition, endPosition, map2D);
+    
+          
+          // Use the full path or fallback to direct path if pathfinding fails
+          const pathToUse = fullPath.length > 0 ? fullPath : [startPosition, endPosition];
+          
+          setGameMessage(`Héroe en movimiento...`);
+          
+          // Animate the movement with the complete path and WAIT for it to finish
+          // before updating the game state
+          handleHeroMovement(selectedHero.id, pathToUse).then(() => {
+  
             
-            // Re-aplicar el estado con la posición corregida
-            setGameState({...updatedGameState});
+            // After animation completes (or immediately if no animation), update the game state
+            if (response.data && response.data.game_state) {
+              const updatedGameState: GameState = response.data.game_state;
+              // Forzar que la posición de todos los héroes sea un objeto plano {x:number, y:number}
+              updatedGameState.player.heroes.forEach(h => {
+                if (typeof h.position.x !== 'number') h.position.x = Number(h.position.x);
+                if (typeof h.position.y !== 'number') h.position.y = Number(h.position.y);
+              });
+              
+              // Update game state after animation completes
+              setGameState(updatedGameState);
+              
+              const movedHero = updatedGameState.player.heroes.find(
+                (h: Hero) => h.id === selectedHero.id
+              );
+
+              if (movedHero) {
+                
+                // Verify position was updated correctly
+                if (movedHero.position.x !== position.x || movedHero.position.y !== position.y) {
+                  console.warn(`GamePage: Position mismatch detected. Forcing hero position to match target: (${position.x},${position.y})`);
+                  // Force hero position update
+                  movedHero.position.x = position.x;
+                  movedHero.position.y = position.y;
+                  
+                  // Update game state with corrected position
+                  setGameState({...updatedGameState});
+                }
+                
+                setSelectedHero(movedHero); // IMPORTANT: Update selectedHero with the new data
+                
+                // Special handling for castle position (48,48)
+                if (movedHero.position.x === 48 && movedHero.position.y === 48) {
+                  console.log('GamePage: ¡HÉROE EN POSICIÓN DEL CASTILLO CENTRAL (48,48)!');
+                  
+                  // Find all buildings at position (48,48)
+                  const buildingsAt4848 = updatedGameState.player.cities
+                    .flatMap(city => city.buildings)
+                    .filter(b => b.position.x === 48 && b.position.y === 48);
+                    
+                  
+                  const castleBuilding = updatedGameState.player.cities
+                    .flatMap(city => city.buildings)
+                    .find(b => b.is_castle && b.position.x === 48 && b.position.y === 48);
+                  
+                  // If there's a defined castle, use it
+                  if (castleBuilding) {
+                    console.log('GamePage: Castle building found, opening ConstructionMenu.');
+                    setGameMessage('¡Has llegado al castillo central!');
+                    setActiveBuilding(castleBuilding);
+                    setShowConstructionMenu(true);
+                  } 
+                  // If no castle but other buildings at (48,48), use the first one
+                  else if (buildingsAt4848.length > 0) {
+                    const anyBuilding = buildingsAt4848[0];
+                    console.log('GamePage: Using alternative building at (48,48):', anyBuilding);
+                    // Force building as castle to open construction menu
+                    anyBuilding.is_castle = true;
+                    setActiveBuilding(anyBuilding);
+                    setShowConstructionMenu(true);
+                    setGameMessage('¡Has llegado al castillo central!');
+                  } 
+                  // If no buildings at (48,48), create a temporary one to show menu
+                  else {
+                    console.log('GamePage: No buildings found at (48,48), creating a temporary one');
+                    const temporaryCastle = {
+                      id: "temp_castle",
+                      name: "Castillo Central",
+                      position: { x: 48, y: 48 },
+                      is_castle: true,
+                      can_recruit: false,
+                      built: true,
+                      cost: { gold: 0, wood: 0, stone: 0 },
+                      has_tavern: false,
+                      building_type: 'castle',
+                      requirements: [],
+                      available_creatures: [],
+                      owner: "player"
+                    } as Building;
+                    setActiveBuilding(temporaryCastle);
+                    setShowConstructionMenu(true);
+                    setGameMessage('¡Has llegado al castillo central!');
+                  }
+                }
+              } else {
+                console.error('GamePage: Moved hero not found in updated game state from backend. This is unexpected.');
+                const currentHeroInOldState = gameState.player.heroes.find(h => h.id === selectedHero.id);
+                if (currentHeroInOldState) setSelectedHero(currentHeroInOldState);
+              }
+            }
+          });
+        }
+        
+        // Check for artifact collection in the response
+        if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
+          const artifactName = response.data.result.interaction.artifact;
+          console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
+          setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
+        }
+
+        // Check for mine capture in the response
+        if (response.data?.result?.interaction === 'resource_site_captured') {
+          const interaction = response.data.result;
+          const resourceType = interaction.resource_type || 'unknown';
+          const resourcePerTurn = interaction.resource_per_turn || 0;
+          
+          // Mensaje formateado con el tipo de recurso y la cantidad
+          const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
+          const captureMessage = `¡Has capturado una mina de ${resourceName}! +${resourcePerTurn} por turno`;
+          
+          console.log(`GamePage: Mine capture detected! ${captureMessage}`);
+          setGameMessage(captureMessage);
+          
+          // Marcar la mina como recién capturada para la animación
+          if (gameState?.map?.visible_objects) {
+            const mine = gameState.map.visible_objects.find(obj => 
+              obj.position && 
+              obj.position.x === position.x && 
+              obj.position.y === position.y &&
+              'resource_type' in obj && obj.resource_type === resourceType
+            );
+            
+            if (mine) {
+              // Añadir propiedad para la animación
+              mine.justCaptured = true;
+              
+              // Reproducir sonido de captura (opcional)
+              const captureSound = new Audio('/sounds/resource-capture.mp3');
+              captureSound.volume = 0.3;
+              captureSound.play().catch(() => console.log('Sound play failed'));
+              
+              // Quitar la propiedad después de la animación
+              setTimeout(() => {
+                if (mine) {
+                  mine.justCaptured = false;
+                  setForceUpdate({}); // Forzar actualización del componente
+                }
+              }, 1500);
+            }
           }
-          
-          // IMPORTANTE: Actualizar el héroe seleccionado con todos los datos nuevos
-          setSelectedHero(movedHero);
-          
-          // IMPORTANTE: Forzar una verificación inmediata de proximidad al castillo
-          checkHeroProximityToCastle(movedHero, updatedGameState);
-        } else {
-          console.error('GamePage: Moved hero not found in updated game state from backend. This is unexpected.');
-          // Fallback: refresh selectedHero from the potentially unchanged gameState if hero not found in updated one
-           const currentHeroInOldState = gameState.player.heroes.find(h => h.id === selectedHero.id);
-           if (currentHeroInOldState) setSelectedHero(currentHeroInOldState);
         }
       } else {
-        console.error('GamePage: Failed to move hero or game_state missing in response:', response.data?.error || 'Unknown error');
+        console.error('GamePage: Failed to move hero:', response.data?.error || 'Unknown error');
         setGameMessage(response.data?.error || "Error al mover el héroe");
         
         // Keep existing check for artifact collection in the error case
@@ -273,40 +440,40 @@ const GamePage: React.FC = () => {
       }
     } catch (err: any) {
       console.error("GamePage: Exception during hero movement:", err);
-      // Mostrar mensaje de error más descriptivo
-      if (err.response && err.response.status === 500) {
-        setGameMessage("Error del servidor al mover el héroe. Inténtalo de nuevo.");
-      } else {
-        setGameMessage(err.message || "Error crítico al mover el héroe");
-      }
+      setGameMessage("Error crítico al mover el héroe");
     }
   };
 
-  // Añadir una nueva función para verificar proximidad al castillo
-  const checkHeroProximityToCastle = (hero: Hero, state: GameState) => {
-    // Buscar todos los castillos en el mapa
-    const castles = state.player.cities
-      .flatMap(city => city.buildings)
-      .filter(b => b.is_castle || (b.position.x === 48 && b.position.y === 48));
-    
-    castles.forEach(castle => {
-      // Calcular distancia
-      const calculateDistance = (pos1: Position, pos2: Position): number => {
-        return Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
+  // Añadir este método a tu componente
+  const getCurrentPlayerResourcesInfo = () => {
+    if (!gameState || !gameState.player || !gameState.ai) {
+      return { 
+        resources: { gold: 0, wood: 0, stone: 0 },
+        income: { gold: 0, wood: 0, stone: 0 }
       };
+    }
+    
+    const resources = gameState.current_player === 'player' ? 
+      gameState.player.resources : 
+      gameState.ai.resources;
       
-      const distance = calculateDistance(hero.position, castle.position);
-      const isNearCastle = distance <= 2;
+    // Calcular ingresos por turno basado en las minas capturadas
+    const income = { gold: 0, wood: 0, stone: 0 };
+    
+    if (gameState.map?.visible_objects) {
+      const currentOwner = gameState.current_player;
       
-      console.log(`GamePage: Verificación de proximidad - Héroe en (${hero.position.x}, ${hero.position.y}), ` +
-                 `Castillo en (${castle.position.x}, ${castle.position.y}), ` + 
-                 `Distancia = ${distance.toFixed(2)}, Está cerca = ${isNearCastle}`);
-      
-      // Si el héroe está cerca del castillo central, abrir el menú de construcción automáticamente
-      if (isNearCastle && castle.position.x === 48 && castle.position.y === 48) {
-        console.log('GamePage: ¡HÉROE CERCA DEL CASTILLO CENTRAL! Distancia:', distance);
-      }
-    });
+      gameState.map.visible_objects.forEach(obj => {
+        if (obj.owner === currentOwner && 'resource_type' in obj && 'resource_per_turn' in obj) {
+          const resourceType = obj.resource_type as keyof typeof income;
+          if (resourceType in income) {
+            income[resourceType] += obj.resource_per_turn as number;
+          }
+        }
+      });
+    }
+    
+    return { resources, income };
   };
 
   // Manejar click en un héroe
@@ -474,7 +641,7 @@ const GamePage: React.FC = () => {
                 
     if (isCastleBuilding) {
       console.log('GamePage: Castle detected in handleHeroInBuilding, opening construction menu');
-      // Asegurar que se trata como castillo para la interfaz de usuario
+      // Asegurar que se trate como castillo para la interfaz de usuario
       if (!building.is_castle && building.position.x === 48 && building.position.y === 48) {
         building.is_castle = true;
         console.log('GamePage: Forced building at (48,48) to be recognized as a castle');
@@ -725,7 +892,52 @@ const GamePage: React.FC = () => {
         setLoading(false);
     }
   };
-  
+
+  // Convertir el mapa a formato 2D para el pathfinding
+  const convertMapTo2D = (gameMap: any) => {
+    const mapWidth = gameMap.size.width;
+    const mapHeight = gameMap.size.height;
+    const tiles2D: any[][] = [];
+    // Helper function to convert the flat map to 2D format needed by findPath
+    for (let y = 0; y < mapHeight; y++) {
+      const row: any[] = [];
+      for (let x = 0; x < mapWidth; x++) {
+        const index = y * mapWidth + x;
+        if (index < gameMap.tiles.length) {
+          row.push(gameMap.tiles[index]);
+        }
+      }
+      tiles2D.push(row);
+    }
+    
+    return tiles2D;
+  };
+
+  // Determinar si es el turno del jugador actual
+  const isPlayerTurn = gameState?.current_player === 'player';
+
+  // Handler para cambio de modo de visualización de la IA
+  const handleAIViewModeChange = (mode: string) => {
+    setAiViewMode(mode as any);
+  };
+
+  // Mostrar panel de configuración de visualización
+  const toggleSettingsPanel = () => {
+    setShowSettings(!showSettings);
+  };
+
+  // Add the missing handler functions
+  const handleOpenMenu = () => {
+    if (window.confirm('¿Estás seguro que deseas salir al menú principal? Todo el progreso no guardado se perderá.')) {
+      navigate('/menu');
+    }
+  };
+
+  const handleOpenSettings = () => {
+    // Open settings modal
+    setShowSettingsModal(true);
+  };
+
   if (loading) {
     return <div className="loading-screen">Cargando partida...</div>;
   }
@@ -738,87 +950,52 @@ const GamePage: React.FC = () => {
   }
 
   return (
-    <div className="game-page">
-      {gameState ? (
-        <>
-          <div className="game-header">
-            <h1>Heroes&Hostias</h1>
-            <ResourceBar resources={getCurrentPlayerResources()} />
-            <div className="game-controls">
-              <Button onClick={handleSaveGame}>Guardar</Button>
-              <Button onClick={() => navigate('/menu')}>Menú</Button>
-            </div>
-          </div>
-          
-          <div className="game-content">
-            <div className="game-sidebar">
-              <div className="game-info">
-                <h2>Turno {gameState.turn || 1}</h2>
-                <p>Jugador: {gameState.current_player === 'player' ? 'Tú' : 'IA'}</p>
-                <p className="game-message">{gameMessage}</p>
-              </div>
-              
-              {selectedHero && (
-                <HeroInfo 
-                  hero={selectedHero} 
-                  onClose={() => setSelectedHero(null)} 
-                />
-              )}
-              
-              {selectedBuilding && (
-                <BuildingInfo
-                  building={selectedBuilding}
-                  onClose={() => setSelectedBuilding(null)}
-                  playerResources={getCurrentPlayerResources()}
-                />
-              )}
-              
-              {showConstructionMenu && (
-                <BuildingConstructionMenu
-                  availableBuildings={gameState?.player.cities.flatMap(c => c.buildings) || []}
-                  onBuild={handleConstructBuilding}
-                  onClose={() => setShowConstructionMenu(false)}
-                  playerResources={getCurrentPlayerResources()}
-                  gameState={gameState}
-                />
-              )}
-              
-              {isPlayerTurnValue && (
-                <Button 
-                  variant="primary" 
-                  size="large" 
-                  onClick={handleEndTurn}
-                  className="end-turn-button"
-                >
-                  Finalizar Turno
-                </Button>
-              )}
-            </div>
-            
-            <div className="game-map-container">
-              <GameMap 
-                gameState={gameState}
-                selectedHeroId={selectedHero?.id || null}
-                onTileClick={handleTileClick}
-                onHeroClick={handleHeroClick}
-                onCityClick={handleCityClick}
-                onBuildingClick={handleBuildingClick}
-                isPlayerTurn={isPlayerTurnValue}
-              />
-            </div>
-          </div>
-          
-          {showRecruitmentMenu && activeBuilding && selectedHero && (
-            <RecruitmentMenu
-              building={activeBuilding}
-              hero={selectedHero}
-              onRecruit={handleRecruit}
-              onClose={() => setShowRecruitmentMenu(false)}
+    <div className={`game-page ${aiViewMode !== 'normal' ? `ai-view-mode-${aiViewMode}` : ''}`}>
+      <div className="game-header">
+        <ResourceBar resources={getCurrentPlayerResources()} />
+      </div>
+      
+      <div className="game-content">
+        <div className="game-map-container">
+          {/* Existing map component */}
+          {gameState && (
+            <GameMap 
+              gameState={gameState}
+              selectedHeroId={selectedHero?.id}
+              onHeroClick={handleHeroClick}
+              onCityClick={handleCityClick}
+              onTileClick={handleTileClick}
+              onBuildingClick={handleBuildingClick}
+              isPlayerTurn={isPlayerTurnValue}
             />
           )}
-        </>
-      ) : (
-        <div className="loading-screen">Cargando estado del juego...</div>
+        </div>
+        
+        {/* Sidebar content */}
+        {/* ...existing code... */}
+      </div>
+      
+      <div className="game-controls-container">
+        <GameControls 
+          turn={gameState?.turn || 1}
+          currentPlayer={gameState?.current_player || 'player'}
+          gameMessage={gameMessage}
+          onEndTurn={handleEndTurn}
+          onSaveGame={handleSaveGame}
+          onOpenMenu={handleOpenMenu}
+          isPlayerTurn={isPlayerTurnValue}
+          onOpenSettings={handleOpenSettings}
+        />
+      </div>
+      
+      {/* These components will be conditionally rendered based on their visibility props */}
+      {/* AIThinkingIndicator and AIActionsSummary are managed by the GameContext */}
+      {showSettingsModal && (
+        <AIViewModeSettings
+          currentMode={aiViewMode}
+          onModeChange={setAiViewMode}
+          onClose={() => setShowSettingsModal(false)}
+        />
       )}
     </div>
   );

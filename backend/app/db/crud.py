@@ -114,6 +114,20 @@ def create_game(game_data: Dict[str, Any]) -> Dict[str, Any]:
     with get_db_client() as db:
         if "user_id" in game_data and isinstance(game_data["user_id"], str):
             game_data["user_id"] = ObjectId(game_data["user_id"])
+            
+        # DEBUG: Check visible_objects and mines before saving to database
+        visible_objects = game_data.get("game_state", {}).get("map", {}).get("visible_objects", [])
+        mines = [obj for obj in visible_objects 
+                if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                   ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+        
+        print(f"DEBUG CRUD.create_game [1]: Saving game with {len(visible_objects)} visible objects")
+        print(f"DEBUG CRUD.create_game [2]: Including {len(mines)} mines")
+        
+        # Log first few mines for verification
+        for i, mine in enumerate(mines[:3]):
+            print(f"DEBUG CRUD.create_game [3]: Sample mine {i+1}: type={mine.get('type')}, resource_type={mine.get('resource_type')}, position={mine.get('position')}")
+            
         _sanitize_city_owners(game_data)  # <-- Añadido: limpia owners antes de guardar
         _fix_hero_positions(game_data)
         result = db.games.insert_one(game_data)
@@ -123,6 +137,15 @@ def create_game(game_data: Dict[str, Any]) -> Dict[str, Any]:
             game["_id"] = str(game["_id"])
             if "user_id" in game:
                 game["user_id"] = str(game["user_id"])
+                
+            # DEBUG: Verify visible_objects and mines are in the retrieved database record
+            retrieved_visible_objects = game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+            retrieved_mines = [obj for obj in retrieved_visible_objects
+                             if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                                ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+            
+            print(f"DEBUG CRUD.create_game [4]: Retrieved game from DB after save with {len(retrieved_visible_objects)} visible objects")
+            print(f"DEBUG CRUD.create_game [5]: Retrieved {len(retrieved_mines)} mines from DB")
         return game
 
 def get_game(game_id: str) -> Optional[Dict[str, Any]]:
@@ -132,6 +155,19 @@ def get_game(game_id: str) -> Optional[Dict[str, Any]]:
             game["_id"] = str(game["_id"])
             if "user_id" in game:
                 game["user_id"] = str(game["user_id"])
+            
+            # DEBUG: Check visible_objects and mines when retrieving from database
+            visible_objects = game.get("game_state", {}).get("map", {}).get("visible_objects", [])
+            mines = [obj for obj in visible_objects 
+                    if obj.get("type") in ["goldmine", "sawmill", "quarry"] or 
+                       ("resource_type" in obj and obj.get("resource_type") in ["gold", "wood", "stone"])]
+            
+            print(f"DEBUG CRUD.get_game [1]: Retrieved game with {len(visible_objects)} visible objects")
+            print(f"DEBUG CRUD.get_game [2]: Found {len(mines)} mines")
+            
+            # Log first few mines for verification
+            for i, mine in enumerate(mines[:3]):
+                print(f"DEBUG CRUD.get_game [3]: Sample mine {i+1}: type={mine.get('type')}, resource_type={mine.get('resource_type')}, position={mine.get('position')}")
             
             # Sanitizar los datos antes de devolverlos
             sanitize_growth_per_week(game)

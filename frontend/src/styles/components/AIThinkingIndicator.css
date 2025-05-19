@@ -1,0 +1,83 @@
+.ai-thinking-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.85);
+  border-radius: 8px;
+  padding: 20px;
+  z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  color: #fff;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  backdrop-filter: blur(4px);
+  border: 1px solid #555;
+}
+
+.ai-thinking-spinner {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.spinner-inner {
+  width: 100%;
+  height: 100%;
+  border: 4px solid transparent;
+  border-top-color: #e2a54c;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.spinner-inner:before, .spinner-inner:after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  border: 4px solid transparent;
+  border-radius: 50%;
+}
+
+.spinner-inner:before {
+  border-top-color: #c77e2b;
+  animation: spin 2s linear infinite;
+}
+
+.spinner-inner:after {
+  border-top-color: #a35b0c;
+  animation: spin 3s linear infinite;
+}
+
+.ai-thinking-message {
+  text-align: center;
+}
+
+.ai-thinking-message h3 {
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+  font-weight: bold;
+  font-family: 'MedievalSharp', serif;
+}
+
+.ai-thinking-message p {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

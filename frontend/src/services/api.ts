@@ -7,6 +7,8 @@
 */
 
 import axios from 'axios';
+// Add import for ResourceMine type
+import { ResourceMine } from '../types/game';
 
 // Configuración base de axios
 const API = axios.create({
@@ -195,6 +197,68 @@ const generateRandomArtifacts = (mapSize: number, mapTiles: any[], count = 10) =
   return { artifacts, updatedTiles };
 };
 
+// Nueva función para generar minas de recursos
+const generateResourceMines = (mapSize: number, mapTiles: any[], usedPositions: {x: number, y: number}[]): { mines: ResourceMine[], updatedTiles: any[] } => {
+  const mines: ResourceMine[] = [];
+  const resourceTypes = [
+    { type: 'goldmine', resourceType: 'gold', symbol: '💰', perTurn: [200, 500] },
+    { type: 'sawmill', resourceType: 'wood', symbol: '🪵', perTurn: [50, 150] },
+    { type: 'quarry', resourceType: 'stone', symbol: '⛏️', perTurn: [50, 100] }
+  ];
+  
+  // Crear una copia de los tiles para modificarlos sin mutar el original
+  const updatedTiles = [...mapTiles];
+  
+  // Generar 3 minas de cada tipo (9 en total)
+  resourceTypes.forEach((resource, resourceIndex) => {
+    for (let i = 0; i < 3; i++) {
+      // Generar posición aleatoria que no esté ya ocupada
+      let x = 0, y = 0;
+      do {
+        x = Math.floor(Math.random() * (mapSize - 20)) + 10; // Evitar bordes
+        y = Math.floor(Math.random() * (mapSize - 20)) + 10;
+      } while (usedPositions.some(pos => 
+        Math.abs(pos.x - x) < 5 && Math.abs(pos.y - y) < 5
+      ));
+      
+      // Registrar posición usada
+      usedPositions.push({x, y});
+      
+      // Generar valor aleatorio de recursos por turno dentro del rango
+      const resourcePerTurn = Math.floor(
+        Math.random() * (resource.perTurn[1] - resource.perTurn[0]) + resource.perTurn[0]
+      );
+      
+      // Crear mina con todas las propiedades necesarias
+      const mineId = `${resource.type}_${i}_${Date.now()}`;
+      
+      // Crear mina en visible_objects
+      mines.push({
+        id: mineId,
+        type: resource.type,
+        resource_type: resource.resourceType,
+        resource_per_turn: resourcePerTurn,
+        position: { x, y },
+        symbol: resource.symbol,
+        owner: null
+      });
+
+      // Actualizar los tiles para marcar la posición de la mina
+      const idx = y * mapSize + x;
+      if (idx >= 0 && idx < mapSize * mapSize) {
+        updatedTiles[idx] = {
+          ...updatedTiles[idx],
+          object_type: 'mine',
+          object_id: mineId
+        };
+      }
+    }
+  });
+  
+  console.log(`Generadas ${mines.length} minas de recursos para el mapa`);
+  return { mines, updatedTiles };
+};
+
 // Crear un nuevo método para sincronizar artefactos al cargar juegos guardados
 const syncArtifactsWithTiles = (gameState: any) => {
   // Verificar la estructura del gameState recibido
@@ -223,8 +287,8 @@ const syncArtifactsWithTiles = (gameState: any) => {
   // CRÍTICO: Restaurar el tipo 'artifact' para cualquier objeto que tenga subtype
   // Este paso es necesario porque el backend no está preservando la propiedad 'type'
   updatedGameState.map.visible_objects.forEach((obj: any) => {
-    if ('subtype' in obj && obj.subtype && !obj.type) {
-      console.log(`Restaurando tipo 'artifact' para objeto con id ${obj.id} y subtipo ${obj.subtype}`);
+    if ('subtype' in obj && obj.subtipo && !obj.type) {
+      //console.log(`Restaurando tipo 'artifact' para objeto con id ${obj.id} y subtipo ${obj.subtipo}`);
       obj.type = 'artifact';
     }
   });
@@ -356,10 +420,24 @@ export const gameService = {
         object_id: null
       }));
 
-      // Generar artefactos y actualizar tiles
-      const { artifacts, updatedTiles } = generateRandomArtifacts(mapSize, initialTiles, 15);
+      // Lista para seguir las posiciones usadas
+      const usedPositions = [
+        {x: 5, y: 5},    // Posición del héroe inicial
+        {x: 48, y: 48},  // Castillo central
+        {x: 48, y: 52},  // Ciudad de caballería
+        {x: 5, y: 90},   // Ciudad de dragones
+        {x: 50, y: 50},  // Ciudad cuartel
+        {x: 52, y: 52},  // Ciudad arquería
+        {x: 70, y: 58}   // Ciudad mágica
+      ];
 
-      // Verificar los artefactos generados
+      // Generar artefactos y actualizar tiles
+      const { artifacts, updatedTiles: tilesWithArtifacts } = generateRandomArtifacts(mapSize, initialTiles, 15);
+      
+      // Generar minas y actualizar tiles
+      const { mines, updatedTiles: finalTiles } = generateResourceMines(mapSize, tilesWithArtifacts, usedPositions);
+
+      // Verificar los artefactos y minas generados
       console.log("Artefactos generados:", {
         count: artifacts.length,
         firstFew: artifacts.slice(0, 3).map(a => ({
@@ -367,6 +445,17 @@ export const gameService = {
           type: a.type,
           subtype: a.subtype,
           position: a.position
+        }))
+      });
+      
+      console.log("Minas generadas:", {
+        count: mines.length,
+        types: mines.map(m => m.type),
+        firstFew: mines.slice(0, 3).map(m => ({
+          id: m.id,
+          type: m.type,
+          resource_type: m.resource_type,
+          position: m.position
         }))
       });
       
@@ -516,18 +605,28 @@ export const gameService = {
         },
         map: {
           size: { width: mapSize, height: mapSize },
-          tiles: updatedTiles, // Usar los tiles actualizados con artefactos marcados
+          tiles: finalTiles, // Usar los tiles actualizados con artefactos y minas marcados
           fog_of_war: Array(totalTiles).fill(false),
           explored: Array(totalTiles).fill(true),
-          visible_objects: artifacts // Usar los artefactos generados
+          visible_objects: [...artifacts, ...mines] // Incluir tanto artefactos como minas
         },
         cities: [] // Array global de ciudades según schema.py
       };
 
+      // CRITICAL DEBUG: Check visible_objects right before sending the request
+      console.log("DEBUG FRONTEND CREATE_GAME [1]: Sending game data with visible_objects:", {
+        count: defaultGameState.map.visible_objects.length,
+        types: defaultGameState.map.visible_objects.map(obj => obj.type),
+        mineObjects: defaultGameState.map.visible_objects.filter(obj => 
+          obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+          ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
+        )
+      });
+
       // Verificar el estado del juego antes de enviarlo
       console.log("Estado del juego a enviar:", {
         visibleObjectsCount: defaultGameState.map.visible_objects.length,
-        tilesWithArtifacts: updatedTiles.filter((t: any) => t.object_type === 'artifact').length
+        tilesWithArtifacts: finalTiles.filter((t: any) => t.object_type === 'artifact').length
       });
       
       const gameData = {
@@ -541,6 +640,22 @@ export const gameService = {
 
       console.log("Creando partida con mapa 100x100");
       const response = await API.post('/games', gameData);
+      
+      // CRITICAL DEBUG: Inspect the response to verify mines were saved
+      console.log("DEBUG FRONTEND CREATE_GAME [2]: Response from server:", response.data);
+      
+      // Check if mines were properly saved in the response
+      const responseVisibleObjects = response.data?.game_state?.map?.visible_objects || [];
+      const savedMines = responseVisibleObjects.filter((obj: any) => 
+        obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+        ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
+      );
+      
+      console.log(`DEBUG FRONTEND CREATE_GAME [3]: Mines in response: ${savedMines.length}`);
+      savedMines.forEach((mine: any, index: number) => {
+        console.log(`DEBUG FRONTEND CREATE_GAME [4]: Mine ${index+1}:`, mine);
+      });
+      
       return response;
     } catch (error) {
       console.error("Error en createGame:", error);
@@ -564,19 +679,67 @@ export const gameService = {
   },
   
   loadGame: async (gameId: string) => {
+    console.log(`DEBUG FRONTEND [1]: Loading game with ID: ${gameId}`);
     const response = await API.get(`/games/${gameId}`);
+    
+    // DETAILED network inspection of response - particularmente para minas
+    console.log("DEBUG FRONTEND [2]: Datos completos del juego recibidos:", response.data);
+    
+    // Verificar datos específicos de minas
+    const visibleObjects = response.data?.game_state?.map?.visible_objects || [];
+    const mines = visibleObjects.filter((obj: any) => 
+      obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+      (obj.resource_type && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
+    );
+    
+    // Registrar información detallada de las minas
+    console.log(`DEBUG FRONTEND [3]: Se encontraron ${mines.length} minas en la respuesta de la API`);
+    mines.forEach((mine: any, index: number) => {
+      console.log(`DEBUG FRONTEND [4]: Detalles de la mina ${index+1}:`, {
+        id: mine.id,
+        type: mine.type,
+        resource_type: mine.resource_type,
+        resource_per_turn: mine.resource_per_turn,
+        position: mine.position,
+        owner: mine.owner
+      });
+    });
     
     // Verificar los datos recibidos del servidor
     console.log("Datos recibidos del servidor:", {
       hasGameState: !!response.data?.game_state,
       hasMap: !!response.data?.game_state?.map,
       visibleObjectsCount: response.data?.game_state?.map?.visible_objects?.length || 0,
-      visibleObjectsTypes: response.data?.game_state?.map?.visible_objects?.map((o: any) => o.type) || []
+      visibleObjectsTypes: response.data?.game_state?.map?.visible_objects?.map((o: any) => o.type) || [],
+      minesCount: response.data?.game_state?.map?.visible_objects?.filter((o: any) => 
+        o.type === 'goldmine' || o.type === 'sawmill' || o.type === 'quarry' || 
+        ('resource_type' in o && ['gold', 'wood', 'stone'].includes(o.resource_type as string))
+      ).length || 0
     });
     
-    // Sincronizar artefactos al cargar el juego
+    // Sincronizar artefactos y minas al cargar el juego
     if (response.data && response.data.game_state) {
+      // Restaurar tipos de minas que pueden haberse perdido
+      if (response.data.game_state?.map?.visible_objects) {
+        response.data.game_state.map.visible_objects.forEach((obj: any) => {
+          if ('resource_type' in obj && !obj.type) {
+            const resourceMapping: Record<string, string> = {
+              'gold': 'goldmine',
+              'wood': 'sawmill',
+              'stone': 'quarry'
+            };
+            obj.type = resourceMapping[obj.resource_type] || 'mine';
+            //console.log(`Restaurando tipo '${obj.type}' para mina con resource_type ${obj.resource_type}`);
+          }
+        });
+      }
+      
+      // Primero sincronizar artefactos (función existente)
       response.data.game_state = syncArtifactsWithTiles(response.data.game_state);
+      
+      // Luego importar y sincronizar minas (desde gameMapUtils)
+      const { syncMinesWithTiles } = await import('../utils/gameMapUtils');
+      response.data.game_state = syncMinesWithTiles(response.data.game_state);
     }
     return response;
   },
@@ -656,7 +819,41 @@ export const gameService = {
         defenderId
       }
     });
-  }
+  },
+
+  getAIActions: async (gameId: string) => {
+    try {
+      console.log(`API: Getting AI actions for game ${gameId}`);
+      // This only gets the actions without executing them
+      const response = await API.post(`/games/${gameId}/ai?execute_actions=false`);
+      return response;
+    } catch (err) {
+      console.error('Error getting AI actions:', err);
+      throw err;
+    }
+  },
+  
+  executeAIActions: async (gameId: string) => {
+    try {
+      console.log(`API: Executing AI actions for game ${gameId}`);
+      // This gets and executes the actions in one call
+      const response = await API.post(`/games/${gameId}/ai?execute_actions=true`);
+      return response;
+    } catch (err) {
+      console.error('Error executing AI actions:', err);
+      throw err;
+    }
+  },
+
+  initializeGame: async (scenarioId: string) => {
+    try {
+      const response = await API.post(`/games/initialize?scenario_id=${scenarioId}`);
+      return response;
+    } catch (error) {
+      console.error("Error initializing game:", error);
+      throw error;
+    }
+  },
 };
 
 export default API;
