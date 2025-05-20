@@ -107,13 +107,22 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 npos = Position(x=nx, y=ny)
                 if check_terrain_passable(npos, game_map):
                     yield npos
+                    
+    # Add a counter to avoid comparing Position objects directly
+    counter = 0
     open_set = []
-    heapq.heappush(open_set, (0, start))
+    # Add counter as a third element in the tuple to make each entry unique
+    heapq.heappush(open_set, (0, counter, start))
+    counter += 1
+    
     came_from = {}
     g_score = { (start.x, start.y): 0 }
     f_score = { (start.x, start.y): abs(end.x - start.x) + abs(end.y - start.y) }
+    
     while open_set:
-        _, current = heapq.heappop(open_set)
+        # Unpack the counter but we don't need to use it
+        _, _, current = heapq.heappop(open_set)
+        
         if current.x == end.x and current.y == end.y:
             # Reconstruir path
             path = [current]
@@ -121,6 +130,7 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 current = came_from[(current.x, current.y)]
                 path.append(current)
             return list(reversed(path))
+            
         for neighbor in neighbors(current):
             tentative_g = g_score[(current.x, current.y)] + 1
             if (neighbor.x, neighbor.y) not in g_score or tentative_g < g_score[(neighbor.x, neighbor.y)]:
@@ -128,7 +138,10 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 g_score[(neighbor.x, neighbor.y)] = tentative_g
                 f = tentative_g + abs(end.x - neighbor.x) + abs(end.y - neighbor.y)
                 f_score[(neighbor.x, neighbor.y)] = f
-                heapq.heappush(open_set, (f, neighbor))
+                # Include counter in the heap entry to avoid Position comparisons
+                heapq.heappush(open_set, (f, counter, neighbor))
+                counter += 1
+                
     return []  # No path found
 
 def process_hero_movement(game_state: GameState, action: dict) -> dict:
@@ -160,64 +173,81 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         if target_x < 0 or target_x >= game_state.map.size.width or target_y < 0 or target_y >= game_state.map.size.height:
             raise ValueError(f"Target position ({target_x}, {target_y}) is outside map boundaries")
         
-        # Store original destination
+        # Store original destination for return value
         original_destination = Position(x=target_x, y=target_y)
-        movement_cost = calculate_movement_cost(hero.position, original_destination)
         
-        # Flag to track if we're doing partial movement
+        # Calculate full path from current position to destination using A*
+        start_position = Position(x=hero.position.x, y=hero.position.y)
+        target_position = Position(x=target_x, y=target_y)
+        
+        print(f"DEBUG: Calculating path from ({start_position.x},{start_position.y}) to ({target_position.x},{target_position.y})")
+        full_path = find_path_a_star(start_position, target_position, game_state.map)
+        
+        if not full_path or len(full_path) < 2:
+            print(f"DEBUG: No valid path found to destination ({target_x},{target_y})")
+            return {
+                "success": False,
+                "error": f"No valid path to destination ({target_x},{target_y})"
+            }
+        
+        print(f"DEBUG: Found path with {len(full_path)} steps")
+        
+        # Track remaining movement points and walk through the path
+        remaining_points = hero.stats.movement_points_left
+        current_position = start_position
+        final_position = None
         partial_movement = False
         
-        # Si el destino está fuera de alcance, calcular destino parcial
-        if movement_cost > hero.stats.movement_points_left:
-            partial_movement = True
-            print(f"DEBUG: Partial movement needed. Target: ({target_x},{target_y}), Cost: {movement_cost}, Available: {hero.stats.movement_points_left}")
-            
-            # Calcular el punto más cercano alcanzable hacia el destino deseado
-            direction_x = target_x - hero.position.x
-            direction_y = target_y - hero.position.y
-            
-            # Normalizar el vector de dirección
-            magnitude = math.sqrt(direction_x**2 + direction_y**2)
-            normalized_x = direction_x / magnitude
-            normalized_y = direction_y / magnitude
-            
-            # Multiplicar por la distancia máxima que podemos recorrer
-            max_distance = hero.stats.movement_points_left
-            
-            # Calcular las nuevas coordenadas de destino
-            new_target_x = int(hero.position.x + (normalized_x * max_distance))
-            new_target_y = int(hero.position.y + (normalized_y * max_distance))
-            
-            # Ajustar la posición para que esté dentro de los límites del mapa
-            new_target_x = max(0, min(new_target_x, game_state.map.size.width - 1))
-            new_target_y = max(0, min(new_target_y, game_state.map.size.height - 1))
-            
-            print(f"DEBUG: Partial movement calculated. New target: ({new_target_x},{new_target_y})")
-            
-            # Actualizar destino y recalcular movimiento
-            target_x = new_target_x
-            target_y = new_target_y
-            movement_cost = calculate_movement_cost(hero.position, Position(x=target_x, y=target_y))
-            
-            print(f"DEBUG: New movement cost: {movement_cost}, Available: {hero.stats.movement_points_left}")
+        # Log the hero's starting position and movement points
+        print(f"DEBUG: Hero starting at ({current_position.x},{current_position.y}) with {remaining_points} movement points")
         
-        # Ensure position values are integers
+        # Walk through the path until we reach the end or run out of movement points
+        for i in range(1, len(full_path)):
+            next_position = full_path[i]
+            
+            # Calculate cost for this path segment
+            segment_cost = calculate_movement_cost(current_position, next_position)
+            print(f"DEBUG: Step {i}: Moving to ({next_position.x},{next_position.y}), cost: {segment_cost}, remaining: {remaining_points}")
+            
+            # Check if we can afford this segment
+            if remaining_points >= segment_cost:
+                # Move to this position
+                current_position = next_position
+                remaining_points -= segment_cost
+                final_position = current_position
+                print(f"DEBUG: Moved to ({current_position.x},{current_position.y}), remaining points: {remaining_points}")
+            else:
+                # Can't move further along the path
+                partial_movement = True
+                print(f"DEBUG: Insufficient movement points to continue. Stopping at ({current_position.x},{current_position.y})")
+                break
+        
+        # If we reached the end of the path, use the target position
+        if not partial_movement:
+            final_position = target_position
+        
+        # If no movement was possible at all, return error
+        if final_position is None:
+            return {
+                "success": False,
+                "error": "Insufficient movement points for any movement"
+            }
+        
+        # Update hero position to the furthest reachable point
         original_x, original_y = hero.position.x, hero.position.y
+        hero.position.x = final_position.x
+        hero.position.y = final_position.y
+        hero.stats.movement_points_left = remaining_points
         
-        # Update position
-        hero.position.x = target_x
-        hero.position.y = target_y
-        hero.stats.movement_points_left -= movement_cost
-        
-        print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({target_x}, {target_y})")
-        print(f"DEBUG: Hero position after update: ({hero.position.x}, {hero.position.y})")
+        print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({hero.position.x}, {hero.position.y})")
+        print(f"DEBUG: Hero has {hero.stats.movement_points_left} movement points left")
         
         # NEW: Check for enemy heroes at the same position BEFORE calling process_tile_interaction
         enemy_hero = None
         for e_hero in enemy_heroes:
-            if e_hero.position.x == target_x and e_hero.position.y == target_y:
+            if e_hero.position.x == hero.position.x and e_hero.position.y == hero.position.y:
                 enemy_hero = e_hero
-                print(f"DEBUG: Enemy hero detected at position ({target_x}, {target_y}): {enemy_hero.id}")
+                print(f"DEBUG: Enemy hero detected at position ({hero.position.x}, {hero.position.y}): {enemy_hero.id}")
                 break
                 
         # If an enemy hero was found, trigger combat
@@ -247,34 +277,36 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
             return {
                 "success": True,
                 "hero_id": hero_id,
-                "new_position": {"x": target_x, "y": target_y},
+                "new_position": {"x": hero.position.x, "y": hero.position.y},
                 "movement_points_left": hero.stats.movement_points_left,
                 "interaction": "combat",  # Indicate this is a combat interaction
                 "combat_result": formatted_combat_result,  # Include formatted combat results
                 "enemy_hero": enemy_hero.id,  # Include the enemy hero ID
                 "partial_movement": partial_movement,
-                "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None
+                "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None,
+                "path": [{"x": pos.x, "y": pos.y} for pos in full_path[:i+1]]  # Include the actual path followed
             }
         
         # Check for interactions at the new position (artifacts, resources, etc.)
         try:
-            print(f"DEBUG: Checking interactions at position ({target_x}, {target_y}) for hero {hero_id}")
-            interaction_result = process_tile_interaction(hero, Position(x=target_x, y=target_y), game_state)
+            print(f"DEBUG: Checking interactions at position ({hero.position.x}, {hero.position.y}) for hero {hero_id}")
+            interaction_result = process_tile_interaction(hero, Position(x=hero.position.x, y=hero.position.y), game_state)
             print(f"DEBUG: Interaction result: {interaction_result}")
         except Exception as e:
             print(f"ERROR in interaction processing: {str(e)}")
             # Continue execution even if interaction processing fails
             interaction_result = {"interaction": "error", "error_message": str(e)}
         
-        # Return extra information for partial movement
+        # Return information about the movement, including path information
         return {
             "success": True,
             "hero_id": hero_id,
-            "new_position": {"x": target_x, "y": target_y},
+            "new_position": {"x": hero.position.x, "y": hero.position.y},
             "movement_points_left": hero.stats.movement_points_left,
             "interaction": interaction_result,  # Include the interaction result in the response
             "partial_movement": partial_movement,
-            "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None
+            "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None,
+            "path": [{"x": pos.x, "y": pos.y} for pos in full_path[:i+1]]  # Include the actual path followed
         }
     except Exception as e:
         print(f"ERROR in process_hero_movement: {str(e)}")
@@ -414,6 +446,7 @@ def add_units_to_hero_or_city(city: City, unit_type: str, amount: int, game_stat
 def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     """Procesa el final del turno"""
     current_player = game_state.current_player
+    print(f"DEBUG: End turn processing. Current player: {current_player}")
     
     # Recolectar recursos de las minas para el jugador actual
     if current_player == "player":
@@ -421,20 +454,40 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     else:
         collect_resource_income(game_state.ai, game_state.map, "ai")
     
-    # Restaurar puntos de movimiento
-    for hero in game_state.player.heroes:
-        hero.stats.movement_points_left = hero.stats.movement_points
-    
     # Cambiar el jugador actual
-    game_state.current_player = "ai" if current_player == "player" else "player"
+    next_player = "ai" if current_player == "player" else "player"
+    game_state.current_player = next_player
+    print(f"DEBUG: Switching player turn from {current_player} to {next_player}")
+    
+    # Log hero movement points BEFORE restoration
+    if next_player == "player":
+        print(f"DEBUG: Player heroes movement points BEFORE restoration:")
+        for hero in game_state.player.heroes:
+            print(f"DEBUG: Hero {hero.id}: {hero.stats.movement_points_left}/{hero.stats.movement_points}")
+    else:
+        print(f"DEBUG: AI heroes movement points BEFORE restoration:")
+        for hero in game_state.ai.heroes:
+            print(f"DEBUG: Hero {hero.id}: {hero.stats.movement_points_left}/{hero.stats.movement_points}")
+    
+    # Restaurar puntos de movimiento para el PRÓXIMO jugador (que ahora es current_player después del cambio)
+    if next_player == "player":
+        for hero in game_state.player.heroes:
+            hero.stats.movement_points_left = hero.stats.movement_points
+            print(f"DEBUG: Restored player hero {hero.id} movement points to {hero.stats.movement_points_left}")
+    else:
+        for hero in game_state.ai.heroes:
+            hero.stats.movement_points_left = hero.stats.movement_points
+            print(f"DEBUG: Restored AI hero {hero.id} movement points to {hero.stats.movement_points_left}")
     
     # Si es un nuevo día
     if current_player == "ai":  # El turno de la IA es el último del día
         game_state.turn += 1
+        print(f"DEBUG: Incrementing turn to {game_state.turn}")
 
         # Procesar crecimiento semanal si estamos en múltiplo de 7
         if game_state.turn % 7 == 0:
             process_weekly_growth_both(game_state)
+            print(f"DEBUG: Processed weekly growth at turn {game_state.turn}")
     
     return {
         "next_player": game_state.current_player,

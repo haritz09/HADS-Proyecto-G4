@@ -176,22 +176,62 @@ def get_game(game_id: str) -> Optional[Dict[str, Any]]:
 
 def _fix_hero_positions(game_data):
     # Corrige la posición de todos los héroes para que sea un dict plano {x:int, y:int}
-    if "game_state" in game_data and "player" in game_data["game_state"] and "heroes" in game_data["game_state"]["player"]:
-        for hero in game_data["game_state"]["player"]["heroes"]:
-            pos = hero.get("position")
-            if pos is not None:
-                # Si es un objeto (por ejemplo, de Pydantic), conviértelo a dict plano
-                if hasattr(pos, 'x') and hasattr(pos, 'y'):
-                    hero["position"] = {"x": int(getattr(pos, 'x')), "y": int(getattr(pos, 'y'))}
-                elif isinstance(pos, dict):
-                    hero["position"]["x"] = int(pos["x"])
-                    hero["position"]["y"] = int(pos["y"])
-                else:
-                    # Si por alguna razón es un string o tipo raro, intenta forzar a int
-                    try:
-                        hero["position"] = {"x": int(pos["x"]), "y": int(pos["y"])}
-                    except Exception:
-                        hero["position"] = {"x": 0, "y": 0}  # fallback seguro
+    # y también asegura que los movement_points_left se mantienen correctamente
+    if "game_state" in game_data:
+        # Fix player heroes
+        if "player" in game_data["game_state"] and "heroes" in game_data["game_state"]["player"]:
+            print(f"DEBUG: Fixing positions for {len(game_data['game_state']['player']['heroes'])} player heroes")
+            for hero in game_data["game_state"]["player"]["heroes"]:
+                # Fix position
+                pos = hero.get("position")
+                if pos is not None:
+                    # Si es un objeto (por ejemplo, de Pydantic), conviértelo a dict plano
+                    if hasattr(pos, 'x') and hasattr(pos, 'y'):
+                        hero["position"] = {"x": int(getattr(pos, 'x')), "y": int(getattr(pos, 'y'))}
+                    elif isinstance(pos, dict):
+                        hero["position"]["x"] = int(pos["x"])
+                        hero["position"]["y"] = int(pos["y"])
+                    else:
+                        # Si por alguna razón es un string o tipo raro, intenta forzar a int
+                        try:
+                            hero["position"] = {"x": int(pos["x"]), "y": int(pos["y"])}
+                        except Exception:
+                            hero["position"] = {"x": 0, "y": 0}  # fallback seguro
+                
+                # Ensure hero stats and movement_points_left are correctly set
+                if "stats" in hero:
+                    stats = hero["stats"]
+                    if "movement_points" in stats and "movement_points_left" not in stats:
+                        print(f"DEBUG: Fixing missing movement_points_left for hero {hero.get('id')}")
+                        stats["movement_points_left"] = stats["movement_points"]
+                    elif "movement_points" in stats and "movement_points_left" in stats:
+                        mp = stats["movement_points"]
+                        mpl = stats["movement_points_left"]
+                        print(f"DEBUG: Hero {hero.get('id')} movement points: {mpl}/{mp}")
+        
+        # Also fix AI heroes to maintain consistency
+        if "ai" in game_data["game_state"] and "heroes" in game_data["game_state"]["ai"]:
+            print(f"DEBUG: Fixing positions for {len(game_data['game_state']['ai']['heroes'])} AI heroes")
+            for hero in game_data["game_state"]["ai"]["heroes"]:
+                # Same position fix as above
+                pos = hero.get("position")
+                if pos is not None:
+                    if hasattr(pos, 'x') and hasattr(pos, 'y'):
+                        hero["position"] = {"x": int(getattr(pos, 'x')), "y": int(getattr(pos, 'y'))}
+                    elif isinstance(pos, dict):
+                        hero["position"]["x"] = int(pos["x"])
+                        hero["position"]["y"] = int(pos["y"])
+                    else:
+                        try:
+                            hero["position"] = {"x": int(pos["x"]), "y": int(pos["y"])}
+                        except Exception:
+                            hero["position"] = {"x": 0, "y": 0}
+                
+                # Fix movement points the same way
+                if "stats" in hero:
+                    stats = hero["stats"]
+                    if "movement_points" in stats and "movement_points_left" not in stats:
+                        stats["movement_points_left"] = stats["movement_points"]
 
 def update_game(game_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     update_data.pop("_id", None)  # Eliminar _id si existe

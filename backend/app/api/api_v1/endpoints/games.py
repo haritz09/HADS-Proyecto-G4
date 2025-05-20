@@ -457,7 +457,24 @@ async def process_action(
             elif action_type == "transfer": # Transerir tropas entre heroe-castillo
                 result = transfer_troops_between_hero_and_castle(game_state, action)
             elif action_type == "endTurn":
+                # Log hero movement points BEFORE end turn processing
+                if game_state.current_player == "player":
+                    for hero in game_state.player.heroes:
+                        logger.info(f"Before endTurn: Player hero {hero.id} has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
+                else:
+                    for hero in game_state.ai.heroes:
+                        logger.info(f"Before endTurn: AI hero {hero.id} has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
+                
                 result = process_end_turn(game_state)
+                
+                # Log hero movement points AFTER end turn processing
+                next_player = game_state.current_player  # Now should be switched
+                if next_player == "player":
+                    for hero in game_state.player.heroes:
+                        logger.info(f"After endTurn: Player hero {hero.id} now has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
+                else:
+                    for hero in game_state.ai.heroes:
+                        logger.info(f"After endTurn: AI hero {hero.id} now has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
             else:
                 raise HTTPException(status_code=400, detail=f"Tipo de acción no válido: {action_type}")
             
@@ -465,7 +482,15 @@ async def process_action(
             # Asegurarnos de hacer un model_dump() completo del game_state
             game_state_dump = game_state.model_dump()
             game["game_state"] = game_state_dump
-            
+
+            # Validate hero movement points before saving
+            if game_state.current_player == "player":
+                for hero in game["game_state"]["player"]["heroes"]:
+                    if hero["stats"]["movement_points_left"] < hero["stats"]["movement_points"]:
+                        logger.warning(f"Player hero {hero['id']} has incorrect movement points before save: {hero['stats']['movement_points_left']}/{hero['stats']['movement_points']}")
+                        hero["stats"]["movement_points_left"] = hero["stats"]["movement_points"]
+                        logger.info(f"Fixed player hero {hero['id']} movement points to {hero['stats']['movement_points_left']}")
+
             # Log para movimiento de héroe - verificar coordenadas antes de guardar en BD
             if action_type == "moveHero" and "hero_id" in action.get("details", {}):
                 hero_id = action["details"]["hero_id"]
@@ -758,9 +783,9 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
                         logger.warning(f"Partial movement performed: Hero moved to ({result['new_position']['x']}, {result['new_position']['y']}) instead of ({result['original_destination']['x']}, {result['original_destination']['y']})")
                         
                         last_partial_movement = {
-                            'hero_id': normalized_action.get('details', {}).get('hero_id') or normalized_action.get('details', {}).get('heroId'),
-                            'new_position': result.get('new_position')
-                        }
+                'hero_id': normalized_action.get('details', {}).get('hero_id') or normalized_action.get('details', {}).get('heroId', None),
+                'new_position': result.get('new_position')
+            }
                 elif action_type_normalized in ['buildstructure', 'build_structure', 'build']:
                     result = process_build_structure(game_state_obj, normalized_action)
                 elif action_type_normalized in ['recruitunits', 'recruit_units', 'recruit']:

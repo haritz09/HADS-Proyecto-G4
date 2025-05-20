@@ -4,6 +4,10 @@ import { useGame } from '../../contexts/GameContext';
 import { findPath, calculatePathCost } from '../../services/gameEngine';
 import '../../styles/components/GameMap.css';
 
+export interface GameMapRef {
+  animateHeroMovement: (heroId: string, path: Position[]) => Promise<void>;
+}
+
 interface GameMapProps {
   gameState: GameState;
   selectedHeroId?: string | null;
@@ -16,17 +20,20 @@ interface GameMapProps {
   isAIView?: boolean;    // Nueva prop para indicar vista de IA
 }
 
-const GameMap: React.FC<GameMapProps> = ({
-  gameState,
-  selectedHeroId,
-  onHeroClick,
-  onCityClick,
-  onTileClick,
-  onBuildingClick,
-  isPlayerTurn,
-  isReadOnly = false,
-  isAIView = false
-}) => {
+const GameMap = React.forwardRef<GameMapRef, GameMapProps>((
+  {
+    gameState,
+    selectedHeroId,
+    onHeroClick,
+    onCityClick,
+    onTileClick,
+    onBuildingClick,
+    isPlayerTurn,
+    isReadOnly = false,
+    isAIView = false
+  }: GameMapProps, 
+  ref: React.ForwardedRef<GameMapRef>
+) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
   // Remove zoom state and set fixed zoom of 1
@@ -167,7 +174,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const getPathClass = (cost: number): string => {
     if (!selectedHeroId) return '';
     
-    const selectedHero = gameState.player.heroes.find(h => h.id === selectedHeroId);
+    const selectedHero = gameState.player.heroes.find((h: Hero) => h.id === selectedHeroId);
     if (!selectedHero) return '';
     
     return cost <= selectedHero.stats.movement_points_left 
@@ -181,6 +188,12 @@ const GameMap: React.FC<GameMapProps> = ({
     
     if (!selectedHeroId) return;
     
+    // Check that position is defined and has x/y properties
+    if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+      console.error('Invalid position object in handleTileClick:', position);
+      return;
+    }
+    
     const currentTime = new Date().getTime();
     const timeSinceLastClick = currentTime - lastClickTime;
     
@@ -189,11 +202,11 @@ const GameMap: React.FC<GameMapProps> = ({
     
     if (timeSinceLastClick < doubleClickThreshold) {
       // Es un doble clic, ejecutar la acción de movimiento
-      console.log('Double click detected, initiating movement');
+      console.log('Double click detected, initiating movement to:', position);
       onTileClick(position);
     } else {
       // Primer clic - mostrar indicación visual si quieres
-      console.log('First click, waiting for potential double click');
+      console.log('First click, waiting for potential double click at:', position);
       // Opcionalmente, podrías establecer un estado para mostrar una indicación visual
       // setPendingDestination(position);
     }
@@ -225,18 +238,37 @@ const GameMap: React.FC<GameMapProps> = ({
     return hero?.position ? { ...hero.position } : undefined;
   };
 
-  const handleHeroMovement = (heroId: string, path: Position[]) => {
+  // Modify the existing handleHeroMovement to return a Promise
+  const handleHeroMovement = (heroId: string, path: Position[]): Promise<void> => {
     const startPosition = getHeroCurrentPosition(heroId);
-    if (!startPosition || path.length < 2) return;
+    if (!startPosition || path.length < 2) return Promise.resolve();
 
-    // Now animation will only be triggered after backend confirms successful movement
-    setAnimatingHero({
-      heroId,
-      currentPosition: startPosition,
-      path, // Use the path parameter instead of the undefined adjustedPath
-      step: 0
+    console.log(`GameMap: Animating hero ${heroId} movement with ${path.length} steps`);
+    
+    return new Promise<void>((resolve) => {
+      // Set the animating state
+      setAnimatingHero({
+        heroId,
+        currentPosition: startPosition,
+        path,
+        step: 0
+      });
+
+      // Create an interval to check when animation is complete
+      const checkInterval = setInterval(() => {
+        if (!animatingHero) {
+          clearInterval(checkInterval);
+          console.log(`GameMap: Animation completed for hero ${heroId}`);
+          resolve();
+        }
+      }, 100);
     });
   };
+
+  // Expose the handleHeroMovement function via forwardRef
+  React.useImperativeHandle(ref, () => ({
+    animateHeroMovement: handleHeroMovement
+  }));
 
   const checkHeroOnBuilding = (hero: Hero | undefined | null, building: Building): string | null => {
     if (!hero) return null;
@@ -275,7 +307,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const findArtifactAtPosition = (x: number, y: number, tile: MapTile): VisibleObject | null => {
     const idx = y * gameState.map.size.width + x;
     
-    const artifactsAtPosition = gameState.map.visible_objects?.filter(obj => 
+    const artifactsAtPosition = gameState.map.visible_objects?.filter((obj: VisibleObject) => 
       obj.position && obj.position.x === x && obj.position.y === y
     );
     
@@ -288,7 +320,7 @@ const GameMap: React.FC<GameMapProps> = ({
     let artifact: VisibleObject | null = null;
     
     if (tile?.object_type === 'artifact' && tile?.object_id) {
-      const foundArtifact = gameState.map.visible_objects?.find(obj => obj.id === tile.object_id);
+      const foundArtifact = gameState.map.visible_objects?.find((obj: VisibleObject) => obj.id === tile.object_id);
       if (foundArtifact) {
         //console.log("Artefacto encontrado por ID en tile:", foundArtifact);
         artifact = foundArtifact;
@@ -296,7 +328,7 @@ const GameMap: React.FC<GameMapProps> = ({
     }
     
     if (!artifact && gameState.map.visible_objects) {
-      const foundArtifact = gameState.map.visible_objects.find(obj => {
+      const foundArtifact = gameState.map.visible_objects.find((obj: VisibleObject) => {
         const isArtifact = obj.type === 'artifact' || 'subtype' in obj;
         const isAtPosition = obj.position && obj.position.x === x && obj.position.y === y;
         return isArtifact && isAtPosition;
@@ -309,9 +341,9 @@ const GameMap: React.FC<GameMapProps> = ({
     }
     
     if (!artifact) {
-      const exactMatch = gameState.map.visible_objects?.find(obj => 
-        obj.position && 
-        obj.position.x === x && 
+      const exactMatch = gameState.map.visible_objects?.find((obj: VisibleObject) =>
+        obj.position &&
+        obj.position.x === x &&
         obj.position.y === y
       );
       
@@ -499,23 +531,23 @@ const GameMap: React.FC<GameMapProps> = ({
       return h.position.x === x && h.position.y === y;
     });
 
-    const city = gameState.player.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
-    const aiCity = gameState.ai.cities?.find(c => c?.position?.x === x && c?.position?.y === y);
+    const city = gameState.player.cities?.find((c: any) => c?.position?.x === x && c?.position?.y === y);
+    const aiCity = gameState.ai.cities?.find((c: any) => c?.position?.x === x && c?.position?.y === y);
     const building = city?.buildings?.[0] || aiCity?.buildings?.[0];
 
     // Find a mine at this position
-    const mineAtPosition = gameState.map.visible_objects?.find(obj => 
-      obj.position && 
-      obj.position.x === x && 
-      obj.position.y === y && 
+    const mineAtPosition = gameState.map.visible_objects?.find((obj: VisibleObject) =>
+      obj.position &&
+      obj.position.x === x &&
+      obj.position.y === y &&
       (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-       ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+       ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
     ) as ResourceMine | undefined;
 
     const artifact = findArtifactAtPosition(x, y, tile);
     const { name: artifactName, subtype: artifactSubtype } = getArtifactProperties(artifact);
 
-    const selectedHero = gameState.player.heroes.find(h => h.id === selectedHeroId) || null;
+    const selectedHero = gameState.player.heroes.find((h: Hero) => h.id === selectedHeroId) || null;
     
     const isCastleBuilding = building && (building.is_castle || (building.position.x === 48 && building.position.y === 48));
     let isNearCastle = false;
@@ -629,17 +661,17 @@ const GameMap: React.FC<GameMapProps> = ({
   const syncArtifactsWithTiles = () => {
     if (!gameState?.map?.visible_objects?.length) return;
     
-    gameState.map.visible_objects.forEach(obj => {
+    gameState.map.visible_objects.forEach((obj: any) => {
       if ('subtype' in obj && !obj.type) {
         (obj as any).type = 'artifact';
       }
     });
     
-    const artifactObjects = gameState.map.visible_objects.filter(obj => 
+    const artifactObjects = gameState.map.visible_objects.filter((obj: VisibleObject) =>
       obj.type === 'artifact' || 'subtype' in obj
     );
     
-    artifactObjects.forEach(artifact => {
+    artifactObjects.forEach((artifact: VisibleObject) => {
       if (artifact.position) {
         const { x, y } = artifact.position;
         const idx = y * gameState.map.size.width + x;
@@ -677,15 +709,15 @@ const GameMap: React.FC<GameMapProps> = ({
   useEffect(() => {
     // Sincronizar minas con el renderizado
     if (gameState?.map?.visible_objects?.length > 0) {
-      const minas = gameState.map.visible_objects.filter(obj => 
-        obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-        ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
+      const minas = gameState.map.visible_objects.filter((obj: VisibleObject) =>
+        obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' ||
+        ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string))
       );
       
       if (minas.length > 0) {
         //console.log(`GameMap: Encontradas ${minas.length} minas para renderizar`);
         // Log detailed mine info
-        minas.forEach((mina, index) => {
+        minas.forEach((mina: VisibleObject, index: number) => {
           //console.log(`GameMap: Mina ${index+1} - type=${mina.type}, resource_type=${'resource_type' in mina ? mina.resource_type : 'N/A'}, position=(${mina.position.x}, ${mina.position.y})`);
         });
       } else {
@@ -752,26 +784,29 @@ const GameMap: React.FC<GameMapProps> = ({
         
         {/* CRITICAL DEBUG: Add logging to show how many mines we're about to render */}
         {(() => {
-          const minesToRender = gameState.map.visible_objects?.filter(obj => 
-            obj.position && 
+          const minesToRender = gameState.map.visible_objects?.filter((obj: VisibleObject) =>
+            obj.position &&
             (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-             ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
+             ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
           ) || [];
           
           return null;
         })()}
         
         {/* Renderizado explícito de todas las minas */}
-        {gameState.map.visible_objects?.filter(obj => 
-          obj.position && 
+        {gameState.map.visible_objects?.filter((obj: VisibleObject) =>
+          obj.position &&
           (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
-        ).map(mine => {
+           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
+        ).map((mine: VisibleObject) => {
           return renderMine(mine);
         })}
       </div>
     </div>
   );
-};
+});
+
+// Add display name to resolve ESLint warning
+GameMap.displayName = 'GameMap';
 
 export default GameMap;

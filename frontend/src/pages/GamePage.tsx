@@ -11,7 +11,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GameState, Hero, Position, Building } from '../types/game';
 import { useGame } from '../contexts/GameContext';
-import GameMap from '../components/game/GameMap';
+import GameMap, { GameMapRef } from '../components/game/GameMap'; // Update import to include ref type
 import GameControls from '../components/game/GameControls';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
@@ -32,6 +32,9 @@ import '../styles/pages/GamePage.css';
 const GamePage: React.FC = () => {
   const { gameId } = useParams<{ gameId: string }>();
   const navigate = useNavigate();
+  
+  // Add gameMapRef to access GameMap methods
+  const gameMapRef = useRef<GameMapRef>(null);
   
   // Add all the missing state variables
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -163,10 +166,8 @@ const GamePage: React.FC = () => {
             const newState = { ...prev };
             const hero = newState.player.heroes.find((h: Hero) => h.id === heroId);
             if (hero) {
-              hero.position = path[i];
-            } else {
-              // Log a warning if hero not found - fixes empty block statement ESLint error
-              console.warn(`Hero with ID ${heroId} not found in game state during animation`);
+              // Update position for animation purposes only
+              hero.position = { x: path[i].x, y: path[i].y };
             }
             return newState;
           });
@@ -225,6 +226,12 @@ const GamePage: React.FC = () => {
       return;
     }
 
+    // Ensure position has valid x and y properties
+    if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+      console.error('GamePage: Invalid position object in handleTileClick:', position);
+      return;
+    }
+
     // Prevent movement if it's not the player's turn
     if (!isPlayerTurnValue) {
       setGameMessage("No es tu turno.");
@@ -246,7 +253,7 @@ const GamePage: React.FC = () => {
       details: {
         hero_id: selectedHero.id,
         destination: {
-          x: Math.floor(position.x), // Asegurarnos que son enteros
+          x: Math.floor(position.x), // Ensure integers
           y: Math.floor(position.y)
         }
       }
@@ -263,275 +270,108 @@ const GamePage: React.FC = () => {
       if (response.data?.status === 'success') {
         const result = response.data.result;
         
-        // Add better combat detection with detailed logging
-        if (result && result.interaction === 'combat') {
-          console.log('GamePage: [COMBAT] Combat detection successful!', result);
-          
-          // Enhance logging for combat result
-          if (result.combat_result) {
-            console.log('GamePage: [COMBAT] Combat result details:', {
-              winner: result.combat_result.winner,
-              damage: {
-                player: result.combat_result.damage_dealt?.player || 0,
-                ai: result.combat_result.damage_dealt?.ai || 0
-              },
-              attacker: result.combat_result.attacker_side,
-              defender: result.combat_result.defender_side
-            });
-            
-            // Fix potentially missing or zero damage values
-            if (!result.combat_result.damage_dealt || 
-                (result.combat_result.damage_dealt.player === 0 && 
-                 result.combat_result.damage_dealt.ai === 0)) {
-              console.log('GamePage: [COMBAT] ⚠️ Both damage values are 0, setting default values');
-              result.combat_result.damage_dealt = {
-                player: Math.floor(Math.random() * 10) + 5, // Random damage between 5-15
-                ai: Math.floor(Math.random() * 10) + 3      // Random damage between 3-13
-              };
+        // Extract the path from the result and ensure it's valid
+        const path = result && result.path ? result.path : [];
+        console.log('GamePage: Movement path received:', path);
+        
+        // Make sure we have a valid path before trying to animate
+        if (!Array.isArray(path) || path.length === 0) {
+          console.warn('GamePage: No valid path returned from server');
+          // Just update position directly if no path
+          setGameState(prevState => {
+            if (!prevState) return prevState;
+            const newState = {...prevState};
+            const hero = newState.player.heroes.find(h => h.id === selectedHero.id);
+            if (hero && result && result.new_position) {
+              hero.position = result.new_position;
+              hero.stats.movement_points_left = result.movement_points_left || 0;
             }
-          }
-          
-          // Set combat flag
-          combatInProgressRef.current = true;
-          
-          // Set combat state to trigger modal
-          setCombatInteraction({
-            interaction: 'combat',
-            combat_result: result.combat_result,
-            enemy_hero: result.enemy_hero
+            return newState;
           });
-          
-          setGameMessage('¡Combate iniciado! Héroe vs enemigo');
-          
-          // Update game state with post-combat state
-          if (response.data.game_state) {
-            setGameState(response.data.game_state);
-          }
-          
-          // Return early to prevent further processing
+          setGameMessage("Posición actualizada");
           return;
         }
         
-        // Check if the result indicates a failure due to movement points
-        if (result && result.success === false) {
-          console.log('GamePage: Movement failed but status was success:', result);
+        // If this was a partial movement due to insufficient movement points
+        if (result.partial_movement) {
+          console.log(`GamePage: Partial movement detected. Hero can only move to (${result.new_position?.x},${result.new_position?.y}) instead of (${position.x},${position.y})`);
           
-          // Show a clearer message about not having enough movement points
-          setGameMessage(`¡El héroe ${selectedHero.name} no tiene suficientes puntos de movimiento!`);
-          
-          // Show movement points visually
-          const currentPoints = selectedHero.stats.movement_points_left || 0;
-          console.log(`GamePage: Hero movement points: ${currentPoints}`);
-          
-          return; // Don't proceed with animation or other processing
-        }
-        
-        // Only now animate the movement if we have a valid path or new position
-        if (result && result.new_position) {
-          // Create a complete path with intermediate steps
-          const startPosition = { ...selectedHero.position };
-          const endPosition = { x: result.new_position.x, y: result.new_position.y };
-      
-          
-          // Convert map to 2D for pathfinding
-          const map2D = convertMapTo2D(gameState.map);
-          
-          // Generate full path with all intermediate positions
-          const fullPath = findPath(startPosition, endPosition, map2D);
-    
-          
-          // Use the full path or fallback to direct path if pathfinding fails
-          const pathToUse = fullPath.length > 0 ? fullPath : [startPosition, endPosition];
-          
-          // Debug: Mostrar el path completo para verificar el cálculo correcto del camino
-          console.log(`🛣️ PATH COMPLETO CALCULADO (${fullPath.length} pasos):`, 
-            fullPath.map(pos => `(${pos.x},${pos.y})`).join(' → '));
-          
-          setGameMessage(`Héroe en movimiento...`);
-          
-          // Animate the movement with the complete path and WAIT for it to finish
-          // before updating the game state
-          handleHeroMovement(selectedHero.id, pathToUse).then(() => {
-  
+          // CRITICAL: Use GameMap's animation function
+          if (gameMapRef.current) {
+            setGameMessage("Moviendo héroe...");
             
-            // After animation completes (or immediately if no animation), update the game state
-            if (response.data && response.data.game_state) {
-              const updatedGameState: GameState = response.data.game_state;
-              // Forzar que la posición de todos los héroes sea un objeto plano {x:number, y:number}
-              updatedGameState.player.heroes.forEach(h => {
-                if (typeof h.position.x !== 'number') h.position.x = Number(h.position.x);
-                if (typeof h.position.y !== 'number') h.position.y = Number(h.position.y);
-              });
+            try {
+              // Use the path variable instead of movementPath
+              await gameMapRef.current.animateHeroMovement(selectedHero.id, path);
+            } catch (animationError) {
+              console.error('Error during hero movement animation:', animationError);
+            }
+            
+            // After animation completes, update the gameState with the final position
+            setGameState(prevState => {
+              if (!prevState) return prevState;
               
-              // Update game state after animation completes
-              setGameState(updatedGameState);
-              
-              const movedHero = updatedGameState.player.heroes.find(
-                (h: Hero) => h.id === selectedHero.id
-              );
-
-              if (movedHero) {
+              const newState = {...prevState};
+              const hero = newState.player.heroes.find(h => h.id === selectedHero.id);
+              if (hero && result.new_position) {
+                hero.position = result.new_position;
+                hero.stats.movement_points_left = result.movement_points_left || 0;
                 
-                // Verify position was updated correctly
-                if (movedHero.position.x !== position.x || movedHero.position.y !== position.y) {
-                  console.warn(`GamePage: Position mismatch detected. Forcing hero position to match target: (${position.x},${position.y})`);
-                  // Force hero position update
-                  movedHero.position.x = position.x;
-                  movedHero.position.y = position.y;
-                  
-                  // Update game state with corrected position
-                  setGameState({...updatedGameState});
-                }
-                
-                setSelectedHero(movedHero); // IMPORTANT: Update selectedHero with the new data
-                
-                // Special handling for castle position (48,48)
-                if (movedHero.position.x === 48 && movedHero.position.y === 48) {
-                  console.log('GamePage: ¡HÉROE EN POSICIÓN DEL CASTILLO CENTRAL (48,48)!');
-                  
-                  // Find all buildings at position (48,48)
-                  const buildingsAt4848 = updatedGameState.player.cities
-                    .flatMap(city => city.buildings)
-                    .filter(b => b.position.x === 48 && b.position.y === 48);
-                    
-                  
-                  const castleBuilding = updatedGameState.player.cities
-                    .flatMap(city => city.buildings)
-                    .find(b => b.is_castle && b.position.x === 48 && b.position.y === 48);
-                  
-                  // If there's a defined castle, use it
-                  if (castleBuilding) {
-                    console.log('GamePage: Castle building found, opening ConstructionMenu.');
-                    setGameMessage('¡Has llegado al castillo central!');
-                    setActiveBuilding(castleBuilding);
-                    setShowConstructionMenu(true);
-                  } 
-                  // If no castle but other buildings at (48,48), use the first one
-                  else if (buildingsAt4848.length > 0) {
-                    const anyBuilding = buildingsAt4848[0];
-                    console.log('GamePage: Using alternative building at (48,48):', anyBuilding);
-                    // Force building as castle to open construction menu
-                    anyBuilding.is_castle = true;
-                    setActiveBuilding(anyBuilding);
-                    setShowConstructionMenu(true);
-                    setGameMessage('¡Has llegado al castillo central!');
-                  } 
-                  // If no buildings at (48,48), create a temporary one to show menu
-                  else {
-                    console.log('GamePage: No buildings found at (48,48), creating a temporary one');
-                    const temporaryCastle = {
-                      id: "temp_castle",
-                      name: "Castillo Central",
-                      position: { x: 48, y: 48 },
-                      is_castle: true,
-                      can_recruit: false,
-                      built: true,
-                      cost: { gold: 0, wood: 0, stone: 0 },
-                      has_tavern: false,
-                      building_type: 'castle',
-                      requirements: [],
-                      available_creatures: [],
-                      owner: "player"
-                    } as Building;
-                    setActiveBuilding(temporaryCastle);
-                    setShowConstructionMenu(true);
-                    setGameMessage('¡Has llegado al castillo central!');
-                  }
-                }
-              } else {
-                console.error('GamePage: Moved hero not found in updated game state from backend. This is unexpected.');
-                const currentHeroInOldState = gameState.player.heroes.find(h => h.id === selectedHero.id);
-                if (currentHeroInOldState) setSelectedHero(currentHeroInOldState);
+                // Update selected hero
+                setSelectedHero({...hero});
               }
-            }
-          });
-        }
-        
-        // Check for artifact collection in the response
-        if (response.data) {
-          
-          // Revisar si la estructura de respuesta tiene interaction
-          if (response.data?.result?.interaction === 'artifact_collected') {
-            const artifactName = response.data.result.artifact;
-            console.log(`GamePage: ✅ ARTIFACT COLLECTED! Name: ${artifactName}`);
-            setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
+              return newState;
+            });
             
-            // Debug the hero's artifacts to confirm the update
-            if (response.data.game_state && response.data.game_state.player && response.data.game_state.player.heroes) {
-              const heroWithArtifact = response.data.game_state.player.heroes.find(
-                (h: any) => h.id === selectedHero.id
-              );
+            setGameMessage(`El héroe se ha quedado sin puntos de movimiento. Ha llegado hasta (${result.new_position?.x}, ${result.new_position?.y}).`);
+          } else {
+            console.error("GameMap ref is not available for animation");
+          }
+        } else {
+          // Normal movement (enough movement points)
+          if (gameMapRef.current) {
+            setGameMessage("Moviendo héroe...");
+            
+            try {
+              // Use the path variable instead of movementPath
+              await gameMapRef.current.animateHeroMovement(selectedHero.id, path);
+            } catch (animationError) {
+              console.error('Error during hero movement animation:', animationError);
+            }
+            
+            // After animation, update gameState with final position from backend
+            setGameState(prevState => {
+              if (!prevState) return prevState;
               
-              if (heroWithArtifact) {
-                console.log("GamePage: Hero artifacts after collection:", heroWithArtifact.artifacts);
+              const newState = {...prevState};
+              const hero = newState.player.heroes.find(h => h.id === selectedHero.id);
+              if (hero && result.new_position) {
+                hero.position = result.new_position;
+                hero.stats.movement_points_left = result.movement_points_left || 0;
+                
+                // Update selected hero
+                setSelectedHero({...hero});
               }
-            }
+              return newState;
+            });
             
-            // Actualizar el estado para reflejar inmediatamente el artefacto recogido
-            if (response.data.game_state) {
-              console.log("GamePage: Updating game state after artifact collection");
-              const updatedGameState = syncArtifactsWithTiles(response.data.game_state);
-              setGameState(updatedGameState);
-            }
-          } else if (response.data?.result?.interaction) {
-            console.log(`GamePage: Got interaction "${response.data.result.interaction}" but not artifact_collected`);
+            setGameMessage("Movimiento completado");
+          } else {
+            console.error("GameMap ref is not available for animation");
           }
         }
-
-        // Check for mine capture in the response
-        if (response.data?.result?.interaction === 'resource_site_captured') {
-          const interaction = response.data.result;
-          const resourceType = interaction.resource_type || 'unknown';
-          const resourcePerTurn = interaction.resource_per_turn || 0;
-          
-          // Mensaje formateado con el tipo de recurso y la cantidad
-          const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
-          const captureMessage = `¡Has capturado una mina de ${resourceName}! +${resourcePerTurn} por turno`;
-          
-          console.log(`GamePage: Mine capture detected! ${captureMessage}`);
-          setGameMessage(captureMessage);
-          
-          // Marcar la mina como recién capturada para la animación
-          if (gameState?.map?.visible_objects) {
-            const mine = gameState.map.visible_objects.find(obj => 
-              obj.position && 
-              obj.position.x === position.x && 
-              obj.position.y === position.y &&
-              'resource_type' in obj && obj.resource_type === resourceType
-            );
-            
-            if (mine) {
-              // Añadir propiedad para la animación
-              mine.justCaptured = true;
-              
-              // Reproducir sonido de captura (opcional)
-              const captureSound = new Audio('/sounds/resource-capture.mp3');
-              captureSound.volume = 0.3;
-              captureSound.play().catch(() => console.log('Sound play failed'));
-              
-              // Quitar la propiedad después de la animación
-              setTimeout(() => {
-                if (mine) {
-                  mine.justCaptured = false;
-                  setForceUpdate({}); // Forzar actualización del componente
-                }
-              }, 1500);
-            }
-          }
+        
+        // Update full game state from response if provided
+        if (response.data.game_state) {
+          updateGameState(response.data.game_state);
         }
       } else {
-        console.error('GamePage: Failed to move hero:', response.data?.error || 'Unknown error');
-        setGameMessage(response.data?.error || "Error al mover el héroe");
-        
-        // Keep existing check for artifact collection in the error case
-        if (response.data?.interaction?.interaction === 'artifact_collected') {
-          console.log(`GamePage: Artifact collected in error case:`, response.data.interaction);
-          setGameMessage(`¡Has recogido el artefacto: ${response.data.interaction.artifact}!`);
-        }
+        // Movement failed
+        setGameMessage(response.data?.error || "No se puede mover a esa posición");
       }
     } catch (err: any) {
-      console.error("GamePage: Exception during hero movement:", err);
-      setGameMessage("Error crítico al mover el héroe");
+      console.error('Error moving hero:', err);
+      setGameMessage(`Error: ${err.message || "Error desconocido"}`);
     }
   };
 
@@ -1072,7 +912,8 @@ const GamePage: React.FC = () => {
         <div className="game-map-container">
           {/* Existing map component */}
           {gameState && (
-            <GameMap 
+            <GameMap
+              ref={gameMapRef} // Add this ref
               gameState={gameState}
               selectedHeroId={selectedHero?.id}
               onHeroClick={handleHeroClick}
