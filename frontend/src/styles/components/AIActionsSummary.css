@@ -50,10 +50,11 @@
   color: #f0c674;
 }
 
+/* Estilos para información estratégica */
 .ai-strategic-info {
-  background-color: rgba(139, 90, 43, 0.2);
-  border-radius: 8px;
+  background: rgba(20, 30, 45, 0.8);
   padding: 15px;
+  border-radius: 8px;
   margin-bottom: 20px;
 }
 
@@ -65,19 +66,46 @@
 }
 
 .strategic-item {
-  margin-bottom: 10px;
+  margin-bottom: 15px;
+  border-left: 3px solid #6d8fb3;
+  padding-left: 12px;
 }
 
 .strategic-item h4 {
-  font-size: 1rem;
-  margin: 0 0 5px 0;
-  color: #d19a3a;
+  color: #d0b060;
+  margin-bottom: 8px;
+  font-size: 1.1rem;
 }
 
 .strategic-item p {
-  margin: 0;
-  font-size: 0.9rem;
+  margin: 5px 0;
   line-height: 1.4;
+}
+
+.strategy-list {
+  list-style-type: disc;
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.strategy-list li {
+  margin-bottom: 4px;
+}
+
+.nested-strategy {
+  padding-left: 10px;
+}
+
+.strategy-subitem {
+  margin-top: 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px dotted #6d8fb3;
+}
+
+.strategy-subitem h5 {
+  color: #a090d0;
+  margin-bottom: 5px;
+  font-size: 0.95rem;
 }
 
 .ai-actions-list {
@@ -143,8 +171,11 @@
 }
 
 .action-result {
-  font-size: 0.8rem;
-  margin-top: 5px;
+  margin-top: 8px;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.9rem;
   color: #a9a9a9;
   display: flex;
   flex-wrap: wrap;

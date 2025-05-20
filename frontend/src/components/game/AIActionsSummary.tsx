@@ -10,7 +10,7 @@ interface AIAction {
 
 interface AIActionsSummaryProps {
   actions: AIAction[];
-  strategicInfo?: Record<string, string>;
+  strategicInfo?: Record<string, any>;
   isVisible: boolean;
   onClose: () => void;
 }
@@ -54,10 +54,6 @@ const AIActionsSummary: React.FC<AIActionsSummaryProps> = ({
     const details = action.details || {};
     const type = action.action?.toLowerCase();
     
-    if (action.error) {
-      return `Error: ${action.error}`;
-    }
-
     switch (type) {
       case 'movehero':
         return `Movió héroe a (${details.destination?.x}, ${details.destination?.y})`;
@@ -71,12 +67,58 @@ const AIActionsSummary: React.FC<AIActionsSummaryProps> = ({
       case 'transfer':
         return `Transfirió tropas entre héroe y castillo`;
       case 'collectresource':
-        return `Recolectó recursos`;
+        return `Recolectó recurso de tipo ${details.resourceType || 'desconocido'}`;
       case 'endturn':
         return 'Finalizó su turno';
       default:
         return `Acción: ${action.action || 'desconocida'}`;
     }
+  };
+
+  // Filtrar solo las acciones exitosas (sin error)
+  const successfulActions = actions.filter(action => !action.error);
+
+  // Función para formatear claves de estrategia a nombres legibles
+  const formatStrategyKey = (key: string): string => {
+    const keyMap: Record<string, string> = {
+      'reasoning': 'Razonamiento',
+      'strategic_planning': 'Planificación Estratégica',
+      'analysis': 'Análisis',
+      'summary': 'Resumen',
+      'opportunities': 'Oportunidades',
+      'threats': 'Amenazas',
+      'prioritized_objectives': 'Objetivos Prioritarios',
+      'short_term_strategy': 'Estrategia a Corto Plazo',
+      'long_term_strategy': 'Estrategia a Largo Plazo'
+    };
+    return keyMap[key] || key;
+  };
+
+  // Función recursiva para renderizar valores estratégicos de cualquier tipo
+  const renderStrategyValue = (value: any): React.ReactNode => {
+    if (typeof value === 'string') {
+      return <p>{value}</p>;
+    } else if (Array.isArray(value)) {
+      return (
+        <ul className="strategy-list">
+          {value.map((item, index) => (
+            <li key={index}>{item}</li>
+          ))}
+        </ul>
+      );
+    } else if (typeof value === 'object' && value !== null) {
+      return (
+        <div className="nested-strategy">
+          {Object.entries(value).map(([subKey, subValue]) => (
+            <div key={subKey} className="strategy-subitem">
+              <h5>{formatStrategyKey(subKey)}</h5>
+              {renderStrategyValue(subValue)}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return <p>{String(value)}</p>;
   };
 
   return (
@@ -91,10 +133,8 @@ const AIActionsSummary: React.FC<AIActionsSummaryProps> = ({
           <h3>Estrategia de la IA</h3>
           {Object.entries(strategicInfo).map(([key, value]) => (
             <div key={key} className="strategic-item">
-              <h4>{key === 'reasoning' ? 'Razonamiento' : 
-                  key === 'strategic_planning' ? 'Planificación Estratégica' : 
-                  key === 'analysis' ? 'Análisis' : key}</h4>
-              <p>{value}</p>
+              <h4>{formatStrategyKey(key)}</h4>
+              {renderStrategyValue(value)}
             </div>
           ))}
         </div>
@@ -102,27 +142,16 @@ const AIActionsSummary: React.FC<AIActionsSummaryProps> = ({
 
       <div className="ai-actions-list">
         <h3>Acciones Realizadas</h3>
-        {actions.length === 0 ? (
-          <p className="no-actions">No se han realizado acciones</p>
+        {successfulActions.length === 0 ? (
+          <p className="no-actions">No se han realizado acciones exitosas</p>
         ) : (
           <ul>
-            {actions.map((action, index) => (
-              <li key={index} className={`action-item ${action.error ? 'action-error' : ''}`}>
+            {successfulActions.map((action, index) => (
+              <li key={index} className="action-item">
                 <div className="action-icon">{getActionIcon(action.action)}</div>
                 <div className="action-content">
                   <div className="action-title">{action.action}</div>
                   <div className="action-description">{getActionDescription(action)}</div>
-                  {action.result && !action.error && (
-                    <div className="action-result">
-                      {typeof action.result === 'object' 
-                        ? Object.entries(action.result)
-                            .filter(([k, v]) => k !== 'success' && v !== undefined)
-                            .map(([key, value]) => (
-                              <span key={key}>{key}: {JSON.stringify(value)}</span>
-                            ))
-                        : action.result}
-                    </div>
-                  )}
                 </div>
               </li>
             ))}

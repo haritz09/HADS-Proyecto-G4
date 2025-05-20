@@ -145,7 +145,12 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         if target_x is None or target_y is None:
             raise ValueError("Invalid target coordinates")
         
-        hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
+        # Buscar el héroe en la entidad correcta según el turno actual
+        if game_state.current_player == "player":
+            hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
+        else:
+            hero = next((h for h in game_state.ai.heroes if h.id == hero_id), None)
+            
         if not hero:
             raise ValueError(f"Hero not found with ID: {hero_id}")
         
@@ -153,10 +158,46 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         if target_x < 0 or target_x >= game_state.map.size.width or target_y < 0 or target_y >= game_state.map.size.height:
             raise ValueError(f"Target position ({target_x}, {target_y}) is outside map boundaries")
         
-        # Calculate movement cost without map parameter
-        movement_cost = calculate_movement_cost(hero.position, Position(x=target_x, y=target_y))
+        # Store original destination
+        original_destination = Position(x=target_x, y=target_y)
+        movement_cost = calculate_movement_cost(hero.position, original_destination)
+        
+        # Flag to track if we're doing partial movement
+        partial_movement = False
+        
+        # Si el destino está fuera de alcance, calcular destino parcial
         if movement_cost > hero.stats.movement_points_left:
-            raise ValueError(f"Not enough movement points: needed {movement_cost}, available {hero.stats.movement_points_left}")
+            partial_movement = True
+            print(f"DEBUG: Partial movement needed. Target: ({target_x},{target_y}), Cost: {movement_cost}, Available: {hero.stats.movement_points_left}")
+            
+            # Calcular el punto más cercano alcanzable hacia el destino deseado
+            direction_x = target_x - hero.position.x
+            direction_y = target_y - hero.position.y
+            
+            # Normalizar el vector de dirección
+            magnitude = math.sqrt(direction_x**2 + direction_y**2)
+            normalized_x = direction_x / magnitude
+            normalized_y = direction_y / magnitude
+            
+            # Multiplicar por la distancia máxima que podemos recorrer
+            max_distance = hero.stats.movement_points_left
+            
+            # Calcular las nuevas coordenadas de destino
+            new_target_x = int(hero.position.x + (normalized_x * max_distance))
+            new_target_y = int(hero.position.y + (normalized_y * max_distance))
+            
+            # Ajustar la posición para que esté dentro de los límites del mapa
+            new_target_x = max(0, min(new_target_x, game_state.map.size.width - 1))
+            new_target_y = max(0, min(new_target_y, game_state.map.size.height - 1))
+            
+            print(f"DEBUG: Partial movement calculated. New target: ({new_target_x},{new_target_y})")
+            
+            # Actualizar destino y recalcular movimiento
+            target_x = new_target_x
+            target_y = new_target_y
+            movement_cost = calculate_movement_cost(hero.position, Position(x=target_x, y=target_y))
+            
+            print(f"DEBUG: New movement cost: {movement_cost}, Available: {hero.stats.movement_points_left}")
         
         # Ensure position values are integers
         original_x, original_y = hero.position.x, hero.position.y
@@ -179,12 +220,15 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
             # Continue execution even if interaction processing fails
             interaction_result = {"interaction": "error", "error_message": str(e)}
         
+        # Return extra information for partial movement
         return {
             "success": True,
             "hero_id": hero_id,
             "new_position": {"x": target_x, "y": target_y},
             "movement_points_left": hero.stats.movement_points_left,
-            "interaction": interaction_result  # Include the interaction result in the response
+            "interaction": interaction_result,  # Include the interaction result in the response
+            "partial_movement": partial_movement,
+            "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None
         }
     except Exception as e:
         print(f"ERROR in process_hero_movement: {str(e)}")
@@ -231,19 +275,22 @@ def is_hero_in_city(hero: Heroe, city: City, radius: int = 1) -> bool:
 def process_recruitment(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     """Procesa el reclutamiento de unidades en un edificio de una ciudad"""
     details = action["details"]
-    hero_id = details["heroId"]
-    city_id = details["cityId"]
-    unit_type = details["unitType"]
-    count = details["count"]
-    building_id = details.get("buildingId")
+    hero_id = details.get("hero_id") or details.get("heroId")
+    city_id = details.get("city_id") or details.get("cityId")
+    unit_type = details.get("unit_type") or details.get("unitType")
+    count = details.get("count") or details.get("quantity", 0)
+    building_id = details.get("building_id") or details.get("buildingId")
+
+    # Determinar entidad actual (player o AI)
+    current_entity = game_state.player if game_state.current_player == "player" else game_state.ai
 
     # Encontrar la ciudad
-    city = next((c for c in game_state.player.cities if c.id == city_id), None)
+    city = next((c for c in current_entity.cities if c.id == city_id), None)
     if not city:
         raise ValueError("Ciudad no encontrada")
 
-    # Validar que el héroe está dentro del radio de la ciudad
-    hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
+    # Encontrar el héroe en la entidad correcta
+    hero = next((h for h in current_entity.heroes if h.id == hero_id), None)
     if not hero or not is_hero_in_city(hero, city, radius=1):
         raise ValueError("El héroe no está en la ciudad ni adyacente a ella")
 
@@ -950,85 +997,190 @@ def calculate_damage(unit: Any, side: str) -> int:
     # Implementación simplificada
     return 10
 
+def process_resource_collection(game_state: GameState, action: dict) -> dict:
+    """
+    Procesa la acción de recolección de recursos de un tile del mapa
+    """
+    try:
+        details = action["details"]
+        hero_id = details.get("hero_id") or details.get("heroId")
+        resource_type = details.get("resource_type") or details.get("resourceType")
+        location = details.get("location")
+        
+        # Verificar si la información de ubicación es correcta
+        if not location or not isinstance(location, dict) or "x" not in location or "y" not in location:
+            raise ValueError("Ubicación de recurso inválida o no especificada")
+            
+        # Convertir coordenadas a enteros
+        position_x = int(location["x"])
+        position_y = int(location["y"])
+        
+        # Buscar héroe en la entidad correcta según el turno actual
+        if game_state.current_player == "player":
+            hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
+            current_entity = game_state.player
+        else:
+            hero = next((h for h in game_state.ai.heroes if h.id == hero_id), None)
+            current_entity = game_state.ai
+            
+        if not hero:
+            raise ValueError(f"Héroe no encontrado con ID: {hero_id}")
+            
+        # Verificar que el héroe está en la posición correcta
+        if hero.position.x != position_x or hero.position.y != position_y:
+            raise ValueError(f"El héroe debe estar en la posición del recurso ({position_x}, {position_y})")
+            
+        # Buscar objeto de recurso en la posición
+        resource_obj = None
+        for obj in game_state.map.visible_objects:
+            if hasattr(obj, "position") and obj.position.x == position_x and obj.position.y == position_y:
+                # Verificar si es un recurso por tipo o resource_type
+                if (hasattr(obj, "type") and obj.type in ["goldmine", "sawmill", "quarry"]) or \
+                   (hasattr(obj, "resource_type") and obj.resource_type in ["gold", "wood", "stone"]):
+                    resource_obj = obj
+                    break
+                    
+        if not resource_obj:
+            raise ValueError(f"No se encontró recurso en la posición ({position_x}, {position_y})")
+            
+        # Verificar si ya tiene dueño
+        if hasattr(resource_obj, "owner") and resource_obj.owner:
+            if resource_obj.owner == game_state.current_player:
+                return {
+                    "success": True,
+                    "message": "Este recurso ya te pertenece",
+                    "resource_type": getattr(resource_obj, "resource_type", "unknown"),
+                    "position": {"x": position_x, "y": position_y}
+                }
+            else:
+                # Si pertenece al enemigo, capturarlo
+                previous_owner = resource_obj.owner
+                resource_obj.owner = game_state.current_player
+                
+                return {
+                    "success": True,
+                    "message": f"Has capturado este recurso de {previous_owner}",
+                    "resource_type": getattr(resource_obj, "resource_type", "unknown"),
+                    "position": {"x": position_x, "y": position_y},
+                    "previous_owner": previous_owner
+                }
+        
+        # Asignar dueño al recurso
+        resource_obj.owner = game_state.current_player
+        
+        # Respuesta para el frontend
+        return {
+            "success": True,
+            "message": f"Has recolectado un recurso de tipo {getattr(resource_obj, 'resource_type', 'desconocido')}",
+            "resource_type": getattr(resource_obj, "resource_type", "unknown"),
+            "position": {"x": position_x, "y": position_y}
+        }
+    except Exception as e:
+        print(f"ERROR in process_resource_collection: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Error recolectando recurso: {str(e)}"
+        }
+
 def transfer_troops_between_hero_and_castle(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     """
     Permite transferir tropas entre el héroe y el castillo central si el héroe está en el castillo.
-    action['details'] debe tener:
-      - heroId: id del héroe
-      - cityId: id de la ciudad
-      - transfer: lista de dicts con { 'unitType': str, 'to_castle': int, 'to_hero': int }
-        (to_castle: cantidad a dejar en el castillo, to_hero: cantidad a llevarse del castillo)
     """
-    details = action["details"]
-    hero_id = details["heroId"]
-    city_id = details["cityId"]
-    transfers = details["transfer"]  # lista de transferencias
+    try:
+        details = action["details"]
+        
+        # Normalizar campos que pueden tener diferentes nombres
+        hero_id = details.get("hero_id") or details.get("heroId")
+        
+        # Aceptar tanto cityId como castleId
+        city_id = details.get("city_id") or details.get("cityId") or details.get("castleId")
+        
+        # Aceptar tanto unitType como troops
+        unit_type = details.get("unit_type") or details.get("unitType") or details.get("troops")
+        
+        # Aceptar tanto count como quantity
+        count = details.get("count") or details.get("quantity", 0)
+        
+        if not hero_id or not city_id or not unit_type:
+            raise ValueError("Faltan campos requeridos para la transferencia (héroe, ciudad o tipo de unidad)")
+        
+        # Determinar la entidad correcta basado en el turno actual
+        if game_state.current_player == "player":
+            entity = game_state.player
+        else:
+            entity = game_state.ai
+        
+        # Encontrar ciudad y castillo
+        city = next((c for c in entity.cities if c.id == city_id), None)
+        if not city:
+            raise ValueError("Ciudad no encontrada")
+        castle = next((b for b in city.buildings if getattr(b, 'is_castle', False)), None)
+        if not castle:
+            raise ValueError("Castillo no encontrado en la ciudad")
 
-    # Encontrar ciudad y castillo
-    city = next((c for c in game_state.player.cities if c.id == city_id), None)
-    if not city:
-        raise ValueError("Ciudad no encontrada")
-    castle = next((b for b in city.buildings if getattr(b, 'is_castle', False)), None)
-    if not castle:
-        raise ValueError("Castillo no encontrado en la ciudad")
+        # Verificar que el héroe está en el castillo
+        hero = next((h for h in entity.heroes if h.id == hero_id), None)
+        if not hero or hero.position.x != castle.position.x or hero.position.y != castle.position.y:
+            raise ValueError("El héroe debe estar en el castillo para transferir tropas")
 
-    # Verificar que el héroe está en el castillo
-    hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
-    if not hero or hero.position.x != castle.position.x or hero.position.y != castle.position.y:
-        raise ValueError("El héroe debe estar en el castillo para transferir tropas")
+        # Inicializar guarnición del castillo si no existe
+        if not hasattr(castle, 'garrison'):
+            castle.garrison = []  # lista de ArmyUnit
 
-    # Inicializar guarnición del castillo si no existe
-    if not hasattr(castle, 'garrison'):
-        castle.garrison = []  # lista de ArmyUnit
+        # Procesar transferencias
+        for t in transfers:
+            unit_type = t['unitType']
+            to_castle = t.get('to_castle', 0)
+            to_hero = t.get('to_hero', 0)
 
-    # Procesar transferencias
-    for t in transfers:
-        unit_type = t['unitType']
-        to_castle = t.get('to_castle', 0)
-        to_hero = t.get('to_hero', 0)
+            # Transferir del héroe al castillo
+            if to_castle > 0:
+                hero_unit = next((u for u in hero.army if u.type == unit_type), None)
+                if not hero_unit or hero_unit.count < to_castle:
+                    raise ValueError(f"El héroe no tiene suficientes unidades de {unit_type} para dejar en el castillo")
+                # Quitar del héroe
+                hero_unit.count -= to_castle
+                if hero_unit.count == 0:
+                    hero.army.remove(hero_unit)
+                # Añadir al castillo
+                castle_unit = next((u for u in castle.garrison if u.type == unit_type), None)
+                if castle_unit:
+                    castle_unit.count += to_castle
+                else:
+                    castle.garrison.append(ArmyUnit(type=unit_type, count=to_castle))
 
-        # Transferir del héroe al castillo
-        if to_castle > 0:
-            hero_unit = next((u for u in hero.army if u.type == unit_type), None)
-            if not hero_unit or hero_unit.count < to_castle:
-                raise ValueError(f"El héroe no tiene suficientes unidades de {unit_type} para dejar en el castillo")
-            # Quitar del héroe
-            hero_unit.count -= to_castle
-            if hero_unit.count == 0:
-                hero.army.remove(hero_unit)
-            # Añadir al castillo
-            castle_unit = next((u for u in castle.garrison if u.type == unit_type), None)
-            if castle_unit:
-                castle_unit.count += to_castle
-            else:
-                castle.garrison.append(ArmyUnit(type=unit_type, count=to_castle))
+            # Transferir del castillo al héroe
+            if to_hero > 0:
+                castle_unit = next((u for u in castle.garrison if u.type == unit_type), None)
+                if not castle_unit or castle_unit.count < to_hero:
+                    raise ValueError(f"El castillo no tiene suficientes unidades de {unit_type} para dar al héroe")
+                # Quitar del castillo
+                castle_unit.count -= to_hero
+                if castle_unit.count == 0:
+                    castle.garrison.remove(castle_unit)
+                # Añadir al héroe
+                hero_unit = next((u for u in hero.army if u.type == unit_type), None)
+                if hero_unit:
+                    hero_unit.count += to_hero
+                else:
+                    hero.army.append(ArmyUnit(type=unit_type, count=to_hero))
 
-        # Transferir del castillo al héroe
-        if to_hero > 0:
-            castle_unit = next((u for u in castle.garrison if u.type == unit_type), None)
-            if not castle_unit or castle_unit.count < to_hero:
-                raise ValueError(f"El castillo no tiene suficientes unidades de {unit_type} para dar al héroe")
-            # Quitar del castillo
-            castle_unit.count -= to_hero
-            if castle_unit.count == 0:
-                castle.garrison.remove(castle_unit)
-            # Añadir al héroe
-            hero_unit = next((u for u in hero.army if u.type == unit_type), None)
-            if hero_unit:
-                hero_unit.count += to_hero
-            else:
-                hero.army.append(ArmyUnit(type=unit_type, count=to_hero))
+        # Limitar a 5 slots por ejército (héroe y castillo)
+        if len(hero.army) > 5:
+            raise ValueError("El héroe no puede llevar más de 5 tipos de tropas")
+        if len(castle.garrison) > 5:
+            raise ValueError("El castillo no puede tener más de 5 tipos de tropas en la guarnición")
 
-    # Limitar a 5 slots por ejército (héroe y castillo)
-    if len(hero.army) > 5:
-        raise ValueError("El héroe no puede llevar más de 5 tipos de tropas")
-    if len(castle.garrison) > 5:
-        raise ValueError("El castillo no puede tener más de 5 tipos de tropas en la guarnición")
-
-    return {
-        "hero_army": [{"type": u.type, "count": u.count} for u in hero.army],
-        "castle_garrison": [{"type": u.type, "count": u.count} for u in castle.garrison]
-    }
+        return {
+            "hero_army": [{"type": u.type, "count": u.count} for u in hero.army],
+            "castle_garrison": [{"type": u.type, "count": u.count} for u in castle.garrison]
+        }
+    except Exception as e:
+        print(f"ERROR in transfer_troops_between_hero_and_castle: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Error en transferencia: {str(e)}"
+        }
 
 def build_structure(game_state, city_id, structure_type):
     """

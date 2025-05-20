@@ -573,9 +573,14 @@ async def communicate_with_ai(
             raise HTTPException(status_code=400, detail="No es el turno de la IA")
         
         # Obtener respuesta de la IA
-        ai_response = groq_client.send_message(game_state)
+        #ai_response = groq_client.send_message(game_state)
+        from ai_service.strategy.decision_maker import create_strategic_summary
+        strategic_summary = create_strategic_summary(game_state)
+        ai_response = groq_client.send_message(strategic_summary)
         response_content = ai_response.choices[0].message.content
         
+        print(f"Promt de la IA recibido: {response_content}")
+ 
         # Si no es necesario ejecutar acciones, devolver solo la respuesta
         if not execute_actions:
             return {"ai_response": response_content}
@@ -586,18 +591,65 @@ async def communicate_with_ai(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error comunicando con la IA: {str(e)}")
 
+def normalize_ai_action(action):
+    """
+    Normaliza la acción de la IA para que coincida con el formato esperado por el backend.
+    Traduce camelCase a snake_case y mapea campos con nombres diferentes.
+    """
+    if not isinstance(action, dict):
+        return action
+
+    # Diccionario de mapeo de campos específicos
+    field_mapping = {
+        "heroId": "hero_id",
+        "cityId": "city_id",
+        "quantity": "count",
+        "buildingId": "building_id",
+        "unitType": "unit_type", 
+        "structureType": "structure_type",
+        "attackerId": "attacker_id",
+        "defenderId": "defender_id",
+        "troops": "unit_type"  # Caso específico para acciones de transfer
+    }
+    
+    # Crear una nueva acción con los campos normalizados
+    normalized_action = {}
+    
+    # Mantener type como está
+    if "type" in action:
+        normalized_action["type"] = action["type"]
+    
+    # Procesar details si existe
+    if "details" in action and isinstance(action["details"], dict):
+        normalized_details = {}
+        
+        for key, value in action["details"].items():
+            # Aplicar mapeo si el campo está en el diccionario
+            if key in field_mapping:
+                normalized_key = field_mapping[key]
+            else:
+                # Convertir camelCase a snake_case para otros campos
+                normalized_key = camel_to_snake(key)
+                
+            # Procesar posiciones y destinos anidados
+            if key in ["position", "destination"] and isinstance(value, dict):
+                normalized_details[normalized_key] = value  # Mantener posiciones como están
+            else:
+                normalized_details[normalized_key] = value
+                
+        normalized_action["details"] = normalized_details
+    
+    return normalized_action
+
+def camel_to_snake(name):
+    """Convierte camelCase a snake_case."""
+    import re
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
 async def process_ai_actions(game_id: str, ai_response_content: str, game: dict, game_state: dict):
     """
     Procesa la respuesta de la IA, extrae las acciones y las ejecuta secuencialmente.
-    
-    Args:
-        game_id: ID de la partida
-        ai_response_content: Respuesta de la IA en formato JSON
-        game: Datos completos del juego
-        game_state: Estado actual del juego
-        
-    Returns:
-        dict: Resultados de las acciones y estado final del juego
     """
     try:
         # Intentar analizar diferentes formatos de respuesta JSON
@@ -605,6 +657,7 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
         try:
             # Intento principal: respuesta completa en formato JSON
             ai_actions = json.loads(ai_response_content)
+            print(f"Intento principal: respuesta completa en formato JSON: {ai_actions}")
         except json.JSONDecodeError:
             # Si falla, intentar extraer solo la parte JSON usando expresiones regulares
             import re
@@ -646,13 +699,33 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
         # Resultados de cada acción
         action_results = []
         
+        # Rastrear si se ha realizado un movimiento parcial para ajustar acciones subsecuentes
+        last_partial_movement = None
+        
         # Procesar cada acción secuencialmente
         for i, action in enumerate(actions):
+            # Normalizar la acción antes de procesarla
+            normalized_action = normalize_ai_action(action)
+            
             # Control logging
-            logger.info(f"Processing AI action {i+1}/{len(actions)}: {action.get('type', 'unknown')}")
+            logger.info(f"Processing AI action {i+1}/{len(actions)}: {normalized_action.get('type', 'unknown')}")
+            
+            # Ajustar destinos de acciones si hubo un movimiento parcial previamente
+            if last_partial_movement and normalized_action.get('type') in ['collectResource', 'pickupArtifact']:
+                hero_id = normalized_action.get('details', {}).get('hero_id') or normalized_action.get('details', {}).get('heroId')
+                
+                # Si esta acción involucra al mismo héroe que se movió parcialmente
+                if hero_id == last_partial_movement['hero_id']:
+                    # Ajustar location en collectResource
+                    if 'location' in normalized_action.get('details', {}):
+                        logger.info(f"Adjusting location in action {i+1} due to partial movement")
+                        normalized_action['details']['location'] = {
+                            'x': last_partial_movement['new_position']['x'],
+                            'y': last_partial_movement['new_position']['y']
+                        }
             
             # Si es el final del turno, terminar el bucle
-            if action.get('type') == 'endTurn':
+            if normalized_action.get('type') == 'endTurn':
                 # Procesar fin de turno
                 result = process_end_turn(game_state_obj)
                 action_results.append({
@@ -665,49 +738,76 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
             # Procesar la acción según su tipo
             try:
                 result = None
-                action_type = action.get('type')
+                action_type = normalized_action.get('type')
                 
                 # Normalizar tipos de acción para manejar posibles variaciones
                 action_type_normalized = action_type.lower() if action_type else None
                 
                 # Asegurar que details exista
-                if 'details' not in action and action_type_normalized != 'endturn':
+                if 'details' not in normalized_action and action_type_normalized != 'endturn':
                     # Intentar reconstruir details con campos a nivel raíz
-                    action['details'] = {k: v for k, v in action.items() if k != 'type'}
-                    logger.warning(f"Missing 'details' field, reconstructed: {action['details']}")
+                    normalized_action['details'] = {k: v for k, v in normalized_action.items() if k != 'type'}
+                    logger.warning(f"Missing 'details' field, reconstructed: {normalized_action['details']}")
                 
-                # Procesar según el tipo normalizado
+                # Procesar según el tipo normalizado - USAR normalized_action EN TODAS LAS LLAMADAS
                 if action_type_normalized in ['movehero', 'move_hero', 'move']:
-                    result = process_hero_movement(game_state_obj, action)
+                    result = process_hero_movement(game_state_obj, normalized_action)
+                    
+                    # Verificar si hubo un movimiento parcial y actualizar el rastreador
+                    if result.get('partial_movement'):
+                        logger.warning(f"Partial movement performed: Hero moved to ({result['new_position']['x']}, {result['new_position']['y']}) instead of ({result['original_destination']['x']}, {result['original_destination']['y']})")
+                        
+                        last_partial_movement = {
+                            'hero_id': normalized_action.get('details', {}).get('hero_id') or normalized_action.get('details', {}).get('heroId'),
+                            'new_position': result.get('new_position')
+                        }
                 elif action_type_normalized in ['buildstructure', 'build_structure', 'build']:
-                    result = process_build_structure(game_state_obj, action)
+                    result = process_build_structure(game_state_obj, normalized_action)
                 elif action_type_normalized in ['recruitunits', 'recruit_units', 'recruit']:
-                    result = process_recruitment(game_state_obj, action)
+                    result = process_recruitment(game_state_obj, normalized_action)
                 elif action_type_normalized in ['combat', 'attack', 'attackenemy', 'attack_enemy']:
-                    result = process_hero_attack(game_state_obj, action)
+                    result = process_hero_attack(game_state_obj, normalized_action)
                 elif action_type_normalized in ['transfer', 'transfertroops', 'transfer_troops']:
-                    result = transfer_troops_between_hero_and_castle(game_state_obj, action)
+                    result = transfer_troops_between_hero_and_castle(game_state_obj, normalized_action)
+                elif action_type_normalized in ['collectresource', 'collect_resource']:
+                    from backend.app.game.logic import process_resource_collection
+                    result = process_resource_collection(game_state_obj, normalized_action)
                 else:
                     # Acción no reconocida o no implementada
                     logger.warning(f"Action type not implemented: {action_type}")
                     result = {"error": f"Acción no implementada: {action_type}"}
                 
-                # Guardar el resultado
-                action_results.append({
-                    "action": action_type,
-                    "details": action.get('details', {}),
-                    "result": result
-                })
-                
-                # Logging para cada acción exitosa
-                logger.info(f"AI action {action_type} executed successfully")
+                # Verificar resultado
+                if result and "error" in result and not result.get("success", False):
+                    logger.error(f"Error in AI action execution: {result['error']}")
+                    action_results.append({
+                        "action": action_type,
+                        "error": result["error"]
+                    })
+                else:
+                    # Guardar el resultado y añadir info adicional para movimientos parciales
+                    action_info = {
+                        "action": action_type,
+                        "details": normalized_action.get('details', {}),
+                        "result": result
+                    }
+                    
+                    # Añadir información de movimiento parcial si corresponde
+                    if action_type_normalized in ['movehero', 'move_hero', 'move'] and result and result.get('partial_movement'):
+                        action_info['partial_movement'] = True
+                        action_info['original_destination'] = result.get('original_destination')
+                    
+                    action_results.append(action_info)
+                    
+                    # Logging solo para acciones exitosas
+                    logger.info(f"AI action {action_type} executed successfully")
                 
             except Exception as e:
                 # Si una acción falla, registrarla y continuar con la siguiente
                 error_msg = f"Error al procesar acción de IA: {str(e)}"
                 logger.error(error_msg)
                 action_results.append({
-                    "action": action.get('type'),
+                    "action": normalized_action.get('type'),
                     "error": error_msg
                 })
                 continue

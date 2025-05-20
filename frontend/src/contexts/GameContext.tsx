@@ -287,11 +287,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Finalizar turno
   const endTurn = async () => {
     if (!gameState || !gameId) {
+      console.log("Dentro de if (!gameState || !gameId)");
       setError('No hay partida activa');
       return;
     }
     
     try {
+      console.log("Dentro de try");
       setLoading(true);
       
       const action = createEndTurnAction();

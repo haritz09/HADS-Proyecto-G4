@@ -64,7 +64,8 @@ const GamePage: React.FC = () => {
     aiStrategicInfo,
     playbackSpeed,
     setPlaybackSpeed,
-    skipAnimation
+    skipAnimation,
+    loadGame: loadGameContext
   } = useGame();
   
   // Estado local para UI
@@ -89,15 +90,7 @@ const GamePage: React.FC = () => {
           obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type))
         ) || [];
-        
-        console.log("Minas encontradas en visible_objects:", minas.map((m: any) => ({
-          id: m.id,
-          type: m.type,
-          resource_type: m.resource_type,
-          position: m.position,
-          owner: m.owner
-        })));
-        
+          
         // Sincronizar artefactos con tiles
         const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
         
@@ -107,6 +100,8 @@ const GamePage: React.FC = () => {
         
         setGameState(fullySyncedGameState);
         setGameMessage(`¡Partida cargada! Turno ${response.data.game_state.turn}`);
+
+        await loadGameContext(gameId);
       } catch (err) {
         console.error("Error loading game:", err);
         setError('Error al cargar la partida');
@@ -891,25 +886,11 @@ const GamePage: React.FC = () => {
   };
 
   // Finalizar turno
-  const handleEndTurn = async () => {
-    if (!gameState || !isPlayerTurnValue || !gameId) return;
+  const handleEndTurn = () => {
+    console.log("handleEndTurn llamando a endTurn del contexto");
     
-    try {
-      const action = createEndTurnAction();
-      const response = await executeAction(gameId, action);
-      
-      setGameState(response.data.game_state);
-      setSelectedHero(null);
-      
-      // Usar la estructura correcta del estado del juego
-      if (response.data.game_state.current_player === 'ai') {
-        setGameMessage('Turno finalizado. Ahora es el turno de la IA');
-      } else {
-        setGameMessage('Turno finalizado. Es tu turno');
-      }
-    } catch (err: any) {
-      setGameMessage(err.response?.data?.detail || 'Error al finalizar turno');
-    }
+    endTurn();
+    console.log("Despues de endTurn");
   };
     // Guardar partida
   const handleSaveGame = async () => {
