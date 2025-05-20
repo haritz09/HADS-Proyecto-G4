@@ -1,0 +1,141 @@
+.combat-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.combat-modal {
+  background-color: #1e1e2f;
+  border: 2px solid #8b5a2b;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 20px;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.combat-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #8b5a2b;
+  padding-bottom: 10px;
+}
+
+.combat-modal-header h2 {
+  margin: 0;
+  color: #e2a54c;
+  font-size: 2rem;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.close-button:hover {
+  color: #e2a54c;
+}
+
+.combat-armies {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.player-army, .enemy-army {
+  flex: 1;
+  padding: 15px;
+  border: 1px solid #8b5a2b;
+  border-radius: 5px;
+  background-color: rgba(30, 30, 47, 0.5);
+}
+
+.vs-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+}
+
+.vs-icon {
+  font-size: 32px;
+  color: #e25b2b;
+}
+
+.army-units {
+  margin-top: 10px;
+}
+
+.army-unit {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  padding: 5px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.combat-result {
+  text-align: center;
+  padding: 20px;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  margin-bottom: 20px;
+}
+
+.combat-result h4 {
+  color: #e2a54c;
+  margin-top: 0;
+}
+
+.damage-dealt {
+  display: flex;
+  justify-content: space-around;
+  margin: 15px 0;
+}
+
+.winner-announcement {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 15px 0;
+  padding: 10px 0;
+}
+
+.player-won {
+  color: #4CAF50;
+}
+
+.player-lost {
+  color: #e25b2b;
+}
+
+.modal-actions {
+  text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767px) {
+  .combat-armies {
+    flex-direction: column;
+  }
+  
+  .vs-section {
+    width: 100%;
+    margin: 10px 0;
+  }
+}

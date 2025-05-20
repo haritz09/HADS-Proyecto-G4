@@ -148,8 +148,10 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         # Buscar el héroe en la entidad correcta según el turno actual
         if game_state.current_player == "player":
             hero = next((h for h in game_state.player.heroes if h.id == hero_id), None)
+            enemy_heroes = game_state.ai.heroes  # The enemy heroes are AI heroes
         else:
             hero = next((h for h in game_state.ai.heroes if h.id == hero_id), None)
+            enemy_heroes = game_state.player.heroes  # The enemy heroes are player heroes
             
         if not hero:
             raise ValueError(f"Hero not found with ID: {hero_id}")
@@ -209,6 +211,50 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         
         print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({target_x}, {target_y})")
         print(f"DEBUG: Hero position after update: ({hero.position.x}, {hero.position.y})")
+        
+        # NEW: Check for enemy heroes at the same position BEFORE calling process_tile_interaction
+        enemy_hero = None
+        for e_hero in enemy_heroes:
+            if e_hero.position.x == target_x and e_hero.position.y == target_y:
+                enemy_hero = e_hero
+                print(f"DEBUG: Enemy hero detected at position ({target_x}, {target_y}): {enemy_hero.id}")
+                break
+                
+        # If an enemy hero was found, trigger combat
+        if enemy_hero:
+            print(f"DEBUG: Combat detected between {hero.id} and {enemy_hero.id}")
+            combat_result = resolve_combat(hero, enemy_hero)
+            
+            if game_state.current_player == "player":
+                attacker_side = "player"
+                defender_side = "ai" 
+            else:
+                attacker_side = "ai"
+                defender_side = "player"
+                
+            # Format the result for frontend
+            formatted_combat_result = {
+                "winner": combat_result["winner"],
+                "damage_dealt": {
+                    "player": combat_result["damage_dealt"]["attacker"] if attacker_side == "player" else combat_result["damage_dealt"]["defender"],
+                    "ai": combat_result["damage_dealt"]["attacker"] if attacker_side == "ai" else combat_result["damage_dealt"]["defender"],
+                },
+                "attacker_side": attacker_side,
+                "defender_side": defender_side
+            }
+            
+            # Return combat result information directly
+            return {
+                "success": True,
+                "hero_id": hero_id,
+                "new_position": {"x": target_x, "y": target_y},
+                "movement_points_left": hero.stats.movement_points_left,
+                "interaction": "combat",  # Indicate this is a combat interaction
+                "combat_result": formatted_combat_result,  # Include formatted combat results
+                "enemy_hero": enemy_hero.id,  # Include the enemy hero ID
+                "partial_movement": partial_movement,
+                "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None
+            }
         
         # Check for interactions at the new position (artifacts, resources, etc.)
         try:

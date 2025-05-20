@@ -22,6 +22,7 @@ import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
 import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu'; // Import the component from game folder
 import RecruitmentMenu from '../components/game/RecruitmentMenu'; // Make sure this is imported too
+import CombatModal from '../components/game/CombatModal'; // Import CombatModal component
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
@@ -48,6 +49,8 @@ const GamePage: React.FC = () => {
   const [forceUpdate, setForceUpdate] = useState<Record<string, unknown>>({});
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
   const [showRecruitmentMenu, setShowRecruitmentMenu] = useState<boolean>(false);
+  const [combatInteraction, setCombatInteraction] = useState<any>(null); // State for combat interaction
+  const combatInProgressRef = useRef<boolean>(false); // Ref to track combat progress
   // Add state for settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -215,7 +218,7 @@ const GamePage: React.FC = () => {
     }
   };
 
-  // Modificar handleTileClick para manejar interacción con minas
+  // Modificar handleTileClick para manejar interacción con minas y combate
   const handleTileClick = async (position: Position) => {
     if (!gameState || !gameId || !selectedHero) {
       console.warn('GamePage: handleTileClick - Missing gameState, gameId, or selectedHero.');
@@ -252,12 +255,40 @@ const GamePage: React.FC = () => {
     try {
       // First, send the action to the backend WITHOUT animating
       setGameMessage("Calculando movimiento...");
+      
       const response = await gameService.executeAction(gameId, action);
       console.log('GamePage: Backend response from moveHero action:', response.data);      
       
-      // Check if movement was successful - UPDATED CONDITION
+      // Check if movement was successful
       if (response.data?.status === 'success') {
         const result = response.data.result;
+        
+        // Add combat detection - Important: This needs to be before any other checks
+        if (result && result.interaction === 'combat') {
+          console.log('GamePage: [COMBAT] Combat interaction detected!', result);
+          console.log('GamePage: [COMBAT] Combat result:', result.combat_result);
+          console.log('GamePage: [COMBAT] Enemy hero ID:', result.enemy_hero);
+          
+          // Set combat flag
+          combatInProgressRef.current = true;
+          
+          // Set combat state to trigger modal
+          setCombatInteraction({
+            interaction: 'combat',
+            combat_result: result.combat_result,
+            enemy_hero: result.enemy_hero
+          });
+          
+          setGameMessage('¡Combate iniciado! Héroe vs enemigo');
+          
+          // Update game state with post-combat state
+          if (response.data.game_state) {
+            setGameState(response.data.game_state);
+          }
+          
+          // Return early to prevent further processing
+          return;
+        }
         
         // Check if the result indicates a failure due to movement points
         if (result && result.success === false) {
@@ -1150,6 +1181,21 @@ const GamePage: React.FC = () => {
           strategicInfo={aiStrategicInfo}
           isVisible={true}
           onClose={() => setShowAiSummary(false)}
+        />
+      )}
+      
+      {/* Add CombatModal with improved rendering logic */}
+      {combatInteraction && combatInteraction.interaction === 'combat' && (
+        <CombatModal
+          isOpen={true}
+          onClose={() => {
+            console.log('GamePage: Closing combat modal');
+            setCombatInteraction(null);
+            combatInProgressRef.current = false;
+          }}
+          combatResult={combatInteraction.combat_result}
+          playerHero={gameState.player.heroes.find(h => h.id === selectedHero?.id) || gameState.player.heroes[0]}
+          enemyHero={gameState.ai.heroes.find(h => h.id === combatInteraction.enemy_hero) || gameState.ai.heroes[0]}
         />
       )}
       

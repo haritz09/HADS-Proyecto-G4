@@ -1,0 +1,127 @@
+.combat-result-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.combat-result-modal {
+  background-color: #1a1a2e;
+  border: 2px solid #4a4a8c;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 90%;
+  color: #e6e6ff;
+  box-shadow: 0 0 20px rgba(0, 0, 255, 0.3);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.combat-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #4a4a8c;
+}
+
+.combat-result-header h2 {
+  margin: 0;
+  color: #ffd700;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #e6e6ff;
+  cursor: pointer;
+}
+
+.combat-result-content {
+  padding: 20px;
+}
+
+.combat-winner {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.player-winner {
+  background-color: rgba(0, 128, 0, 0.2);
+  border: 1px solid #00cc00;
+}
+
+.ai-winner {
+  background-color: rgba(128, 0, 0, 0.2);
+  border: 1px solid #cc0000;
+}
+
+.combat-details {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+
+.combat-side {
+  flex: 1;
+  padding: 10px;
+  border-radius: 6px;
+  background-color: rgba(74, 74, 140, 0.2);
+}
+
+.player-side {
+  margin-right: 10px;
+}
+
+.ai-side {
+  margin-left: 10px;
+}
+
+.vs-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 18px;
+  color: #ffd700;
+}
+
+.combat-actions {
+  padding: 15px 20px;
+  text-align: center;
+  border-top: 1px solid #4a4a8c;
+}
+
+.primary-button {
+  background-color: #4a4a8c;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.primary-button:hover {
+  background-color: #6464bd;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
