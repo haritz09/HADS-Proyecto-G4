@@ -47,19 +47,33 @@ export const calculatePathCost = (path: Position[], map: MapTile[][]): number =>
 
 // Encuentra un camino usando el algoritmo A*
 export const findPath = (start: Position, target: Position, map: MapTile[][]): Position[] => {
-  if (!map || !map.length || !map[0].length) return [];
+  
+  if (!map || !map.length || !map[0].length) {
+    console.error(`[PathFinding] ERROR: Mapa inválido o vacío`);
+    return [];
+  }
   
   const rows = map.length;
   const cols = map[0].length;
   
+  
   // Verificar límites del mapa
-  if (target.x < 0 || target.x >= cols || target.y < 0 || target.y >= rows) return [];
-  if (start.x < 0 || start.x >= cols || start.y < 0 || start.y >= rows) return [];
+  if (target.x < 0 || target.x >= cols || target.y < 0 || target.y >= rows) {
+    console.error(`[PathFinding] ERROR: Target (${target.x},${target.y}) fuera de los límites del mapa (${cols}x${rows})`);
+    return [];
+  }
+  if (start.x < 0 || start.x >= cols || start.y < 0 || start.y >= rows) {
+    console.error(`[PathFinding] ERROR: Start (${start.x},${start.y}) fuera de los límites del mapa (${cols}x${rows})`);
+    return [];
+  }
   
   // No buscar camino si la casilla destino es agua y no es la posición actual
   if (map[target.y][target.x].terrain === 'water' && (start.x !== target.x || start.y !== target.y)) {
+    console.error(`[PathFinding] ERROR: Destino en agua (${target.x},${target.y}), no se puede encontrar camino`);
     return [];
   }
+
+  console.log(`[PathFinding] Verificaciones iniciales pasadas, ejecutando algoritmo A*`);
   
   // Definir direcciones de movimiento (8 direcciones, incluyendo diagonales)
   const directions = [
@@ -77,7 +91,16 @@ export const findPath = (start: Position, target: Position, map: MapTile[][]): P
   gScore[start.y][start.x] = 0;
   fScore[start.y][start.x] = heuristic(start, target);
   
+  let iterations = 0;
+  const MAX_ITERATIONS = 1000; // Límite de seguridad para evitar bucles infinitos
+  
   while (openSet.length > 0) {
+    iterations++;
+    if (iterations > MAX_ITERATIONS) {
+      console.error(`[PathFinding] ERROR: Excedido máximo de iteraciones (${MAX_ITERATIONS})`);
+      return [];
+    }
+    
     // Encontrar el nodo con menor fScore
     let current = openSet[0];
     let lowestFScore = fScore[current.y][current.x];
@@ -94,7 +117,10 @@ export const findPath = (start: Position, target: Position, map: MapTile[][]): P
     
     // Si hemos alcanzado el destino, reconstruir y devolver el camino
     if (current.x === target.x && current.y === target.y) {
-      return reconstructPath(cameFrom, current);
+      console.log(`[PathFinding] ÉXITO: Destino alcanzado en ${iterations} iteraciones`);
+      const path = reconstructPath(cameFrom, current);
+      console.log(`[PathFinding] Camino encontrado con ${path.length} pasos: ${path.map(p => `(${p.x},${p.y})`).join(' → ')}`);
+      return path;
     }
     
     // Sacar el nodo actual del openSet y marcarlo como visitado
@@ -120,6 +146,7 @@ export const findPath = (start: Position, target: Position, map: MapTile[][]): P
       
       // Ignorar terreno impassable (agua)
       if (map[neighbor.y][neighbor.x].terrain === 'water') {
+        console.log(`[PathFinding] Ignorando vecino en (${neighbor.x},${neighbor.y}) porque es agua`);
         continue;
       }
       
@@ -151,6 +178,7 @@ export const findPath = (start: Position, target: Position, map: MapTile[][]): P
   }
   
   // No se encontró camino
+  console.error(`[PathFinding] ERROR: No se encontró camino después de ${iterations} iteraciones`);
   return [];
 };
 

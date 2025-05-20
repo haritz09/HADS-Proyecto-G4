@@ -599,10 +599,127 @@ def process_tile_interaction(hero: Heroe, position: Position, game_state: GameSt
             
         tile = game_state.map.tiles[idx] if game_state.map.tiles else None
         print(f"DEBUG: process_tile_interaction at ({position.x}, {position.y}), tile={tile}")
+        print(f"DEBUG: Tile object_type = {getattr(tile, 'object_type', None)}, object_id = {getattr(tile, 'object_id', None)}")
         
         if not tile:
             return {"interaction": "none", "reason": "No tile found"}
         
+        # Imprimir todos los objetos visibles para depuración
+        print(f"DEBUG: Total visible objects: {len(game_state.map.visible_objects)}")
+        for i, obj in enumerate(game_state.map.visible_objects):
+            print(f"DEBUG: Object #{i}: id={getattr(obj, 'id', 'unknown')}, type={getattr(obj, 'type', 'unknown')}, "
+                  f"position=({getattr(getattr(obj, 'position', None), 'x', '?')}, {getattr(getattr(obj, 'position', None), 'y', '?')})")
+            if hasattr(obj, 'subtype'):
+                print(f"DEBUG: Object #{i} has subtype: {obj.subtype}")
+        
+        # Mejorado: Verificar artefactos primero para mayor prioridad
+        print(f"DEBUG: Checking artifacts at ({position.x}, {position.y})...")
+        found_artifact = False
+        
+        for obj in (game_state.map.visible_objects or []):
+            # Método mejorado para detectar artefactos - comprobar tanto por tipo como por atributos
+            is_artifact = (
+                (hasattr(obj, 'type') and getattr(obj, 'type') == 'artifact') or 
+                hasattr(obj, 'subtype')
+            )
+            
+            is_at_position = (
+                hasattr(obj, 'position') and 
+                hasattr(obj.position, 'x') and 
+                hasattr(obj.position, 'y') and
+                obj.position.x == position.x and 
+                obj.position.y == position.y
+            )
+            
+            if is_artifact:
+                print(f"DEBUG: Found artifact object: {obj.id if hasattr(obj, 'id') else 'unknown id'}")
+            
+            if is_at_position:
+                print(f"DEBUG: Found object at position ({position.x}, {position.y})")
+            
+            if is_artifact and is_at_position:
+                found_artifact = True
+                print(f"DEBUG: ARTIFACT FOUND at position ({position.x}, {position.y}): {obj}")
+                
+                # Comprobar límite de artefactos
+                print(f"DEBUG: Hero {hero.id} current artifacts: {hero.artifacts}")
+                print(f"DEBUG: Hero artifacts count: {len(hero.artifacts)}")
+                
+                if len(hero.artifacts) >= 2:
+                    print(f"DEBUG: Artifact limit reached ({len(hero.artifacts)}/2)")
+                    return {"interaction": "artifact_found", "error": "Inventario de artefactos lleno", "stop_movement": False}
+                
+                # Recoger artefacto
+                artifact = Artifact(
+                    id=getattr(obj, 'id', f"artifact_{position.x}_{position.y}"),
+                    name=getattr(obj, 'name', getattr(obj, 'subtype', 'Artefacto')),
+                    subtype=getattr(obj, 'subtype', 'unknown'),
+                    effect=getattr(obj, 'effect', {})
+                )
+                
+                print(f"DEBUG: Created new artifact object: {artifact}")
+                print(f"DEBUG: New artifact ID: {artifact.id}, Name: {artifact.name}, Subtype: {artifact.subtype}")
+                
+                # Aplicar bonificación según el tipo (sin cambios)
+                if artifact.subtype == 'totemDeGuerra':
+                    print(f"DEBUG: Applying totemDeGuerra effect")
+                    for unit in hero.army:
+                        if hasattr(unit, 'stats'):
+                            unit.stats.attack = int(unit.stats.attack * 1.2)
+                            unit.stats.health = int(getattr(unit.stats, 'health', 10) * 1.2)
+                            unit.stats.speed = int(unit.stats.speed * 1.2)
+                    artifact.effect = {"army_buff": "+20% attack, health, speed"}
+                elif artifact.subtype == 'totemVelocidad':
+                    print(f"DEBUG: Applying totemVelocidad effect")
+                    hero.stats.movement_points = int(hero.stats.movement_points * 1.3)
+                    hero.stats.movement_points_left = int(hero.stats.movement_points_left * 1.3)
+                    artifact.effect = {"movement_buff": "+30% movement points"}
+                elif artifact.subtype == 'totemReclutamiento':
+                    print(f"DEBUG: Applying totemReclutamiento effect")
+                    artifact.effect = {"recruitment_discount": "-30% cost"}
+                
+                # CRÍTICO: Verificar si hero.artifacts existe
+                if not hasattr(hero, 'artifacts'):
+                    print(f"DEBUG: Hero {hero.id} doesn't have 'artifacts' attribute, creating it")
+                    hero.artifacts = []
+                
+                # Añadir el artefacto a la lista
+                try:
+                    hero.artifacts.append(artifact)
+                    print(f"DEBUG: Added artifact to hero. Hero now has {len(hero.artifacts)} artifacts")
+                    print(f"DEBUG: Hero artifacts after adding: {[a.id for a in hero.artifacts]}")
+                except Exception as e:
+                    print(f"CRITICAL ERROR adding artifact to hero: {str(e)}")
+                
+                # Eliminar artefacto del mapa - MEJORADO para usar el ID
+                try:
+                    print(f"DEBUG: Removing artifact from visible_objects. Before: {len(game_state.map.visible_objects)}")
+                    artifact_id = getattr(obj, 'id', None)
+                    game_state.map.visible_objects = [
+                        o for o in game_state.map.visible_objects 
+                        if getattr(o, 'id', None) != artifact_id
+                    ]
+                    print(f"DEBUG: After removal: {len(game_state.map.visible_objects)}")
+                except Exception as e:
+                    print(f"ERROR removing artifact from visible_objects: {str(e)}")
+                
+                # Limpiar el tile
+                try:
+                    print(f"DEBUG: Clearing tile at ({position.x}, {position.y}) from object_type: {tile.object_type} to None")
+                    if tile and tile.object_type == 'artifact':
+                        tile.object_type = None
+                        tile.object_id = None
+                except Exception as e:
+                    print(f"ERROR clearing tile object info: {str(e)}")
+                
+                # Notificar al frontend con la interacción correcta
+                print(f"DEBUG: Returning artifact_collected interaction with artifact name: {artifact.name}")
+                return {"interaction": "artifact_collected", "artifact": artifact.name, "stop_movement": False}
+        
+        if not found_artifact:
+            print(f"DEBUG: No artifacts found at position ({position.x}, {position.y})")
+        
+        # El resto del código sin cambios
         # Captura de minas y sitios de recursos
         for obj in (game_state.map.visible_objects or []):
             # --- MINAS ---

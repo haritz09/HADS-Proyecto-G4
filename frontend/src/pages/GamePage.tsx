@@ -20,6 +20,8 @@ import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
 import AIActionsSummary from '../components/game/AIActionsSummary';
 import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
+import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu'; // Import the component from game folder
+import RecruitmentMenu from '../components/game/RecruitmentMenu'; // Make sure this is imported too
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
@@ -76,7 +78,6 @@ const GamePage: React.FC = () => {
       try {
         console.log("Loading game with ID:", gameId);
         const response = await gameService.loadGame(gameId);
-        console.log("Loaded game data:", response.data);
         
         // Asegurarse de que el estado del juego tiene la estructura correcta
         if (!response.data.game_state?.map) {
@@ -280,6 +281,10 @@ const GamePage: React.FC = () => {
           // Use the full path or fallback to direct path if pathfinding fails
           const pathToUse = fullPath.length > 0 ? fullPath : [startPosition, endPosition];
           
+          // Debug: Mostrar el path completo para verificar el cálculo correcto del camino
+          console.log(`🛣️ PATH COMPLETO CALCULADO (${fullPath.length} pasos):`, 
+            fullPath.map(pos => `(${pos.x},${pos.y})`).join(' → '));
+          
           setGameMessage(`Héroe en movimiento...`);
           
           // Animate the movement with the complete path and WAIT for it to finish
@@ -381,10 +386,34 @@ const GamePage: React.FC = () => {
         }
         
         // Check for artifact collection in the response
-        if (response.data?.result?.interaction?.interaction === 'artifact_collected') {
-          const artifactName = response.data.result.interaction.artifact;
-          console.log(`GamePage: Artifact collection detected! Artifact: ${artifactName}`);
-          setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
+        if (response.data) {
+          
+          // Revisar si la estructura de respuesta tiene interaction
+          if (response.data?.result?.interaction === 'artifact_collected') {
+            const artifactName = response.data.result.artifact;
+            console.log(`GamePage: ✅ ARTIFACT COLLECTED! Name: ${artifactName}`);
+            setGameMessage(`¡Has recogido el artefacto: ${artifactName}!`);
+            
+            // Debug the hero's artifacts to confirm the update
+            if (response.data.game_state && response.data.game_state.player && response.data.game_state.player.heroes) {
+              const heroWithArtifact = response.data.game_state.player.heroes.find(
+                (h: any) => h.id === selectedHero.id
+              );
+              
+              if (heroWithArtifact) {
+                console.log("GamePage: Hero artifacts after collection:", heroWithArtifact.artifacts);
+              }
+            }
+            
+            // Actualizar el estado para reflejar inmediatamente el artefacto recogido
+            if (response.data.game_state) {
+              console.log("GamePage: Updating game state after artifact collection");
+              const updatedGameState = syncArtifactsWithTiles(response.data.game_state);
+              setGameState(updatedGameState);
+            }
+          } else if (response.data?.result?.interaction) {
+            console.log(`GamePage: Got interaction "${response.data.result.interaction}" but not artifact_collected`);
+          }
         }
 
         // Check for mine capture in the response
@@ -897,18 +926,54 @@ const GamePage: React.FC = () => {
   const convertMapTo2D = (gameMap: any) => {
     const mapWidth = gameMap.size.width;
     const mapHeight = gameMap.size.height;
+    
+    // Verificación y logging extensivo para depuración
+    console.log(`[MapConversion] Convirtiendo mapa de ${mapWidth}x${mapHeight} con ${gameMap.tiles.length} tiles`);
+    
+    // Validar que las dimensiones sean correctas
+    if (!mapWidth || !mapHeight || mapWidth <= 0 || mapHeight <= 0) {
+      console.error(`[MapConversion] ERROR: Dimensiones de mapa inválidas: ${mapWidth}x${mapHeight}`);
+      return []; // Devolver un array vacío para evitar errores posteriores
+    }
+    
+    // Verificar que tiles sea un array válido
+    if (!Array.isArray(gameMap.tiles) || gameMap.tiles.length === 0) {
+      console.error(`[MapConversion] ERROR: No hay tiles en el mapa`);
+      return [];
+    }
+    
     const tiles2D: any[][] = [];
-    // Helper function to convert the flat map to 2D format needed by findPath
+    
+    // Generar el mapa 2D fila por fila
     for (let y = 0; y < mapHeight; y++) {
       const row: any[] = [];
+      
       for (let x = 0; x < mapWidth; x++) {
         const index = y * mapWidth + x;
+        
+        // Verificar si estamos dentro de los límites del array de tiles
         if (index < gameMap.tiles.length) {
-          row.push(gameMap.tiles[index]);
+          // Añadir el tile a la fila actual
+          const tile = gameMap.tiles[index];
+          row.push(tile);
+        } else {
+          // Si el índice está fuera de límites, añadir un tile "default" para evitar filas vacías
+          // Este es un caso que no debería ocurrir con datos correctos
+          console.warn(`[MapConversion] ADVERTENCIA: Índice fuera de límites ${index} para tile en (${x},${y})`);
+          row.push({ terrain: 'grass', passable: true });
         }
       }
-      tiles2D.push(row);
+      
+      // Solo añadir la fila si tiene elementos (para evitar filas vacías)
+      if (row.length > 0) {
+        tiles2D.push(row);
+      } else {
+        console.warn(`[MapConversion] ADVERTENCIA: La fila ${y} está vacía`);
+      }
     }
+    
+    // Verificación final de la matriz generada
+    console.log(`[MapConversion] Matriz generada: ${tiles2D.length} filas x ${tiles2D[0]?.length || 0} columnas`);
     
     return tiles2D;
   };
@@ -988,8 +1053,112 @@ const GamePage: React.FC = () => {
         />
       </div>
       
+      {/* Add conditional rendering for BuildingConstructionMenu */}
+      {showConstructionMenu && activeBuilding && (
+        <BuildingConstructionMenu
+          availableBuildings={[
+            { 
+              id: 'barracks',
+              name: 'Cuartel',
+              building_type: 'barracks',
+              position: activeBuilding.position,
+              cost: { gold: 1000, wood: 50, stone: 50 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'archery',
+              name: 'Campo de Tiro',
+              building_type: 'archery',
+              position: activeBuilding.position,
+              cost: { gold: 1200, wood: 70, stone: 30 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'knights_tower',
+              name: 'Torre de Caballeros',
+              building_type: 'knights_tower',
+              position: activeBuilding.position,
+              cost: { gold: 1500, wood: 100, stone: 100 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'mage_tower',
+              name: 'Torre de Magos',
+              building_type: 'mage_tower',
+              position: activeBuilding.position,
+              cost: { gold: 2000, wood: 100, stone: 100 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            },
+            {
+              id: 'dragons_lair',
+              name: 'Guarida de Dragones',
+              building_type: 'dragons_lair',
+              position: activeBuilding.position,
+              cost: { gold: 5000, wood: 200, stone: 200 },
+              built: false,
+              can_recruit: true,
+              is_castle: false,
+              has_tavern: false,
+              requirements: [],
+              available_creatures: [],
+              owner: null
+            }
+          ]}
+          onBuild={handleConstructBuilding}
+          onClose={() => setShowConstructionMenu(false)}
+          playerResources={getCurrentPlayerResources()}
+          gameState={gameState}
+        />
+      )}
+
+      {/* This section also needs to be preserved for the recruitment menu */}
+      {showRecruitmentMenu && activeBuilding && selectedHero && (
+        <RecruitmentMenu 
+          building={activeBuilding}
+          hero={selectedHero}
+          onRecruit={handleRecruit}
+          onClose={() => setShowRecruitmentMenu(false)}
+        />
+      )}
+      
+      {/* AI thinking indicator */}
+      {aiThinking && <AIThinkingIndicator isThinking={true} />}
+      
+      {/* AI Actions Summary */}
+      {showAiSummary && aiActions && (
+        <AIActionsSummary
+          actions={aiActions}
+          strategicInfo={aiStrategicInfo}
+          isVisible={true}
+          onClose={() => setShowAiSummary(false)}
+        />
+      )}
+      
       {/* These components will be conditionally rendered based on their visibility props */}
-      {/* AIThinkingIndicator and AIActionsSummary are managed by the GameContext */}
       {showSettingsModal && (
         <AIViewModeSettings
           currentMode={aiViewMode}

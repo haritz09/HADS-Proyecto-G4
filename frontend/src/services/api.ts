@@ -613,15 +613,6 @@ export const gameService = {
         cities: [] // Array global de ciudades según schema.py
       };
 
-      // CRITICAL DEBUG: Check visible_objects right before sending the request
-      console.log("DEBUG FRONTEND CREATE_GAME [1]: Sending game data with visible_objects:", {
-        count: defaultGameState.map.visible_objects.length,
-        types: defaultGameState.map.visible_objects.map(obj => obj.type),
-        mineObjects: defaultGameState.map.visible_objects.filter(obj => 
-          obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-          ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
-        )
-      });
 
       // Verificar el estado del juego antes de enviarlo
       console.log("Estado del juego a enviar:", {
@@ -642,7 +633,6 @@ export const gameService = {
       const response = await API.post('/games', gameData);
       
       // CRITICAL DEBUG: Inspect the response to verify mines were saved
-      console.log("DEBUG FRONTEND CREATE_GAME [2]: Response from server:", response.data);
       
       // Check if mines were properly saved in the response
       const responseVisibleObjects = response.data?.game_state?.map?.visible_objects || [];
@@ -650,11 +640,6 @@ export const gameService = {
         obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
         ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
       );
-      
-      console.log(`DEBUG FRONTEND CREATE_GAME [3]: Mines in response: ${savedMines.length}`);
-      savedMines.forEach((mine: any, index: number) => {
-        console.log(`DEBUG FRONTEND CREATE_GAME [4]: Mine ${index+1}:`, mine);
-      });
       
       return response;
     } catch (error) {
@@ -679,11 +664,9 @@ export const gameService = {
   },
   
   loadGame: async (gameId: string) => {
-    console.log(`DEBUG FRONTEND [1]: Loading game with ID: ${gameId}`);
     const response = await API.get(`/games/${gameId}`);
     
     // DETAILED network inspection of response - particularmente para minas
-    console.log("DEBUG FRONTEND [2]: Datos completos del juego recibidos:", response.data);
     
     // Verificar datos específicos de minas
     const visibleObjects = response.data?.game_state?.map?.visible_objects || [];
@@ -691,19 +674,6 @@ export const gameService = {
       obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
       (obj.resource_type && ['gold', 'wood', 'stone'].includes(obj.resource_type as string))
     );
-    
-    // Registrar información detallada de las minas
-    console.log(`DEBUG FRONTEND [3]: Se encontraron ${mines.length} minas en la respuesta de la API`);
-    mines.forEach((mine: any, index: number) => {
-      console.log(`DEBUG FRONTEND [4]: Detalles de la mina ${index+1}:`, {
-        id: mine.id,
-        type: mine.type,
-        resource_type: mine.resource_type,
-        resource_per_turn: mine.resource_per_turn,
-        position: mine.position,
-        owner: mine.owner
-      });
-    });
     
     // Verificar los datos recibidos del servidor
     console.log("Datos recibidos del servidor:", {

@@ -11,10 +11,12 @@ export const syncArtifactsWithTiles = (gameState: GameState): GameState => {
   const mapWidth = gameState.map.size.width;
   const mapHeight = gameState.map.size.height;
   
-  // Identificar artefactos en visible_objects
+  // Identificar artefactos en visible_objects con validación mejorada
   const artifacts = gameState.map.visible_objects.filter(obj => 
-    obj.type === 'artifact' || 'subtype' in obj
+    obj.type === 'artifact' || 
+    (obj && typeof obj === 'object' && 'subtype' in obj && typeof obj.subtype === 'string')
   );
+  
   
   // Crear copias de los tiles para no modificar directamente el estado
   const updatedTiles = [...gameState.map.tiles];
@@ -26,7 +28,7 @@ export const syncArtifactsWithTiles = (gameState: GameState): GameState => {
       const idx = y * mapWidth + x;
       
       if (idx >= 0 && idx < updatedTiles.length) {
-        // No modificar arrays inmutables directamente
+        // Actualizar el tile con la información del artefacto
         updatedTiles[idx] = {
           ...updatedTiles[idx],
           object_type: 'artifact',
@@ -59,14 +61,7 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
   const updatedGameState = { ...gameState };
   const mapWidth = gameState.map.size.width;
   
-  // Log complete list of visible_objects for debugging
-  console.log("DEBUG syncMinesWithTiles [2]: All visible objects:", gameState.map.visible_objects.map(obj => ({
-    id: obj.id,
-    type: obj.type,
-    resource_type: 'resource_type' in obj ? obj.resource_type : undefined,
-    position: obj.position,
-    owner: obj.owner
-  })));
+
   
   // CRÍTICO: Restaurar los tipos faltantes si solo tienen resource_type
   let mineRestorationCount = 0;
@@ -79,38 +74,22 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
       };
       obj.type = resourceMapping[obj.resource_type as keyof typeof resourceMapping] || 'mine';
       mineRestorationCount++;
-      console.log(`DEBUG syncMinesWithTiles [3]: Restaurando tipo '${obj.type}' para mina con resource_type ${obj.resource_type} at position:`, obj.position);
     }
   });
   
   if (mineRestorationCount > 0) {
-    console.log(`DEBUG syncMinesWithTiles [4]: Restored type for ${mineRestorationCount} mines that were missing type`);
+    console.log(`DEBUG syncMinesWithTiles [2]: Restored ${mineRestorationCount} mine types`);
   }
   
   // Identificar minas en visible_objects con mucho detalle en el criterio de filtrado
   const mines = updatedGameState.map.visible_objects.filter(obj => {
     const isMineByType = obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry';
-    const isMineByResource = 'resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string);
-    const hasMineKeywords = obj.type && (obj.type.includes('mine') || obj.type.includes('gold') || 
-                                       obj.type.includes('wood') || obj.type.includes('stone'));
+    const isMineByResourceType = 'resource_type' in obj && 
+      (obj.resource_type === 'gold' || obj.resource_type === 'wood' || obj.resource_type === 'stone');
     
-    const result = isMineByType || isMineByResource || hasMineKeywords;
-    
-    // Detailed logging for each object
-    if (result) {
-      console.log(`DEBUG syncMinesWithTiles [5]: Identified mine:`, {
-        id: obj.id,
-        type: obj.type,
-        resource_type: 'resource_type' in obj ? obj.resource_type : undefined,
-        position: obj.position,
-        matched: isMineByType ? 'by type' : (isMineByResource ? 'by resource_type' : 'by keywords')
-      });
-    }
-    
-    return result;
+    return isMineByType || isMineByResourceType;
   });
   
-  console.log(`DEBUG syncMinesWithTiles [6]: Sincronizando ${mines.length} minas con tiles del mapa`);
   
   // Crear copias de los tiles para no modificar directamente el estado
   const updatedTiles = [...gameState.map.tiles];
@@ -122,13 +101,12 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
       const idx = y * mapWidth + x;
       
       if (idx >= 0 && idx < updatedTiles.length) {
-        // No modificar arrays inmutables directamente
+        // Actualizar el tile con la información de la mina
         updatedTiles[idx] = {
           ...updatedTiles[idx],
           object_type: 'mine',
           object_id: mine.id
         };
-        console.log(`DEBUG syncMinesWithTiles [7]: Marked tile at (${x},${y}) as mine with id ${mine.id}`);
       }
     }
   });
@@ -143,61 +121,59 @@ export const syncMinesWithTiles = (gameState: GameState): GameState => {
   };
 };
 
-/**
- * Función auxiliar para buscar artefactos en una posición específica
- */
 export const findArtifactAtPosition = (
   x: number, 
   y: number, 
   gameState: GameState
 ): VisibleObject | null => {
-  if (!gameState?.map) return null;
+  if (!gameState?.map) {
+    console.log(`findArtifactAtPosition: No gameState.map available`);
+    return null;
+  }
   
-  // Método 1: Buscar por tile
+  console.log(`findArtifactAtPosition: Searching for artifact at (${x}, ${y})`);
+  
+  // Método 1: Buscar por tile (más confiable)
   const index = y * gameState.map.size.width + x;
-  const tile = gameState.map.tiles[index];
-  
-  if (tile?.object_type === 'artifact' && tile?.object_id) {
-    // Encontrar el artefacto correspondiente en visible_objects
-    const artifact = gameState.map.visible_objects?.find(obj => obj.id === tile.object_id);
-    if (artifact) return artifact;
+  if (index >= 0 && index < gameState.map.tiles.length) {
+    const tile = gameState.map.tiles[index];
+    console.log(`findArtifactAtPosition: Tile at (${x},${y})`, 
+      {object_type: tile.object_type, object_id: tile.object_id});
+    
+    if (tile?.object_type === 'artifact' && tile?.object_id) {
+      console.log(`findArtifactAtPosition: Tile has artifact with ID ${tile.object_id}`);
+      // Encontrar el artefacto correspondiente en visible_objects
+      const artifact = gameState.map.visible_objects?.find(obj => obj.id === tile.object_id);
+      if (artifact) {
+        console.log(`findArtifactAtPosition: Found artifact by ID ${tile.object_id} in visible_objects`);
+        return artifact;
+      } else {
+        console.log(`findArtifactAtPosition: Artifact with ID ${tile.object_id} not found in visible_objects`);
+      }
+    }
   }
   
   // Método 2: Buscar directamente en visible_objects por posición
-  return gameState.map.visible_objects?.find(obj => 
-    (obj.type === 'artifact' || 'subtype' in obj) && 
-    obj.position?.x === x && obj.position?.y === y
-  ) || null;
-};
-
-/**
- * Función auxiliar para buscar minas en una posición específica
- */
-export const findMineAtPosition = (
-  x: number, 
-  y: number, 
-  gameState: GameState
-): VisibleObject | null => {
-  if (!gameState?.map) return null;
-  
-  // Método 1: Buscar por tile
-  const index = y * gameState.map.size.width + x;
-  const tile = gameState.map.tiles[index];
-  
-  if (tile?.object_type === 'mine' && tile?.object_id) {
-    // Encontrar la mina correspondiente en visible_objects
-    const mine = gameState.map.visible_objects?.find(obj => obj.id === tile.object_id);
-    if (mine) return mine;
+  if (gameState.map.visible_objects && gameState.map.visible_objects.length > 0) {
+    console.log(`findArtifactAtPosition: Searching among ${gameState.map.visible_objects.length} visible objects`);
+    
+    const artifactsAtPosition = gameState.map.visible_objects.filter(obj => {
+      const isArtifact = obj.type === 'artifact' || 'subtype' in obj;
+      const isAtPosition = obj.position?.x === x && obj.position?.y === y;
+      if (isArtifact) console.log(`findArtifactAtPosition: Found artifact object with ID ${obj.id}`);
+      if (isAtPosition) console.log(`findArtifactAtPosition: Found object at position (${x},${y}): ${obj.id}`);
+      return isArtifact && isAtPosition;
+    });
+    
+    if (artifactsAtPosition.length > 0) {
+      console.log(`findArtifactAtPosition: Found ${artifactsAtPosition.length} artifacts at position (${x},${y})`);
+      return artifactsAtPosition[0];
+    } else {
+      console.log(`findArtifactAtPosition: No artifacts found at position (${x},${y})`);
+    }
+  } else {
+    console.log(`findArtifactAtPosition: No visible objects array or empty`);
   }
   
-  // Método 2: Buscar directamente en visible_objects por posición y tipo
-  return gameState.map.visible_objects?.find(obj => {
-    const isMineByType = obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry';
-    const isMineByResource = 'resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string);
-    const hasMineKeywords = obj.type && (obj.type.includes('mine') || obj.type.includes('gold') || 
-                                       obj.type.includes('wood') || obj.type.includes('stone'));
-    const isAtPosition = obj.position?.x === x && obj.position?.y === y;
-    
-    return (isMineByType || isMineByResource || hasMineKeywords) && isAtPosition;
-  }) || null;
+  return null;
 };
