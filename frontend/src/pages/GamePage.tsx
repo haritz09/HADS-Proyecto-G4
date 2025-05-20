@@ -264,6 +264,20 @@ const GamePage: React.FC = () => {
       if (response.data?.status === 'success') {
         const result = response.data.result;
         
+        // Check if the result indicates a failure due to movement points
+        if (result && result.success === false) {
+          console.log('GamePage: Movement failed but status was success:', result);
+          
+          // Show a clearer message about not having enough movement points
+          setGameMessage(`¡El héroe ${selectedHero.name} no tiene suficientes puntos de movimiento!`);
+          
+          // Show movement points visually
+          const currentPoints = selectedHero.stats.movement_points_left || 0;
+          console.log(`GamePage: Hero movement points: ${currentPoints}`);
+          
+          return; // Don't proceed with animation or other processing
+        }
+        
         // Only now animate the movement if we have a valid path or new position
         if (result && result.new_position) {
           // Create a complete path with intermediate steps
