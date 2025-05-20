@@ -276,16 +276,44 @@ def process_recruitment(game_state: GameState, action: Dict[str, Any]) -> Dict[s
     return {"recruited": count, "type": unit_type, "hero": hero_id, "city": city_id, "building": building_id, "cost": cost}
 
 def add_units_to_hero_or_city(city: City, unit_type: str, amount: int, game_state: GameState) -> None:
-    """Añade unidades reclutadas al ejército del primer héroe de la ciudad, o a la guarnición si no hay héroe."""
-    # Buscar héroe en la ciudad
-    hero = next((h for h in game_state.player.heroes if h.position.x == city.position.x and h.position.y == city.position.y), None)
+    """Añade unidades reclutadas al ejército del héroe que interactúa con la ciudad."""
+    # Buscar héroe en la ciudad o cerca
+    hero = next((h for h in game_state.player.heroes if 
+                 is_hero_in_city(h, city, radius=1)), None)
+    
     if hero:
+        # Buscar las estadísticas de la unidad en los edificios de la ciudad
+        unit_stats = None
+        for building in city.buildings:
+            if hasattr(building, 'available_creatures'):
+                for creature in building.available_creatures:
+                    if creature.type == unit_type and hasattr(creature, 'stats'):
+                        unit_stats = creature.stats
+                        break
+                if unit_stats:
+                    break
+        
+        if not unit_stats:
+            # Si no encontramos stats, creamos unas stats básicas
+            unit_stats = Stats(
+                attack=5,
+                defense=5,
+                speed=5,
+                movement_points=5,
+                movement_points_left=5.0
+            )
+        
         # Añadir a ejército del héroe
         unit = next((u for u in hero.army if u.type == unit_type), None)
         if unit:
             unit.count += amount
         else:
-            hero.army.append(ArmyUnit(type=unit_type, count=amount))
+            # Crear nuevo ArmyUnit con las stats
+            hero.army.append(ArmyUnit(
+                type=unit_type, 
+                count=amount,
+                stats=unit_stats
+            ))
     else:
         # Si no hay héroe, podrías implementar una guarnición de ciudad aquí
         pass  # Implementación opcional
