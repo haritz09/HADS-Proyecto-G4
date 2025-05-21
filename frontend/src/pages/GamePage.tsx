@@ -9,9 +9,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { GameState, Hero, Position, Building } from '../types/game';
+import { GameState, Hero, Position, Building, MapTile } from '../types/game'; // Add MapTile import
 import { useGame } from '../contexts/GameContext';
-import GameMap, { GameMapRef } from '../components/game/GameMap'; // Update import to include ref type
+import GameMap, { GameMapRef } from '../components/game/GameMap';
 import GameControls from '../components/game/GameControls';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
@@ -20,13 +20,13 @@ import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
 import AIActionsSummary from '../components/game/AIActionsSummary';
 import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
-import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu'; // Import the component from game folder
-import RecruitmentMenu from '../components/game/RecruitmentMenu'; // Make sure this is imported too
-import CombatModal from '../components/game/CombatModal'; // Import CombatModal component
+import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
+import RecruitmentMenu from '../components/game/RecruitmentMenu';
+import CombatModal from '../components/game/CombatModal';
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
-import { findPath, calculateMovementCost } from '../services/gameEngine';
+import { findPath, calculatePathCost, calculateMovementCost } from '../services/gameEngine'; // Add missing function imports
 import '../styles/pages/GamePage.css';
 
 const GamePage: React.FC = () => {
@@ -219,7 +219,7 @@ const GamePage: React.FC = () => {
     }
   };
 
-  // Modificar handleTileClick para manejar interacción con minas y combate
+  // Modificar handleTileClick para calcular path localmente antes de enviar al backend
   const handleTileClick = async (position: Position) => {
     if (!gameState || !gameId || !selectedHero) {
       console.warn('GamePage: handleTileClick - Missing gameState, gameId, or selectedHero.');
@@ -248,126 +248,182 @@ const GamePage: React.FC = () => {
 
     console.log(`GamePage: Attempting to move hero ${selectedHero.id} from: (${selectedHero.position.x},${selectedHero.position.y}) to: (${position.x},${position.y})`);
 
-    const action = {
-      type: "moveHero",
-      details: {
-        hero_id: selectedHero.id,
-        destination: {
-          x: Math.floor(position.x), // Ensure integers
-          y: Math.floor(position.y)
-        }
-      }
-    };
-
     try {
-      // First, send the action to the backend WITHOUT animating
+      // 1. Convertir el mapa a formato 2D para pathfinding
+      const mapWidth = gameState.map.size.width;
+      const mapHeight = gameState.map.size.height;
+      const tiles2D: MapTile[][] = [];
+      
+      for (let y = 0; y < mapHeight; y++) {
+        const row: MapTile[] = [];
+        for (let x = 0; x < mapWidth; x++) {
+          const index = y * mapWidth + x;
+          if (index < gameState.map.tiles.length) {
+            row.push(gameState.map.tiles[index]);
+          }
+        }
+        tiles2D.push(row);
+      }
+
+      // 2. Calcular el camino usando findPath de gameEngine.ts
       setGameMessage("Calculando movimiento...");
+      const path = findPath(selectedHero.position, position, tiles2D);
       
-      const response = await gameService.executeAction(gameId, action);
-      console.log('GamePage: Backend response from moveHero action:', response.data);      
+      if (!path.length) {
+        setGameMessage("No se puede encontrar un camino válido.");
+        return;
+      }
       
-      // Check if movement was successful
-      if (response.data?.status === 'success') {
-        const result = response.data.result;
+      // 3. Calcular el coste total del camino
+      const totalCost = calculatePathCost(path, tiles2D);
+      
+      // 4. Verificar si hay suficientes puntos de movimiento
+      if (totalCost > selectedHero.stats.movement_points_left) {
+        // Calcular hasta dónde puede llegar el héroe con los puntos disponibles
+        const affordablePath = []; // Change from let to const
+        let currentCost = 0;
         
-        // Extract the path from the result and ensure it's valid
-        const path = result && result.path ? result.path : [];
-        console.log('GamePage: Movement path received:', path);
-        
-        // Make sure we have a valid path before trying to animate
-        if (!Array.isArray(path) || path.length === 0) {
-          console.warn('GamePage: No valid path returned from server');
-          // Just update position directly if no path
-          setGameState(prevState => {
-            if (!prevState) return prevState;
-            const newState = {...prevState};
-            const hero = newState.player.heroes.find(h => h.id === selectedHero.id);
-            if (hero && result && result.new_position) {
-              hero.position = result.new_position;
-              hero.stats.movement_points_left = result.movement_points_left || 0;
-            }
-            return newState;
-          });
-          setGameMessage("Posición actualizada");
-          return;
-        }
-        
-        // If this was a partial movement due to insufficient movement points
-        if (result.partial_movement) {
-          console.log(`GamePage: Partial movement detected. Hero can only move to (${result.new_position?.x},${result.new_position?.y}) instead of (${position.x},${position.y})`);
+        for (let i = 0; i < path.length - 1; i++) {
+          const current = path[i];
+          const next = path[i + 1];
           
-          // CRITICAL: Use GameMap's animation function
-          if (gameMapRef.current) {
-            setGameMessage("Moviendo héroe...");
-            
-            try {
-              // Use the path variable instead of movementPath
-              await gameMapRef.current.animateHeroMovement(selectedHero.id, path);
-            } catch (animationError) {
-              console.error('Error during hero movement animation:', animationError);
-            }
-            
-            // After animation completes, update the gameState with the final position
-            setGameState(prevState => {
-              if (!prevState) return prevState;
-              
-              const newState = {...prevState};
-              const hero = newState.player.heroes.find(h => h.id === selectedHero.id);
-              if (hero && result.new_position) {
-                hero.position = result.new_position;
-                hero.stats.movement_points_left = result.movement_points_left || 0;
-                
-                // Update selected hero
-                setSelectedHero({...hero});
-              }
-              return newState;
-            });
-            
-            setGameMessage(`El héroe se ha quedado sin puntos de movimiento. Ha llegado hasta (${result.new_position?.x}, ${result.new_position?.y}).`);
-          } else {
-            console.error("GameMap ref is not available for animation");
+          // Calcular costo del segmento
+          const from = tiles2D[current.y][current.x];
+          const to = tiles2D[next.y][next.x];
+          const terrainCost = calculateMovementCost(from, to);
+          
+          // Costo adicional por movimiento diagonal
+          const isDiagonal = current.x !== next.x && current.y !== next.y;
+          const moveCost = isDiagonal ? 1.414 : 1; // sqrt(2) para diagonales
+          
+          const segmentCost = moveCost * terrainCost;
+          
+          // Si añadir este segmento supera los puntos disponibles, terminar
+          if (currentCost + segmentCost > selectedHero.stats.movement_points_left) {
+            break;
           }
-        } else {
-          // Normal movement (enough movement points)
-          if (gameMapRef.current) {
-            setGameMessage("Moviendo héroe...");
-            
-            try {
-              // Use the path variable instead of movementPath
-              await gameMapRef.current.animateHeroMovement(selectedHero.id, path);
-            } catch (animationError) {
-              console.error('Error during hero movement animation:', animationError);
-            }
-            
-            // After animation, update gameState with final position from backend
-            setGameState(prevState => {
-              if (!prevState) return prevState;
-              
-              const newState = {...prevState};
-              const hero = newState.player.heroes.find(h => h.id === selectedHero.id);
-              if (hero && result.new_position) {
-                hero.position = result.new_position;
-                hero.stats.movement_points_left = result.movement_points_left || 0;
-                
-                // Update selected hero
-                setSelectedHero({...hero});
-              }
-              return newState;
-            });
-            
-            setGameMessage("Movimiento completado");
-          } else {
-            console.error("GameMap ref is not available for animation");
-          }
+          
+          // Añadir segmento al camino viable
+          affordablePath.push(current);
+          currentCost += segmentCost;
         }
         
-        // Update full game state from response if provided
-        if (response.data.game_state) {
-          updateGameState(response.data.game_state);
+        // Añadir la última posición alcanzable
+        if (affordablePath.length < path.length - 1) {
+          affordablePath.push(path[affordablePath.length]);
+        }
+        
+        // Usar este camino parcial
+        console.log(`GamePage: Partial movement - hero can only move ${affordablePath.length} steps out of ${path.length}`);
+        setGameMessage("Puntos de movimiento insuficientes para llegar al destino. Moviendo lo máximo posible...");
+        
+        // 5. Animar el movimiento parcial
+        if (gameMapRef.current) {
+          try {
+            // Animate the affordable path
+            await gameMapRef.current.animateHeroMovement(selectedHero.id, affordablePath);
+          } catch (animationError) {
+            console.error('Error during hero movement animation:', animationError);
+          }
+          
+          // 6. Enviar acción al backend para actualizar el estado
+          const finalPosition = affordablePath[affordablePath.length - 1];
+          const action = {
+            type: "moveHero",
+            details: {
+              hero_id: selectedHero.id,
+              destination: {
+                x: Math.floor(finalPosition.x),
+                y: Math.floor(finalPosition.y)
+              }
+            }
+          };
+          
+          const response = await gameService.executeAction(gameId, action);
+          
+          // 7. Actualizar el estado del juego con la respuesta del backend
+          if (response.data?.game_state) {
+            updateGameState(response.data.game_state);
+          }
+          
+          // Actualizar el héroe seleccionado
+          if (response.data?.result?.new_position) {
+            setSelectedHero(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                position: response.data.result.new_position,
+                stats: {
+                  ...prev.stats,
+                  movement_points_left: response.data.result.movement_points_left || 0
+                }
+              };
+            });
+          }
+          
+          setGameMessage(`El héroe se ha quedado sin puntos de movimiento.`);
         }
       } else {
-        // Movement failed
-        setGameMessage(response.data?.error || "No se puede mover a esa posición");
+        // El héroe tiene suficientes puntos para llegar al destino
+        console.log(`GamePage: Full movement - hero can move all ${path.length} steps`);
+        setGameMessage("Moviendo héroe...");
+        
+        // 5. Animar el movimiento completo
+        if (gameMapRef.current) {
+          try {
+            await gameMapRef.current.animateHeroMovement(selectedHero.id, path);
+          } catch (animationError) {
+            console.error('Error during hero movement animation:', animationError);
+          }
+          
+          // 6. Enviar acción al backend para actualizar el estado
+          const action = {
+            type: "moveHero",
+            details: {
+              hero_id: selectedHero.id,
+              destination: {
+                x: Math.floor(position.x),
+                y: Math.floor(position.y)
+              }
+            }
+          };
+          
+          const response = await gameService.executeAction(gameId, action);
+          
+          // 7. Actualizar el estado del juego con la respuesta del backend
+          if (response.data?.game_state) {
+            updateGameState(response.data.game_state);
+          }
+          
+          // Actualizar el héroe seleccionado
+          if (response.data?.result?.new_position) {
+            setSelectedHero(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                position: response.data.result.new_position,
+                stats: {
+                  ...prev.stats,
+                  movement_points_left: response.data.result.movement_points_left || 0
+                }
+              };
+            });
+          }
+          
+          // Procesar interacciones en el destino (artefactos, minas, combate)
+          if (response.data?.result?.interaction) {
+            if (response.data.result.interaction === 'combat') {
+              setCombatInteraction(response.data.result);
+              combatInProgressRef.current = true;
+            } else if (response.data.result.interaction.interaction === 'artifact_collected') {
+              setGameMessage(`¡Has recogido un artefacto: ${response.data.result.interaction.artifact}!`);
+            } else if (response.data.result.interaction.interaction === 'resource_site_captured') {
+              setGameMessage(`¡Has capturado un sitio de recursos!`);
+            }
+          } else {
+            setGameMessage("Movimiento completado");
+          }
+        }
       }
     } catch (err: any) {
       console.error('Error moving hero:', err);
