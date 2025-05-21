@@ -262,7 +262,7 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
                 attacker_side = "ai"
                 defender_side = "player"
                 
-            # Format the result for frontend
+            # Format the result for frontend with battle steps included
             formatted_combat_result = {
                 "winner": combat_result["winner"],
                 "damage_dealt": {
@@ -270,7 +270,8 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
                     "ai": combat_result["damage_dealt"]["attacker"] if attacker_side == "ai" else combat_result["damage_dealt"]["defender"],
                 },
                 "attacker_side": attacker_side,
-                "defender_side": defender_side
+                "defender_side": defender_side,
+                "battle_steps": combat_result.get("battle_steps", [])  # Include battle steps
             }
             
             # Return combat result information directly
@@ -280,7 +281,7 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
                 "new_position": {"x": hero.position.x, "y": hero.position.y},
                 "movement_points_left": hero.stats.movement_points_left,
                 "interaction": "combat",  # Indicate this is a combat interaction
-                "combat_result": formatted_combat_result,  # Include formatted combat results
+                "combat_result": formatted_combat_result,  # Include formatted combat results with battle steps
                 "enemy_hero": enemy_hero.id,  # Include the enemy hero ID
                 "partial_movement": partial_movement,
                 "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None,
@@ -341,6 +342,10 @@ def process_hero_attack(game_state: GameState, action: Dict[str, Any]) -> Dict[s
     # Otorgar experiencia al ganador
     if combat_result["winner"] == "player":
         grant_experience(attacker, EXPERIENCE_PER_COMBAT)
+    
+    # Asegurar que battle_steps esté presente en el resultado
+    if "battle_steps" not in combat_result:
+        combat_result["battle_steps"] = []
     
     return combat_result
 
@@ -1012,27 +1017,178 @@ def process_tile_interaction(hero: Heroe, position: Position, game_state: GameSt
         return {"interaction": "error", "error_message": str(e)}
 
 def resolve_combat(attacker: Heroe, defender: Heroe) -> Dict[str, Any]:
-    """Resuelve un combate entre dos héroes"""
+    """Resuelve un combate entre dos héroes con pasos detallados para visualización"""
     # Sistema de combate por turnos basado en velocidad
     units = []
     for army, side in [(attacker.army, 'attacker'), (defender.army, 'defender')]:
         for unit in army:
             units.append({
                 "unit": unit,
-                "speed": unit.stats.speed,
-                "side": side
+                "speed": unit.stats.speed if hasattr(unit, 'stats') and hasattr(unit.stats, 'speed') else 3,
+                "side": side,
+                "name": unit.type,
+                "count": unit.count
             })
+    
+    # Ordenar unidades por velocidad
     units.sort(key=lambda x: x["speed"], reverse=True)
+    
     damage_dealt = {"attacker": 0, "defender": 0}
-    for unit in units:
-        # Moral y suerte (simplificado)
-        if check_morale_bonus():
-            damage = calculate_damage(unit["unit"], unit["side"])
-            if check_luck_bonus():
-                damage *= 2
-            damage_dealt[unit["side"]] += damage
-    winner = "player" if damage_dealt["attacker"] > damage_dealt["defender"] else "ai"
-    return {"winner": winner, "damage_dealt": damage_dealt}
+    battle_steps = []
+    
+    # Agregar paso inicial describiendo el combate
+    battle_steps.append({
+        "description": f"¡Comienza el combate entre {attacker.name} y {defender.name}!",
+        "damage": 0,
+        "side": "none"
+    })
+    
+    # Crear una copia de las tropas para no modificar las originales durante el combate
+    remaining_troops = {
+        "attacker": {unit["name"]: unit["count"] for unit in units if unit["side"] == "attacker"},
+        "defender": {unit["name"]: unit["count"] for unit in units if unit["side"] == "defender"}
+    }
+    
+    # Continuar el combate hasta que un lado no tenga tropas (con límite de seguridad)
+    max_rounds = 30  # Límite para evitar bucles infinitos
+    round_num = 0
+    battle_ongoing = True
+    
+    while battle_ongoing and round_num < max_rounds:
+        round_num += 1
+        
+        # Comprobar si algún bando ya no tiene tropas
+        attacker_has_troops = sum(remaining_troops["attacker"].values()) > 0
+        defender_has_troops = sum(remaining_troops["defender"].values()) > 0
+        
+        if not attacker_has_troops or not defender_has_troops:
+            break
+            
+        # Agregar marcador de nueva ronda si no es la primera
+        if round_num > 1:
+            battle_steps.append({
+                "description": f"Ronda {round_num} de combate",
+                "damage": 0,
+                "side": "none"
+            })
+        
+        # Cada unidad ataca según su orden (basado en velocidad)
+        for unit_info in units:
+            # Saltarse unidades que ya no tienen tropas disponibles
+            current_count = remaining_troops[unit_info["side"]].get(unit_info["name"], 0)
+            if current_count <= 0:
+                continue
+                
+            # Obtener stats de la unidad
+            unit_stats = getattr(unit_info["unit"], 'stats', None)
+            attack_value = getattr(unit_stats, 'attack', 5) if unit_stats else 5
+            
+            # Calcular daño básico (ataque * cantidad actual)
+            base_damage = attack_value * current_count
+            
+            # Aplicar modificadores (simplificado)
+            damage_multiplier = 1.0
+            
+            # Moral y suerte (simplificado)
+            if random.random() < 0.2:  # 20% chance of morale bonus
+                damage_multiplier *= 1.2
+                battle_steps.append({
+                    "description": f"¡Los {unit_info['name']} de {attacker.name if unit_info['side'] == 'attacker' else defender.name} atacan con alta moral!",
+                    "type": "morale_bonus",
+                    "unit": unit_info["name"],
+                    "side": unit_info["side"]
+                })
+            
+            if random.random() < 0.1:  # 10% chance of critical hit
+                damage_multiplier *= 1.5
+                battle_steps.append({
+                    "description": f"¡Golpe crítico de los {unit_info['name']} de {attacker.name if unit_info['side'] == 'attacker' else defender.name}!",
+                    "type": "critical_hit",
+                    "unit": unit_info["name"],
+                    "side": unit_info["side"]
+                })
+            
+            # Calcular daño final
+            final_damage = int(base_damage * damage_multiplier)
+            
+            # Target side is the opposite of the attacker
+            target_side = "defender" if unit_info["side"] == "attacker" else "attacker"
+            target_name = defender.name if unit_info["side"] == "attacker" else attacker.name
+            
+            # Encontrar la unidad objetivo más débil con tropas restantes
+            target_units = [(name, count) for name, count in remaining_troops[target_side].items() if count > 0]
+            if not target_units:  # No quedan objetivos
+                break
+                
+            # Ordenar por defensa más baja (simulado - en un juego real tendríamos stats por tipo)
+            target_unit_name = target_units[0][0]  # Por ahora simplemente tomamos el primero disponible
+            
+            # Registrar el paso de ataque
+            battle_step = {
+                "description": f"Los {unit_info['name']} de {attacker.name if unit_info['side'] == 'attacker' else defender.name} atacan a los {target_unit_name} de {target_name}.",
+                "damage": final_damage,
+                "attacker_unit": unit_info["name"],
+                "defender_unit": target_unit_name,
+                "side": unit_info["side"]
+            }
+            
+            # Calcular bajas (simplificado)
+            target_hp = 10  # HP base para todas las unidades
+            casualties = min(max(1, int(final_damage / target_hp)), remaining_troops[target_side][target_unit_name])
+            
+            if casualties > 0:
+                # IMPORTANTE: Actualizar las tropas restantes del objetivo
+                remaining_troops[target_side][target_unit_name] -= casualties
+                
+                battle_step["casualties"] = {
+                    "unit_type": target_unit_name,
+                    "count": casualties,
+                    "side": target_side
+                }
+                
+                # Si se eliminan todas las tropas de este tipo, comprobar si el bando objetivo ya no tiene tropas
+                if remaining_troops[target_side][target_unit_name] <= 0:
+                    if sum(remaining_troops[target_side].values()) <= 0:
+                        battle_ongoing = False
+            
+            battle_steps.append(battle_step)
+            
+            # Acumular el daño total
+            damage_dealt[unit_info["side"]] += final_damage
+            
+            # Verificar si el defensor se ha quedado sin tropas después de este ataque
+            if sum(remaining_troops[target_side].values()) <= 0:
+                break
+    
+    # Determinar el ganador basado en tropas restantes
+    attacker_troops_left = sum(remaining_troops["attacker"].values())
+    defender_troops_left = sum(remaining_troops["defender"].values())
+    
+    if attacker_troops_left > 0 and defender_troops_left <= 0:
+        winner = "player"  # El atacante (player) ganó
+    elif defender_troops_left > 0 and attacker_troops_left <= 0:
+        winner = "ai"      # El defensor (ai) ganó
+    else:
+        # En caso de que ambos tengan tropas (límite de rondas) o ninguno tenga (empate extraño),
+        # decidir por daño total como fallback
+        winner = "player" if damage_dealt["attacker"] > damage_dealt["defender"] else "ai"
+    
+    # Agregar paso final con el resultado
+    battle_steps.append({
+        "description": f"¡La batalla ha terminado! {attacker.name if winner == 'player' else defender.name} ha vencido.",
+        "damage": 0,
+        "side": "attacker" if winner == "player" else "defender",
+        "attacker_troops_left": attacker_troops_left,
+        "defender_troops_left": defender_troops_left
+    })
+    
+    return {
+        "winner": winner, 
+        "damage_dealt": damage_dealt,
+        "battle_steps": battle_steps,
+        "attacker_troops_left": attacker_troops_left,
+        "defender_troops_left": defender_troops_left
+    }
 
 def grant_experience(hero: Heroe, amount: int) -> None:
     """Otorga experiencia a un héroe y maneja la subida de nivel"""
@@ -1227,8 +1383,17 @@ def transfer_troops_between_hero_and_castle(game_state: GameState, action: Dict[
             castle.garrison = []  # lista de ArmyUnit
 
         # Procesar transferencias
+        transfers = details.get("transfers", [])
+        if not transfers:
+            # Si no hay lista de transferencias, crear una con los datos directos
+            transfers = [{
+                "unitType": unit_type,
+                "to_castle": details.get("to_castle", 0),
+                "to_hero": details.get("to_hero", 0)
+            }]
+
         for t in transfers:
-            unit_type = t['unitType']
+            unit_type = t.get('unitType', unit_type)
             to_castle = t.get('to_castle', 0)
             to_hero = t.get('to_hero', 0)
 
@@ -1385,7 +1550,7 @@ def get_available_creatures(building_type):
             {
                 "type": "Dragón",
                 "count": 1,
-                "growth_per_week": 0.5,
+                "growth_per_week": 1,
                 "stats": {"attack": 15, "defense": 12, "speed": 8, "movement_points": 10, "movement_points_left": 10},
                 "unit_cost": {"gold": 2000}
             }
