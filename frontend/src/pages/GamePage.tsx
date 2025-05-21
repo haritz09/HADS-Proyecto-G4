@@ -660,28 +660,35 @@ const GamePage: React.FC = () => {
     // Simplificar la lógica: Si es un castillo o es un edificio que puede reclutar
     if (isNearBuilding || heroAtSamePosition) {
       if (isCastleBuilding) {
+        // Add an ownership check for castles
+        if (safeBuilding.owner !== 'player') {
+            console.log('GamePage: ❌ NO SE ABRIRÁ MENÚ: El castillo no pertenece al jugador');
+            setGameMessage('Este castillo no te pertenece.');
+            return;
+        }
+        
         console.log('GamePage: ✅ ABRIENDO MENÚ DE CONSTRUCCIÓN. Distancia al castillo:', distance.toFixed(2));
         // Si el edificio está en (48,48), siempre tratarlo como castillo
         if (buildingIsAt4848 && !safeBuilding.is_castle) {
-          console.log('GamePage: Edificio en (48,48) tratado como castillo independientemente de su propiedad is_castle');
-          safeBuilding.is_castle = true;
-          
-          // Asegurarnos que tiene cost para el menú de construcción
-          if (!safeBuilding.cost) {
-            safeBuilding.cost = { gold: 0, wood: 0, stone: 0 };
-          }
+            console.log('GamePage: Edificio en (48,48) tratado como castillo independientemente de su propiedad is_castle');
+            safeBuilding.is_castle = true;
+            
+            // Asegurarnos que tiene cost para el menú de construcción
+            if (!safeBuilding.cost) {
+                safeBuilding.cost = { gold: 0, wood: 0, stone: 0 };
+            }
         }
         
         // Completar datos faltantes para el castillo antes de mostrar el menú
         if (!safeBuilding.available_creatures) {
-          safeBuilding.available_creatures = [];
+            safeBuilding.available_creatures = [];
         }
         
         setActiveBuilding(safeBuilding);
         setShowConstructionMenu(true);
         setGameMessage(heroAtSamePosition ? 
-          '¡Has llegado al castillo central!' : 
-          '¡Puedes construir edificios en el castillo cercano!');
+            '¡Has llegado al castillo central!' : 
+            '¡Puedes construir edificios en el castillo cercano!');
       } 
       // Lógica corregida para edificios de reclutamiento
       else if (safeBuilding.built && safeBuilding.can_recruit && isPlayerOwned) {
