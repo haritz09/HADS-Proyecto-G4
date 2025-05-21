@@ -69,7 +69,7 @@ const GameOverScreen: React.FC<GameOverScreenProps> = ({ status, gameState, onRe
   
   // Navegar al menú principal
   const handleMainMenu = () => {
-    navigate('/');
+    navigate('/menu'); // Changed from '/' to '/menu' to go to MainMenuPage
   };
   
   return (
