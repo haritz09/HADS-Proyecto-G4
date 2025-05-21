@@ -24,6 +24,7 @@ EXPERIENCE_PER_COMBAT = 100
 LEVELS_THRESHOLDS = [100, 300, 600, 1000, 1500]  # Experiencia necesaria para cada nivel
 STAT_POINTS_PER_LEVEL = 2
 MOVEMENT_POINTS_BASE = 10
+HERO_VISION_RADIUS = 3  # Radio de visión estándar para héroes
 
 def calculate_distance(pos1: Position, pos2: Position) -> float:
     """Calcula la distancia entre dos posiciones."""
@@ -144,6 +145,44 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 
     return []  # No path found
 
+def update_fog_of_war(game_state: GameState, hero_position: Position, vision_radius: int = HERO_VISION_RADIUS):
+    """
+    Actualiza la niebla de guerra y las casillas exploradas basándose en la posición del héroe.
+    
+    Args:
+        game_state: Estado del juego
+        hero_position: Posición del héroe
+        vision_radius: Radio de visión del héroe (por defecto HERO_VISION_RADIUS)
+    """
+    if not game_state.map or not hasattr(game_state.map, 'fog_of_war'):
+        print("ERROR: No se puede actualizar fog_of_war, estructura del mapa incorrecta")
+        return
+    
+    map_width = game_state.map.size.width
+    map_height = game_state.map.size.height
+    
+    # Inicializar explored si aún no existe
+    if not hasattr(game_state.map, 'explored') or not game_state.map.explored:
+        game_state.map.explored = [False] * (map_width * map_height)
+    
+    # Iteramos por todas las casillas dentro del radio de visión
+    for y in range(max(0, hero_position.y - vision_radius), min(map_height, hero_position.y + vision_radius + 1)):
+        for x in range(max(0, hero_position.x - vision_radius), min(map_width, hero_position.x + vision_radius + 1)):
+            # Calcular distancia
+            distance = math.sqrt((x - hero_position.x) ** 2 + (y - hero_position.y) ** 2)
+            
+            # Si está dentro del radio de visión
+            if distance <= vision_radius:
+                idx = y * map_width + x
+                
+                # Marcar como visible (quitar niebla)
+                if 0 <= idx < len(game_state.map.fog_of_war):
+                    game_state.map.fog_of_war[idx] = False
+                
+                # Marcar como explorado permanentemente
+                if 0 <= idx < len(game_state.map.explored):
+                    game_state.map.explored[idx] = True
+
 def process_hero_movement(game_state: GameState, action: dict) -> dict:
     try:
         hero_id = action["details"]["hero_id"]
@@ -239,8 +278,13 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         hero.position.y = final_position.y
         hero.stats.movement_points_left = remaining_points
         
+        # Actualizar fog of war basado en la nueva posición
+        vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+        update_fog_of_war(game_state, hero.position, vision_radius)
+        
         print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({hero.position.x}, {hero.position.y})")
         print(f"DEBUG: Hero has {hero.stats.movement_points_left} movement points left")
+        print(f"DEBUG: Updated fog of war with vision radius {vision_radius}")
         
         # NEW: Check for enemy heroes at the same position BEFORE calling process_tile_interaction
         enemy_hero = None
@@ -458,6 +502,21 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     next_player = "ai" if current_player == "player" else "player"
     game_state.current_player = next_player
     print(f"DEBUG: Switching player turn from {current_player} to {next_player}")
+    
+    # Resetear fog of war (todo oculto de nuevo)
+    map_width = game_state.map.size.width
+    map_height = game_state.map.size.height
+    game_state.map.fog_of_war = [True] * (map_width * map_height)
+    
+    # Recalcular visibilidad para el nuevo jugador actual
+    if next_player == "player":
+        for hero in game_state.player.heroes:
+            vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+            update_fog_of_war(game_state, hero.position, vision_radius)
+    else:
+        for hero in game_state.ai.heroes:
+            vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+            update_fog_of_war(game_state, hero.position, vision_radius)
     
     # Log hero movement points BEFORE restoration
     if next_player == "player":

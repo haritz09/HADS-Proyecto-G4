@@ -54,6 +54,7 @@ export const HERO_CONFIG = {
   LEVEL_UP_EXPERIENCE: 1000,
   MAX_ARTIFACTS: 7,
   MAX_ARMY_SLOTS: 7,
+  VISION_RADIUS: 3, // Rango de visión estándar para héroes (en casillas)
 };
 
 // Configuración de combate
@@ -116,4 +117,11 @@ export enum GameStatus {
   VICTORY = 'victory',
   DEFEAT = 'defeat',
   DRAW = 'draw',
+}
+
+// Tipos de visibilidad de las casillas
+export enum TileVisibility {
+  UNEXPLORED = 'unexplored',  // Nunca visto (negro)
+  EXPLORED = 'explored',      // Visto anteriormente (gris)
+  VISIBLE = 'visible',        // Visible actualmente (normal)
 }
