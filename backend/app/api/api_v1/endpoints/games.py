@@ -395,6 +395,47 @@ def get_game_internal(game_id: str):
     
     return sanitized_game
 
+@router.put("/{game_id}", response_model=GameRead)
+async def save_game_state(
+    game_id: str,
+    game_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Guarda el estado actual de una partida."""
+    game = get_game_internal(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    
+    # Verificar que el usuario es dueño de la partida
+    if str(game["user_id"]) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="No autorizado para guardar esta partida")
+    
+    # Actualizar solo el estado del juego, mantener otros campos
+    if "game_state" in game_data:
+        game["game_state"] = game_data["game_state"]
+        game["last_saved"] = datetime.now(UTC)
+        
+        try:
+            # Sanitizar y asegurar que los datos son válidos
+            game["game_state"] = ensure_buildings_have_building_type(game["game_state"])
+            sanitized_game = sanitize_game_data(game)
+            
+            # Guardar en la base de datos
+            updated_game = update_game(game_id, sanitized_game)
+            if updated_game:
+                logger.info(f"Game {game_id} saved successfully")
+                return updated_game
+            else:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Error al guardar la partida en la base de datos"
+                )
+        except Exception as e:
+            logger.error(f"Error saving game: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error al guardar la partida: {str(e)}")
+    else:
+        raise HTTPException(status_code=400, detail="Datos de juego no proporcionados")
+
 @router.post("/{game_id}/action")
 async def process_action(
     game_id: str,

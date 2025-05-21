@@ -740,22 +740,14 @@ export const gameService = {
   
   saveGame: async (gameId: string, gameState: any) => {
     try {
-      const response = await API.post(`/game/${gameId}/save`, {
-        game_state: gameState
-      });
-      
-      if (!response.data.success) {
-        throw new Error(response.data.error || 'Failed to save game');
-      }
-      
+      const response = await API.put(`/games/${gameId}`, { game_state: gameState });
       return response;
-    } catch (error: any) {
-      console.error('Error saving game:', error);
-      throw new Error(error.response?.data?.error || 'Failed to save game');
+    } catch (error) {
+      console.error("Error al guardar la partida:", error);
+      throw error;
     }
   },
   
-  // Acciones del juego usando el sistema unificado de acciones
   executeAction: async (gameId: string, action: any) => {
     try {
       console.log(`Ejecutando acción ${action.type} en el juego ${gameId}`);
