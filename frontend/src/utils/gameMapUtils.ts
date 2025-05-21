@@ -1,4 +1,5 @@
 import { GameState, VisibleObject, MapTile, ArtifactObject, ResourceMine } from '../types/game';
+import { TileVisibility } from '../constants/gameConstants';
 
 /**
  * Sincroniza los artefactos en visible_objects con los tiles del mapa
@@ -131,12 +132,21 @@ export const findArtifactAtPosition = (
     return null;
   }
   
+  // Check if the position is currently visible (not in fog of war)
+  const index = y * gameState.map.size.width + x;
+  if (index >= 0 && index < gameState.map.fog_of_war.length) {
+    // Only find artifacts in currently visible areas (not just explored)
+    if (gameState.map.fog_of_war[index]) {
+      return null; // Position is in fog of war, don't show artifacts
+    }
+  }
+  
   console.log(`findArtifactAtPosition: Searching for artifact at (${x}, ${y})`);
   
   // Método 1: Buscar por tile (más confiable)
-  const index = y * gameState.map.size.width + x;
-  if (index >= 0 && index < gameState.map.tiles.length) {
-    const tile = gameState.map.tiles[index];
+  const tileIndex = y * gameState.map.size.width + x;
+  if (tileIndex >= 0 && tileIndex < gameState.map.tiles.length) {
+    const tile = gameState.map.tiles[tileIndex];
     console.log(`findArtifactAtPosition: Tile at (${x},${y})`, 
       {object_type: tile.object_type, object_id: tile.object_id});
     
@@ -176,4 +186,31 @@ export const findArtifactAtPosition = (
   }
   
   return null;
+};
+
+// Add a utility function to help determine a tile's visibility state
+export const getTileVisibilityState = (
+  x: number, 
+  y: number, 
+  gameState: GameState
+): TileVisibility => {
+  const index = y * gameState.map.size.width + x;
+  
+  // Ensure index is valid
+  if (index < 0 || index >= gameState.map.fog_of_war.length) {
+    return TileVisibility.UNEXPLORED;
+  }
+  
+  // If the tile is currently visible (not in fog of war)
+  if (!gameState.map.fog_of_war[index]) {
+    return TileVisibility.VISIBLE;
+  }
+  
+  // If this tile has been explored before
+  if (gameState.map.explored && gameState.map.explored[index]) {
+    return TileVisibility.EXPLORED;
+  }
+  
+  // By default, unexplored
+  return TileVisibility.UNEXPLORED;
 };

@@ -104,7 +104,7 @@ export const sampleGameState: GameState = {
     },
     tiles: createSampleMap(20, 20),
     fog_of_war: Array(400).fill(false),
-    explored: [],
+    explored: Array(400).fill(false), // Initialize with appropriate size
     visible_objects: [
       {
         id: 'mine1',

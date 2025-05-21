@@ -22,7 +22,7 @@ interface GameMapProps {
 }
 
 // Corregir la sintaxis de forwardRef
-const GameMap = React.forwardRef<GameMapRef, GameMapProps>((props, ref) => {
+const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(props, ref) {
   const {
     gameState,
     selectedHeroId,
@@ -464,8 +464,125 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>((props, ref) => {
     );
   };
 
-  // Función auxiliar para manejar click en un edificio - versión limpia
-  const renderBuilding = (building: Building, cityId: string) => {
+  // Método actualizado para renderizar un tile con visibilidad
+  const renderTile = (x: number, y: number) => {
+    const index = y * gameState.map.size.width + x;
+    const tile = gameState.map.tiles[index];
+    const visibility = getTileVisibility(x, y);
+    
+    // Para tiles completamente sin explorar, renderizar un tile negro simple
+    if (visibility === TileVisibility.UNEXPLORED) {
+      return (
+        <div
+          className="map-tile unexplored-tile"
+          onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
+        ></div>
+      );
+    }
+    
+    // Para tiles explorados pero no visibles actualmente
+    const isExploredOnly = visibility === TileVisibility.EXPLORED;
+    
+    // Solo mostrar objetos y personajes en tiles actualmente visibles
+    const heroForRendering = !isExploredOnly ? 
+      [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
+        const visualPos = getHeroCurrentPosition(h.id, true);
+        return visualPos && visualPos.x === x && visualPos.y === y;
+      }) : null;
+
+    // Encontrar ciudad en la ubicación actual (tanto en vista completa como explorada)
+    const city = gameState.player.cities?.find((c: any) => c?.position?.x === x && c?.position?.y === y);
+    const aiCity = gameState.ai.cities?.find((c: any) => c?.position?.x === x && c?.position?.y === y);
+    const building = city?.buildings?.[0] || aiCity?.buildings?.[0];
+
+    // Encontrar mina en la ubicación actual (visible en áreas exploradas)
+    const mineAtPosition = gameState.map.visible_objects?.find((obj: VisibleObject) =>
+      obj.position &&
+      obj.position.x === x &&
+      obj.position.y === y &&
+      (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
+       ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
+    ) as ResourceMine | undefined;
+
+    // Solo buscar artefactos en áreas actualmente visibles
+    const artifact = !isExploredOnly ? findArtifactAtPosition(x, y, tile) : null;
+    const { name: artifactName, subtype: artifactSubtype } = getArtifactProperties(artifact);
+
+    const selectedHero = gameState.player.heroes.find((h: Hero) => h.id === selectedHeroId) || null;
+    
+    const isCastleBuilding = building && (building.is_castle || (building.position.x === 48 && building.position.y === 48));
+    let isNearCastle = false;
+    
+    if (isCastleBuilding && selectedHero) {
+      const heroRealPosition = selectedHero.position;
+      const distance = calculateDistance(heroRealPosition, building.position);
+      isNearCastle = distance <= 2;
+    }
+
+    const isPlayerOwned = building && building.owner === "player";
+    const isAIOwned = building && building.owner === "ai";
+
+    const isHeroAtThisPosition = selectedHero && selectedHero.position.x === x && selectedHero.position.y === y;
+    const isBuildingInteractive = building && (isHeroAtThisPosition || (isCastleBuilding && isNearCastle));
+
+    const forceCastleInteractive = isCastleBuilding && isNearCastle;
+
+    const tileClasses = [
+      `map-tile`,
+      `terrain-${tile?.terrain || 'grass'}`,
+      isExploredOnly ? 'explored-tile' : '',
+      isHeroAtThisPosition ? 'has-hero' : '',
+      city ? 'has-city' : '',
+      building ? `has-building building-${building.building_type}` : '',
+      isBuildingInteractive ? 'interactive-building' : '',
+      forceCastleInteractive ? 'castle-near-hero' : '',
+      isPlayerOwned ? 'player-owned-building' : '', // Clase para edificios del jugador
+      isAIOwned ? 'ai-owned-building' : '', // Clase para edificios de la IA
+      selectedHero && selectedHero.position.x === x && selectedHero.position.y === y ? 'selected-hero-tile' : '',
+      artifact ? 'has-artifact' : ''
+    ].filter(Boolean).join(' ');
+
+    // Renderizar el contenido del tile según visibilidad
+    return (
+      <div
+        className={tileClasses}
+        onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
+        title={isExploredOnly ? 'Territorio explorado (no visible actualmente)' : 
+              (mineAtPosition ? 
+                `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
+                (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : undefined))}
+      >
+        {/* Solo mostrar artefactos en áreas actualmente visibles */}
+        {!isExploredOnly && artifact && (
+          <div className={`artifact-sprite artifact-${artifactSubtype || 'unknown'}`}>
+            {artifactSubtype && typeof artifactSubtype === 'string' 
+              ? getArtifactIcon(artifactSubtype) 
+              : '🏆'}
+          </div>
+        )}
+
+        {/* Solo mostrar héroes en áreas actualmente visibles */}
+        {!isExploredOnly && heroForRendering && (
+          <div 
+            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''} ${isAIView && heroForRendering.id.startsWith('ai_') ? 'ai-perspective' : ''} ${getHeroCurrentPosition(heroForRendering.id, true)?.isAnimating ? 'moving' : ''}`}
+            onClick={(e) => {
+              if (isReadOnly) return;
+              e.stopPropagation();
+              onHeroClick(heroForRendering.id);
+            }}
+          >
+            H
+          </div>
+        )}
+
+        {/* Renderizar edificios en áreas visibles y también en áreas exploradas con estilo reducido */}
+        {building && renderBuilding(building, city?.id || '', isExploredOnly)}
+      </div>
+    );
+  };
+
+  // Actualizar renderBuilding para manejar áreas exploradas
+  const renderBuilding = (building: Building, cityId: string, isExploredOnly = false) => {
     const heroes = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])];
 
     const isHeroNearby = heroes.some(hero => {
@@ -498,7 +615,8 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>((props, ref) => {
       isPlayerOwned ? 'building-player-owned' : '',
       building.built ? 'building-built' : '',
       building.can_recruit && building.built ? 'building-can-recruit' : '',
-      `building-${building.building_type}`
+      `building-${building.building_type}`,
+      isExploredOnly ? 'explored-only' : '' // Add this class for explored-only buildings
     ].filter(Boolean).join(' ');
 
     const handleBuildingClick = () => {
@@ -545,138 +663,6 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>((props, ref) => {
     
     // Por defecto, no explorado
     return TileVisibility.UNEXPLORED;
-  };
-
-  // Método actualizado para renderizar un tile con visibilidad
-  const renderTile = (x: number, y: number) => {
-    const index = y * gameState.map.size.width + x;
-    const tile = gameState.map.tiles[index];
-    const visibility = getTileVisibility(x, y);
-    
-    // Para tiles completamente sin explorar, renderizar un tile negro simple
-    if (visibility === TileVisibility.UNEXPLORED) {
-      return (
-        <div
-          className="map-tile unexplored-tile"
-          onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
-        ></div>
-      );
-    }
-    
-    // Para tiles explorados pero no visibles actualmente
-    const isExploredOnly = visibility === TileVisibility.EXPLORED;
-    
-    // Solo mostrar objetos y personajes en tiles actualmente visibles
-    const heroForRendering = !isExploredOnly ? 
-      [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
-        const visualPos = getHeroCurrentPosition(h.id, true);
-        return visualPos && visualPos.x === x && visualPos.y === y;
-      }) : null;
-
-    const heroAtThisPosition = !isExploredOnly ?
-      [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
-        return h.position.x === x && h.position.y === y;
-      }) : null;
-
-    const city = !isExploredOnly ? 
-      gameState.player.cities?.find((c: any) => c?.position?.x === x && c?.position?.y === y) : null;
-    const aiCity = !isExploredOnly ? 
-      gameState.ai.cities?.find((c: any) => c?.position?.x === x && c?.position?.y === y) : null;
-    const building = city?.buildings?.[0] || aiCity?.buildings?.[0];
-
-    // Find a mine at this position
-    const mineAtPosition = !isExploredOnly ? gameState.map.visible_objects?.find((obj: VisibleObject) =>
-      obj.position &&
-      obj.position.x === x &&
-      obj.position.y === y &&
-      (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-       ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
-    ) as ResourceMine | undefined : null;
-
-    // Las mismas comprobaciones que antes, pero solo para tiles visibles
-    const artifact = !isExploredOnly ? findArtifactAtPosition(x, y, tile) : null;
-    const { name: artifactName, subtype: artifactSubtype } = getArtifactProperties(artifact);
-
-    const selectedHero = gameState.player.heroes.find((h: Hero) => h.id === selectedHeroId) || null;
-    
-    const isCastleBuilding = building && (building.is_castle || (building.position.x === 48 && building.position.y === 48));
-    let isNearCastle = false;
-    
-    if (isCastleBuilding && selectedHero) {
-      const heroRealPosition = selectedHero.position;
-      const distance = calculateDistance(heroRealPosition, building.position);
-      isNearCastle = distance <= 2;
-    }
-
-    const isPlayerOwned = building && building.owner === "player";
-    const isAIOwned = building && building.owner === "ai";
-
-    const isHeroAtThisPosition = selectedHero && selectedHero.position.x === x && selectedHero.position.y === y;
-    const isBuildingInteractive = building && (isHeroAtThisPosition || (isCastleBuilding && isNearCastle));
-
-    const forceCastleInteractive = isCastleBuilding && isNearCastle;
-
-    const tileClasses = [
-      `map-tile`,
-      `terrain-${tile?.terrain || 'grass'}`,
-      heroAtThisPosition ? 'has-hero' : '',
-      city ? 'has-city' : '',
-      building ? `has-building building-${building.building_type}` : '',
-      isBuildingInteractive ? 'interactive-building' : '',
-      forceCastleInteractive ? 'castle-near-hero' : '',
-      isPlayerOwned ? 'player-owned-building' : '', // Clase para edificios del jugador
-      isAIOwned ? 'ai-owned-building' : '', // Clase para edificios de la IA
-      selectedHero && selectedHero.position.x === x && selectedHero.position.y === y ? 'selected-hero-tile' : '',
-      artifact ? 'has-artifact' : ''
-    ].filter(Boolean).join(' ');
-
-    // Renderizar el contenido del tile según visibilidad
-    return (
-      <div
-        className={tileClasses}
-        onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
-        title={isExploredOnly ? 'Territorio explorado (no visible actualmente)' : 
-              (mineAtPosition ? 
-                `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
-                (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : undefined))}
-      >
-        {/* Renderizar contenido solo si el tile es completamente visible */}
-        {!isExploredOnly && artifact && (
-          <div 
-            className={`artifact-sprite artifact-${artifactSubtype || 'unknown'}`}
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-          >
-            {artifactSubtype && typeof artifactSubtype === 'string' 
-              ? getArtifactIcon(artifactSubtype) 
-              : '🏆'}
-          </div>
-        )}
-
-        {/* Path indicator for movement animation - add this section */}
-        {animatingHero && animationPath.some(pos => pos.x === x && pos.y === y) && (
-          <div className="path-indicator"></div>
-        )}
-
-        {/* FIXED: Removed !animatingHero condition to ensure heroes remain visible during animation */}
-        {!isExploredOnly && heroForRendering && (
-          <div 
-            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''} ${isAIView && heroForRendering.id.startsWith('ai_') ? 'ai-perspective' : ''} ${getHeroCurrentPosition(heroForRendering.id, true)?.isAnimating ? 'moving' : ''}`}
-            onClick={(e) => {
-              if (isReadOnly) return;
-              e.stopPropagation();
-              onHeroClick(heroForRendering.id);
-            }}
-          >
-            H
-          </div>
-        )}
-
-        {/* Solo renderizar edificios en tiles visibles */}
-        {!isExploredOnly && building && renderBuilding(building, city?.id || '')}
-      </div>
-    );
   };
 
   const syncArtifactsWithTiles = () => {
@@ -803,7 +789,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>((props, ref) => {
       >
         {grid}
         
-        {/* Modify this section to check visibility before rendering mines */}
+        {/* Modify this section to render mines with proper visibility state */}
         {gameState.map.visible_objects?.filter((obj: VisibleObject) =>
           obj.position &&
           (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
@@ -812,7 +798,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>((props, ref) => {
           // Check visibility of the mine's position before rendering
           const visibility = getTileVisibility(mine.position.x, mine.position.y);
           
-          // Only render if the position is currently visible
+          // Only render if the position is currently visible or explored
           if (visibility === TileVisibility.VISIBLE) {
             return renderMine(mine);
           } else if (visibility === TileVisibility.EXPLORED) {
