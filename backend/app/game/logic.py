@@ -241,6 +241,12 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         # Log the hero's starting position and movement points
         print(f"DEBUG: Hero starting at ({current_position.x},{current_position.y}) with {remaining_points} movement points")
         
+        # Get the hero's vision radius before starting movement
+        vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+        
+        # Update fog of war at the starting position
+        update_fog_of_war(game_state, current_position, vision_radius)
+        
         # Walk through the path until we reach the end or run out of movement points
         for i in range(1, len(full_path)):
             next_position = full_path[i]
@@ -256,6 +262,9 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
                 remaining_points -= segment_cost
                 final_position = current_position
                 print(f"DEBUG: Moved to ({current_position.x},{current_position.y}), remaining points: {remaining_points}")
+                
+                # Update fog of war at this position in the path
+                update_fog_of_war(game_state, current_position, vision_radius)
             else:
                 # Can't move further along the path
                 partial_movement = True
@@ -279,13 +288,12 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         hero.position.y = final_position.y
         hero.stats.movement_points_left = remaining_points
         
-        # Actualizar fog of war basado en la nueva posición
-        vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
-        update_fog_of_war(game_state, hero.position, vision_radius)
+        # We already updated fog of war at each step, so we don't need to do it again here
+        # Just log that we've been updating fog of war along the path
+        print(f"DEBUG: Updated fog of war along the path with vision radius {vision_radius}")
         
         print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({hero.position.x}, {hero.position.y})")
         print(f"DEBUG: Hero has {hero.stats.movement_points_left} movement points left")
-        print(f"DEBUG: Updated fog of war with vision radius {vision_radius}")
         
         # Improved enemy hero detection - ensure positions are compared as integers
         enemy_hero = None
