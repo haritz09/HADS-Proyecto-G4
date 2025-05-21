@@ -159,6 +159,14 @@ def update_fog_of_war(game_state: GameState, hero_position: Position, vision_rad
         print("ERROR: No se puede actualizar fog_of_war, estructura del mapa incorrecta")
         return
     
+    # Check if the map is permanently revealed (skip normal visibility calculations)
+    if getattr(game_state.map, 'permanently_revealed', False):
+        # If map is permanently revealed, ensure all tiles are visible and explored
+        game_state.map.fog_of_war = [False] * (game_state.map.size.width * game_state.map.size.height)
+        if hasattr(game_state.map, 'explored'):
+            game_state.map.explored = [True] * (game_state.map.size.width * game_state.map.size.height)
+        return
+    
     map_width = game_state.map.size.width
     map_height = game_state.map.size.height
     
@@ -506,6 +514,27 @@ def add_units_to_hero_or_city(city: City, unit_type: str, amount: int, game_stat
         # Si no hay héroe, podrías implementar una guarnición de ciudad aquí
         pass  # Implementación opcional
 
+def get_available_creatures(building_type: str) -> list:
+    """Devuelve las criaturas disponibles para un tipo de edificio."""
+    if building_type == "castle":
+        return [
+            {
+                "type": "Milicia",
+                "count": 15,
+                "growth_per_week": 5,
+                "stats": {
+                    "attack": 3,
+                    "defense": 3,
+                    "speed": 3,
+                    "movement_points": 5,
+                    "movement_points_left": 5
+                },
+                "recruit_cost": {"gold": 100}
+            }
+        ]
+    # Add more building types here if needed
+    return []
+
 def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     """Procesa el final del turno"""
     current_player = game_state.current_player
@@ -522,20 +551,25 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     game_state.current_player = next_player
     print(f"DEBUG: Switching player turn from {current_player} to {next_player}")
     
-    # Resetear fog of war (todo oculto de nuevo)
-    map_width = game_state.map.size.width
-    map_height = game_state.map.size.height
-    game_state.map.fog_of_war = [True] * (map_width * map_height)
+    # Check if the map is permanently revealed (from cheat)
+    map_permanently_revealed = getattr(game_state.map, 'permanently_revealed', False)
     
-    # Recalcular visibilidad para el nuevo jugador actual
-    if next_player == "player":
-        for hero in game_state.player.heroes:
-            vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
-            update_fog_of_war(game_state, hero.position, vision_radius)
-    else:
-        for hero in game_state.ai.heroes:
-            vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
-            update_fog_of_war(game_state, hero.position, vision_radius)
+    # Only reset fog of war if the map is not permanently revealed
+    if not map_permanently_revealed:
+        # Resetear fog of war (todo oculto de nuevo)
+        map_width = game_state.map.size.width
+        map_height = game_state.map.size.height
+        game_state.map.fog_of_war = [True] * (map_width * map_height)
+        
+        # Recalcular visibilidad para el nuevo jugador actual
+        if next_player == "player":
+            for hero in game_state.player.heroes:
+                vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+                update_fog_of_war(game_state, hero.position, vision_radius)
+        else:
+            for hero in game_state.ai.heroes:
+                vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+                update_fog_of_war(game_state, hero.position, vision_radius)
     
     # Log hero movement points BEFORE restoration
     if next_player == "player":
@@ -1615,54 +1649,23 @@ def build_structure(game_state, city_id, structure_type):
         "new_resources": player_resources
     }
 
-def get_available_creatures(building_type):
+def get_available_creatures(building_type: str) -> list:
     """Devuelve las criaturas disponibles para un tipo de edificio."""
-    creatures = {
-        "barracks": [
+    if building_type == "castle":
+        return [
             {
-                "type": "Soldado",
-                "count": 10,
-                "growth_per_week": 3,
-                "stats": {"attack": 5, "defense": 5, "speed": 3, "movement_points": 5, "movement_points_left": 5},
-                "unit_cost": {"gold": 100}
-            }
-        ],
-        "archery": [
-            {
-                "type": "Arquero",
-                "count": 8,
-                "growth_per_week": 2,
-                "stats": {"attack": 6, "defense": 2, "speed": 4, "movement_points": 5, "movement_points_left": 5},
-                "unit_cost": {"gold": 150}
-            }
-        ],
-        "knights_tower": [
-            {
-                "type": "Caballero",
-                "count": 5,
-                "growth_per_week": 1,
-                "stats": {"attack": 8, "defense": 6, "speed": 6, "movement_points": 7, "movement_points_left": 7},
-                "unit_cost": {"gold": 300}
-            }
-        ],
-        "mage_tower": [
-            {
-                "type": "Mago",
-                "count": 3,
-                "growth_per_week": 1,
-                "stats": {"attack": 10, "defense": 3, "speed": 3, "movement_points": 5, "movement_points_left": 5},
-                "unit_cost": {"gold": 500}
-            }
-        ],
-        "dragons_lair": [
-            {
-                "type": "Dragón",
-                "count": 1,
-                "growth_per_week": 1,
-                "stats": {"attack": 15, "defense": 12, "speed": 8, "movement_points": 10, "movement_points_left": 10},
-                "unit_cost": {"gold": 2000}
+                "type": "Milicia",
+                "count": 15,
+                "growth_per_week": 5,
+                "stats": {
+                    "attack": 3,
+                    "defense": 3,
+                    "speed": 3,
+                    "movement_points": 5,
+                    "movement_points_left": 5
+                },
+                "recruit_cost": {"gold": 100}
             }
         ]
-    }
-    
-    return creatures.get(building_type, [])
+    # Add more building types here if needed
+    return []

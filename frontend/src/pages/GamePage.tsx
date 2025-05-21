@@ -1159,10 +1159,14 @@ const GamePage: React.FC = () => {
     console.log('GamePage: setShowGameOver cambiado a true');
   };
 
+  // Add useEffect to detect game over conditions
   useEffect(() => {
-    console.log('GamePage: Estado showGameOver cambiado a', showGameOver);
-    console.log('GamePage: Estado gameOverStatus =', gameOverStatus);
-  }, [showGameOver, gameOverStatus]);
+    if (gameState?.status && gameState.status !== 'ongoing') {
+      console.log(`Game over detected: ${gameState.status}`);
+      setShowGameOver(true);
+      setGameOverStatus(gameState.status as 'victory' | 'defeat' | 'draw');
+    }
+  }, [gameState?.status]);
 
   return (
     <div className={`game-page ${isAiViewMode ? `ai-view-mode-${aiViewMode}` : ''}`}>
@@ -1341,11 +1345,11 @@ const GamePage: React.FC = () => {
       {/* Mostrar pantalla de fin de juego si la partida ha terminado */}
       {showGameOver && gameState && (
         <GameOverScreen 
-          status={gameOverStatus}
-          gameState={gameState}
+          status={gameOverStatus} 
+          gameState={gameState} 
           onRestart={() => {
-            console.log('GamePage: onRestart llamado');
-            navigate('/');
+            setShowGameOver(false);
+            navigate('/menu');
           }}
         />
       )}

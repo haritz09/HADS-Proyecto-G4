@@ -65,7 +65,7 @@ def cheat_derrota_inmediata(game_state: GameState, target: Dict[str, Any]) -> Di
     return {'success': True, 'message': 'Has perdido la partida', 'affected_entity': None}
 
 def cheat_victoria_inmediata(game_state: GameState, target: Dict[str, Any]) -> Dict[str, Any]:
-    game_state.status = 'won'
+    game_state.status = 'victory'  # Changed from 'won' to 'victory'
     return {'success': True, 'message': '¡Has ganado la partida!', 'affected_entity': None}
 
 def cheat_escuadron_arcangeles(game_state: GameState, target: Dict[str, Any]) -> Dict[str, Any]:
@@ -128,6 +128,9 @@ def cheat_revelar_mapa(game_state: GameState, target: Dict[str, Any]) -> Dict[st
         # Also mark all tiles as explored
         if hasattr(game_state.map, 'explored'):
             game_state.map.explored = [True] * len(game_state.map.explored)
+        
+        # Add permanent reveal flag to prevent fog from being reset
+        game_state.map.permanently_revealed = True
     
     return {'success': True, 'message': 'El mapa ha sido completamente revelado', 'affected_entity': None}
 

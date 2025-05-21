@@ -43,6 +43,7 @@ interface ApiError {
 const CheatMenu: React.FC<CheatMenuProps> = ({ onClose, gameState }) => {
   const { gameId } = useParams<{ gameId: string }>();
   const { loadGame } = useGame(); // Usar el contexto de juego para recargar el estado
+  const gameContext = useGame();
   const [selectedCheat, setSelectedCheat] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -133,21 +134,22 @@ const CheatMenu: React.FC<CheatMenuProps> = ({ onClose, gameState }) => {
         setSuccess(true);
         setMessage(`Cheat aplicado: ${response.data.message || 'Éxito'}`);
         
-        // Para el cheat de derrota inmediata, actualizar inmediatamente el estado para mostrar GameOver
-        if (selectedCheat === 'derrota_inmediata') {
-          // Esperar un momento breve para mostrar el mensaje de éxito
-          setTimeout(async () => {
-            await loadGame(gameId);
-            // No cerramos el menú en este caso, pues la pantalla GameOver se mostrará automáticamente
-            // al actualizar el estado del juego a 'defeat'
-          }, 1000);
-        } else {
-          // Para otros cheats, comportamiento normal
-          setTimeout(async () => {
-            await loadGame(gameId);
+        // Esperar un momento breve para mostrar el mensaje de éxito
+        setTimeout(async () => {
+          // Cargar el estado del juego actualizado
+          await loadGame(gameId);
+          
+          // Verificar si es un cheat de victoria o derrota y manejarlo en consecuencia
+          const status = gameContext.gameState?.status;
+          if (status === 'victory' || status === 'defeat' || status === 'draw') {
+            // Dejar que el componente GamePage maneje la pantalla de GameOver
+            // El estado del juego en el contexto activará la pantalla de GameOver
             onClose();
-          }, 1500);
-        }
+          } else {
+            // Para otros cheats, simplemente cerrar el menú
+            onClose();
+          }
+        }, 1500);
       } else {
         setMessage(`Error al aplicar cheat: ${response.error || 'Error desconocido'}`);
       }

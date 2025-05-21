@@ -139,7 +139,7 @@ class GameMap(BaseModel):
     fog_of_war: Optional[List[bool]] = None
     explored: Optional[List[Any]] = None
     visible_objects: Optional[List[Union[ResourceMine, Artifact]]] = None
-    # visible_objects ahora puede contener ResourceMine y otros objetos
+    permanently_revealed: bool = False  # New field for persistent map revealing
 
 class GameState(BaseModel):
     turn: int
