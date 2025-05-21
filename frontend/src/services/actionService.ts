@@ -6,24 +6,26 @@ export interface GameAction {
   details: any;
 }
 
-export const executeAction = async (gameId: string, action: GameAction) => {
-  return await gameService.executeAction(gameId, action);
-};
-
+// Crear acción de movimiento de héroe
 export const createMoveHeroAction = (heroId: string, destination: Position): GameAction => {
   return {
     type: 'moveHero',
     details: {
       hero_id: heroId,
-      x: destination.x,
-      y: destination.y
+      destination
     }
   };
 };
 
+// Crear acción de fin de turno (simplificada)
 export const createEndTurnAction = (): GameAction => {
   return {
     type: 'endTurn',
-    details: {}
+    details: {} // No se necesitan detalles adicionales
   };
+};
+
+// Ejecutar acción en el backend
+export const executeAction = async (gameId: string, action: GameAction) => {
+  return await gameService.executeAction(gameId, action);
 };

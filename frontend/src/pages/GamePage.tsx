@@ -834,12 +834,10 @@ const GamePage: React.FC = () => {
     }
   };
 
-  // Finalizar turno
+  // Finalizar turno - ahora sólo llama a la función del contexto
   const handleEndTurn = () => {
-    console.log("handleEndTurn llamando a endTurn del contexto");
-    
-    endTurn();
-    console.log("Despues de endTurn");
+    console.log("Finalizando turno desde la interfaz");
+    endTurn(); // Esta función en el contexto se encargará de todo
   };
     // Guardar partida
   const handleSaveGame = async () => {

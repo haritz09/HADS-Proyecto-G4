@@ -733,13 +733,13 @@ export const gameService = {
   
   // Acciones del juego usando el sistema unificado de acciones
   executeAction: async (gameId: string, action: any) => {
-    console.log(`API: Executing action of type ${action.type} for game ${gameId}`);
     try {
+      console.log(`Ejecutando acción ${action.type} en el juego ${gameId}`);
       const response = await API.post(`/games/${gameId}/action`, action);
       return response;
-    } catch (err) {
-      console.error('Error executing game action:', err);
-      throw err;
+    } catch (error) {
+      console.error(`Error al ejecutar acción ${action.type}:`, error);
+      throw error;
     }
   },
   

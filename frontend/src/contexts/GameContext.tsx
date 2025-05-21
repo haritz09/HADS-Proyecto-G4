@@ -287,22 +287,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Finalizar turno
   const endTurn = async () => {
     if (!gameState || !gameId) {
-      console.log("Dentro de if (!gameState || !gameId)");
+      console.log("No hay partida activa para finalizar el turno");
       setError('No hay partida activa');
       return;
     }
     
     try {
-      console.log("Dentro de try");
+      console.log("Enviando acción de fin de turno al backend");
       setLoading(true);
       
+      // Crear la acción de finalizar turno
       const action = createEndTurnAction();
       const response = await executeAction(gameId, action);
       
+      // Actualizar el estado del juego con la respuesta del backend
       setGameState(response.data.game_state);
       setSelectedHero(null);
       
-      // Usa la estructura correcta del estado del juego
+      // Si ahora es el turno de la IA, iniciar el proceso de turno de la IA
       if (response.data.game_state.current_player === 'ai') {
         setGameMessage('Turno finalizado. Ahora es el turno de la IA');
         
