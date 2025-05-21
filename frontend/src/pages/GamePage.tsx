@@ -23,6 +23,7 @@ import Button from '../components/ui/Button';
 import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
 import RecruitmentMenu from '../components/game/RecruitmentMenu';
 import CombatModal from '../components/game/CombatModal';
+import PlayerInteractionSummary from '../components/game/PlayerInteractionSummary';
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
@@ -56,6 +57,10 @@ const GamePage: React.FC = () => {
   const combatInProgressRef = useRef<boolean>(false); // Ref to track combat progress
   // Add state for settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Add state for player interaction summary
+  const [playerInteraction, setPlayerInteraction] = useState<any>(null);
+  const [showPlayerInteraction, setShowPlayerInteraction] = useState<boolean>(false);
 
   const { 
     selectHero, 
@@ -246,6 +251,11 @@ const GamePage: React.FC = () => {
       return;
     }
 
+    // Log selectedHero stats for debugging
+    console.log("Selected Hero Stats:", selectedHero?.stats);
+    console.log("Movement points left:", selectedHero?.stats?.movement_points_left);
+    console.log("Total movement points:", selectedHero?.stats?.movement_points);
+    
     console.log(`GamePage: Attempting to move hero ${selectedHero.id} from: (${selectedHero.position.x},${selectedHero.position.y}) to: (${position.x},${position.y})`);
 
     try {
@@ -412,16 +422,33 @@ const GamePage: React.FC = () => {
           
           // Procesar interacciones en el destino (artefactos, minas, combate)
           if (response.data?.result?.interaction) {
-            if (response.data.result.interaction === 'combat') {
+            const interaction = response.data.result.interaction;
+            
+            // Check if it's a combat interaction
+            if (interaction === 'combat') {
               setCombatInteraction(response.data.result);
               combatInProgressRef.current = true;
-            } else if (response.data.result.interaction.interaction === 'artifact_collected') {
-              setGameMessage(`¡Has recogido un artefacto: ${response.data.result.interaction.artifact}!`);
-            } else if (response.data.result.interaction.interaction === 'resource_site_captured') {
-              setGameMessage(`¡Has capturado un sitio de recursos!`);
+            } 
+            // Handle artifact or resource interaction
+            else if (typeof interaction === 'object') {
+              if (interaction.interaction === 'artifact_collected' || 
+                  interaction.interaction === 'resource_site_captured') {
+                setPlayerInteraction(interaction);
+                setShowPlayerInteraction(true);
+                
+                // Set appropriate game message
+                if (interaction.interaction === 'artifact_collected') {
+                  setGameMessage(`Has encontrado un artefacto: ${interaction.artifact}`);
+                } else if (interaction.interaction === 'resource_site_captured') {
+                  const resourceType = interaction.resource_type || 'recurso';
+                  setGameMessage(`Has capturado una mina de ${resourceType}`);
+                }
+              }
+            } else {
+              setGameMessage(`Movimiento completado a (${position.x}, ${position.y})`);
             }
           } else {
-            setGameMessage("Movimiento completado");
+            setGameMessage(`Movimiento completado a (${position.x}, ${position.y})`);
           }
         }
       }
@@ -1124,6 +1151,13 @@ const GamePage: React.FC = () => {
           onClose={() => setShowSettingsModal(false)}
         />
       )}
+
+      {/* Add player interaction summary component */}
+      <PlayerInteractionSummary
+        isVisible={showPlayerInteraction}
+        onClose={() => setShowPlayerInteraction(false)}
+        interactionData={playerInteraction}
+      />
     </div>
   );
 };

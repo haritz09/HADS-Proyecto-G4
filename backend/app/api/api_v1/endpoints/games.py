@@ -677,16 +677,19 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
     Procesa la respuesta de la IA, extrae las acciones y las ejecuta secuencialmente.
     """
     try:
+        # Preprocesar la respuesta para eliminar etiquetas XML de los valores JSON
+        cleaned_content = clean_ai_response(ai_response_content)
+        
         # Intentar analizar diferentes formatos de respuesta JSON
         ai_actions = None
         try:
-            # Intento principal: respuesta completa en formato JSON
-            ai_actions = json.loads(ai_response_content)
+            # Intento principal: respuesta completa en formato JSON limpio
+            ai_actions = json.loads(cleaned_content)
             print(f"Intento principal: respuesta completa en formato JSON: {ai_actions}")
         except json.JSONDecodeError:
             # Si falla, intentar extraer solo la parte JSON usando expresiones regulares
             import re
-            json_match = re.search(r'```json\s*(.*?)\s*```', ai_response_content, re.DOTALL)
+            json_match = re.search(r'```json\s*(.*?)\s*```', cleaned_content, re.DOTALL)
             if json_match:
                 try:
                     ai_actions = json.loads(json_match.group(1))
@@ -695,7 +698,7 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
             
             # Si aún no hemos encontrado JSON válido, buscar la primera ocurrencia de { hasta la última de }
             if not ai_actions:
-                json_match = re.search(r'(\{.*\})', ai_response_content, re.DOTALL)
+                json_match = re.search(r'(\{.*\})', cleaned_content, re.DOTALL)
                 if json_match:
                     try:
                         ai_actions = json.loads(json_match.group(1))
@@ -704,7 +707,7 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
         
         # Si después de todos los intentos no tenemos un objeto JSON, mostrar error
         if not ai_actions:
-            raise ValueError(f"No se pudo parsear la respuesta de la IA: {ai_response_content[:100]}...")
+            raise ValueError(f"No se pudo parsear la respuesta de la IA: {cleaned_content[:100]}...")
         
         # Verificar que la respuesta tiene el formato esperado
         if not isinstance(ai_actions, dict):
@@ -890,3 +893,41 @@ async def initialize_new_game(
     
     # Crear la partida usando el CRUD existente
     return create_game(game_data)
+
+def clean_ai_response(content: str) -> str:
+    """
+    Limpia la respuesta de la IA de etiquetas XML que pueden estar dentro de valores JSON
+    """
+    if not content:
+        return content
+        
+    try:
+        # Patrón para encontrar etiquetas XML dentro de valores de cadena JSON
+        # Busca patrones <tag>...</tag> dentro de cadenas entrecomilladas
+        import re
+        
+        # Eliminar etiquetas XML que rodean toda la respuesta
+        content = re.sub(r'^<[\w_]+>(.*)</[\w_]+>$', r'\1', content.strip(), flags=re.DOTALL)
+        
+        # Patrón para etiquetas dentro de valores de string JSON
+        pattern = r'(\"[^\"]*?)(<[\w_]+>)(.*?)(</[\w_]+>)([^\"]*?\")'
+        
+        # Función para procesar cada coincidencia
+        def replace_xml_tags(match):
+            prefix = match.group(1)  # Texto antes de la etiqueta de apertura
+            content = match.group(3)  # Contenido entre etiquetas
+            suffix = match.group(5)  # Texto después de la etiqueta de cierre
+            return f'{prefix}{content}{suffix}'
+        
+        # Reemplazar etiquetas XML dentro de valores string
+        cleaned = re.sub(pattern, replace_xml_tags, content)
+        
+        # Intentar de nuevo con otro patrón para casos donde la etiqueta de apertura 
+        # podría estar al principio de un valor de cadena
+        pattern2 = r'(\")([\s]*<[\w_]+>)(.*?)(</[\w_]+>[\s]*)(\")' 
+        cleaned = re.sub(pattern2, lambda m: f'"{m.group(3)}"', cleaned)
+        
+        return cleaned
+    except Exception as e:
+        logger.error(f"Error al limpiar etiquetas XML de la respuesta JSON: {e}")
+        return content

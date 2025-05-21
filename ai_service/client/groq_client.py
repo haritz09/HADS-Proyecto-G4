@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
-import requests  # Usamos requests para manejar las solicitudes HTTP
+import requests
 import json
+import re  # Añadir importación para usar expresiones regulares
 from groq import Groq
 from groq import RateLimitError, APIError
 from ..exceptions.rate_limit_error import RateLimitExceededError
@@ -97,16 +98,12 @@ You can also build these structures in your cities with buildStructure (to build
 -"mage_tower": {"gold": 2000, "wood": 100, "stone": 100},
 -"dragons_lair": {"gold": 5000, "wood": 200, "stone": 200}
 You can also build a tavern in the castle to increase the maximum number of heroes you can have (so you don't lose when a hero dies):
--"tavern": {"gold": 1000, "wood": 200, "stone": 200} 
- Before providing your final response, wrap your thought process and 
-strategic considerations inside <strategic_planning> tags. In this section:
- 1. Summarize the current game state, including hero positions, resources, 
-and known enemy information.
- 2. List out potential opportunities and threats.
- 3. Prioritize objectives based on the current situation.
- 4. Outline a short-term (this turn) and long-term (next few turns) strategy.
- It's OK for this section to be quite long, as thorough planning is crucial 
-for success in the game.
+-"tavern": {"gold": 1000, "wood": 200, "stone": 200}
+
+ IMPORTANT: First, think through your strategic planning. After you've thought through your strategy, 
+ you'll provide your response in PURE JSON format. Do not include any XML tags inside the JSON values!
+ The fields like "summary", "reasoning", etc. should contain plain text without any XML tags.
+ 
  Your final response should be in the following JSON format:
 {
   "actions": [
@@ -192,7 +189,8 @@ for success in the game.
   "analysis": "Brief game state analysis and implications for future."
 }
 
-Only output this JSON object. Do not wrap it in any tags or add additional explanation.
+Your response must be a valid JSON object. Do not include XML tags or text markers like <strategic_planning> 
+inside your JSON values. Only output this JSON object without any additional text.
 """
 
 
@@ -238,8 +236,11 @@ This is the strategic planning and context from the current game. Use this to in
                 # Extract strategic_planning from response if available
                 try:
                     content = response.choices[0].message.content
+                    # Limpiar etiquetas XML que puedan estar dentro de los valores JSON
+                    cleaned_content = self._clean_xml_tags_from_json(content)
+                    
                     # Try to parse content as JSON
-                    json_data = json.loads(content)
+                    json_data = json.loads(cleaned_content)
                     if "strategic_planning" in json_data:
                         self.actual_context = json_data["strategic_planning"]
                         print("Updated strategic planning context")
@@ -247,7 +248,12 @@ This is the strategic planning and context from the current game. Use this to in
                     # If not valid JSON or missing the expected structure, ignore
                     pass
                 
-                # Return the original response
+                # Clean the content before returning the response
+                if hasattr(response.choices[0].message, 'content'):
+                    cleaned_content = self._clean_xml_tags_from_json(response.choices[0].message.content)
+                    response.choices[0].message.content = cleaned_content
+                
+                # Return the original response with cleaned content
                 return response
             except RateLimitError as e:
                 # Handle Groq specific rate limit error
@@ -323,6 +329,39 @@ This is the strategic planning and context from the current game. Use this to in
                 else:
                     # Re-raise other API errors
                     raise
+    
+    def _clean_xml_tags_from_json(self, content):
+        """
+        Remove XML tags that might be embedded within JSON string values.
+        This prevents parsing errors when the model incorrectly includes tags.
+        """
+        if not content:
+            return content
+            
+        try:
+            # Pattern to match XML tags inside JSON string values
+            # This looks for <tag>...</tag> patterns inside quoted strings
+            pattern = r'(\"[^\"]*?)(<[\w_]+>)(.*?)(</[\w_]+>)([^\"]*?\")'
+            
+            # Function to process each match
+            def replace_xml_tags(match):
+                prefix = match.group(1)
+                content = match.group(3)
+                suffix = match.group(5)
+                return f'{prefix}{content}{suffix}'
+            
+            # Replace XML tags inside string values
+            cleaned = re.sub(pattern, replace_xml_tags, content)
+            
+            # Try again with another pattern for cases where the opening tag might be
+            # at the very beginning of a string value
+            pattern2 = r'(\")([\s]*<[\w_]+>)(.*?)(</[\w_]+>[\s]*)(\")' 
+            cleaned = re.sub(pattern2, lambda m: f'"{m.group(3)}"', cleaned)
+            
+            return cleaned
+        except Exception as e:
+            print(f"Error cleaning XML tags from JSON: {e}")
+            return content
     
     def get_actual_context(self):
         """
