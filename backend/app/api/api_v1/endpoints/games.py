@@ -12,7 +12,7 @@ from backend.app.db.crud import (
     get_db_client
 )
 from bson import ObjectId
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 import logging
 import json
 
@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 from ai_service.client.groq_client import GroqClient
 
 router = APIRouter()
+
+# Estado global para rastrear solicitudes en curso de la IA
+ai_requests_status = {}  # game_id -> status info
 
 def ensure_buildings_have_building_type(game_state):
     """Ensure all buildings have a building_type field to avoid validation errors."""
@@ -570,11 +573,53 @@ async def aplicar_cheat(
         raise HTTPException(status_code=400, detail=str(e))
     
 
+@router.get("/{game_id}/ai/status")
+async def get_ai_status(
+    game_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Obtiene el estado actual de la solicitud de IA para una partida específica.
+    """
+    game = get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    if str(game["user_id"]) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="No autorizado para esta partida")
+    
+    # Si no hay estado registrado o el estado es muy antiguo (más de 5 minutos), devolver estado inactivo
+    if game_id not in ai_requests_status:
+        return {
+            "status": "idle",
+            "message": "No hay solicitud en curso",
+            "retrying": False,
+            "retry_count": 0,
+            "retry_wait_time": 0,
+            "current_model": None,
+            "started_at": None,
+            "updated_at": None
+        }
+    
+    # Si hay un estado, devolverlo
+    status = ai_requests_status[game_id]
+    
+    # Si el estado indica 'completado' o 'error' y es antiguo (más de 2 minutos), limpiar para liberar memoria
+    if status.get("status") in ["completed", "error"]:
+        updated_at = status.get("updated_at")
+        if updated_at:
+            updated_time = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+            if (datetime.now(UTC) - updated_time) > timedelta(minutes=2):
+                # Limpiar estado antiguo pero devolver una copia antes de eliminar
+                result = status.copy()
+                del ai_requests_status[game_id]
+                return result
+    
+    return status
 
 @router.post("/{game_id}/ai")
 async def communicate_with_ai(
     game_id: str,
-    execute_actions: bool = False,  # Nuevo parámetro para decidir si ejecutar acciones automáticamente
+    execute_actions: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -590,19 +635,65 @@ async def communicate_with_ai(
     if not game_state:
         raise HTTPException(status_code=400, detail="La partida no tiene estado de juego válido")
     
+    # Inicializar o actualizar el estado de la solicitud
+    ai_requests_status[game_id] = {
+        "status": "processing",
+        "message": "Procesando solicitud de IA",
+        "retrying": False,
+        "retry_count": 0,
+        "retry_wait_time": 0,
+        "current_model": None,
+        "started_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat()
+    }
+    
     # Obtener instancia singleton de GroqClient
     groq_client = GroqClient()
+    ai_requests_status[game_id]["current_model"] = groq_client.default_model
+    
+    # Definir función callback para rastrear reintentos
+    def on_retry_callback(retry_info):
+        # Actualizar el estado con información de reintento
+        ai_requests_status[game_id]["retrying"] = True
+        ai_requests_status[game_id]["retry_count"] = retry_info.get("retry_count", 0)
+        ai_requests_status[game_id]["retry_wait_time"] = retry_info.get("retry_after", 0)
+        ai_requests_status[game_id]["current_model"] = retry_info.get("new_model", groq_client.default_model)
+        ai_requests_status[game_id]["message"] = f"Reintentando en {retry_info.get('retry_after', 0)} segundos con modelo {retry_info.get('new_model', groq_client.default_model)}"
+        ai_requests_status[game_id]["updated_at"] = datetime.now(UTC).isoformat()
+        
+    # Registrar el callback
+    groq_client.set_retry_callback(on_retry_callback)
+    
     try:
         # Verificar que es el turno de la IA
         if game_state.get("current_player") != "ai":
+            # Actualizar estado antes de lanzar la excepción
+            ai_requests_status[game_id].update({
+                "status": "error",
+                "message": "No es el turno de la IA",
+                "updated_at": datetime.now(UTC).isoformat()
+            })
             raise HTTPException(status_code=400, detail="No es el turno de la IA")
         
+        # Actualizar estado para indicar que estamos enviando a Groq
+        ai_requests_status[game_id].update({
+            "message": f"Enviando solicitud a Groq (modelo: {groq_client.default_model})",
+            "updated_at": datetime.now(UTC).isoformat()
+        })
+        
         # Obtener respuesta de la IA
-        #ai_response = groq_client.send_message(game_state)
         from ai_service.strategy.decision_maker import create_strategic_summary
         strategic_summary = create_strategic_summary(game_state)
         ai_response = groq_client.send_message(strategic_summary)
         response_content = ai_response.choices[0].message.content
+        
+        # Actualizar estado a completado
+        ai_requests_status[game_id].update({
+            "status": "completed",
+            "message": "Respuesta de IA recibida correctamente",
+            "retrying": False,
+            "updated_at": datetime.now(UTC).isoformat()
+        })
         
         print(f"Promt de la IA recibido: {response_content}")
  
@@ -614,6 +705,13 @@ async def communicate_with_ai(
         return await process_ai_actions(game_id, response_content, game, game_state)
         
     except Exception as e:
+        # Actualizar estado a error
+        ai_requests_status[game_id].update({
+            "status": "error",
+            "message": f"Error: {str(e)}",
+            "updated_at": datetime.now(UTC).isoformat()
+        })
+        
         raise HTTPException(status_code=500, detail=f"Error comunicando con la IA: {str(e)}")
 
 def normalize_ai_action(action):

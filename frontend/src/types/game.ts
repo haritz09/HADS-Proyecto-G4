@@ -156,3 +156,18 @@ export interface GameState {
   map: GameMap;
   cities?: City[]; // Optional cities directly on gameState
 }
+
+// Asegúrate de que GameContextType incluya las nuevas propiedades
+export interface GameContextType {
+  // ...existing code...
+  aiRetryInfo: {
+    retrying: boolean;
+    retryCount: number;
+    retryWaitTime: number;
+    currentModel: string | null;
+  };
+  aiStatusPolling: boolean;
+  pollingRetryCount: number;
+  aiResponseReceived: boolean;
+  handleAiSummaryClose: () => void;
+}

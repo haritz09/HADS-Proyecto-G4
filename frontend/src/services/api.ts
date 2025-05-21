@@ -22,7 +22,30 @@ const API = axios.create({
   timeout: 5000
 });
 
-// Interceptor para agregar el token de autenticación
+// Instancia específica para consultas de estado de la IA con timeout más largo
+const AI_STATUS_API = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api',
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  withCredentials: false,
+  timeout: 30000 // 30 segundos para consultas de estado de la IA
+});
+
+// Aplicar el mismo interceptor a la instancia para consultas de IA
+AI_STATUS_API.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Interceptor para agregar el token de autenticación (instancia principal)
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
@@ -398,6 +421,7 @@ const syncArtifactsWithTiles = (gameState: any) => {
   return updatedGameState;
 };
 
+// Servicios de API para el juego
 export const gameService = {
   getScenarios: async () => {
     return await API.get('/scenarios');
@@ -803,16 +827,15 @@ export const gameService = {
     }
   },
   
-  executeAIActions: async (gameId: string) => {
-    try {
-      console.log(`API: Executing AI actions for game ${gameId}`);
-      // This gets and executes the actions in one call
-      const response = await API.post(`/games/${gameId}/ai?execute_actions=true`);
-      return response;
-    } catch (err) {
-      console.error('Error executing AI actions:', err);
-      throw err;
-    }
+  executeAIActions: (gameId: string) => {
+    console.log(`API: Executing AI actions for game ${gameId}`);
+    return API.post(`/games/${gameId}/ai?execute_actions=true`);
+  },
+  
+  // Consultar estado de la IA - usar la instancia con timeout largo
+  checkAiStatus: (gameId: string) => {
+    console.log(`API: Checking AI status for game ${gameId}`);
+    return AI_STATUS_API.get(`/games/${gameId}/ai/status`);
   },
 
   initializeGame: async (scenarioId: string) => {

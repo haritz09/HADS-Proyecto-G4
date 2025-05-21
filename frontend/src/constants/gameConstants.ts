@@ -95,6 +95,9 @@ export const RESOURCE_CONFIG = {
 
 // Tiempo de respuesta máximo para AI
 export const AI_RESPONSE_TIMEOUT = 30000; // 30 segundos
+export const AI_STATUS_POLL_TIMEOUT = 30000; // 30 segundos para consultas de estado
+export const AI_STATUS_POLL_INTERVAL = 2000; // 2 segundos entre consultas
+export const AI_STATUS_MAX_RETRIES = 15; // Máximo número de reintentos antes de mostrar advertencia
 
 // Acciones del juego
 export enum GameAction {

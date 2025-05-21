@@ -15,10 +15,8 @@ import GameMap, { GameMapRef } from '../components/game/GameMap';
 import GameControls from '../components/game/GameControls';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
-import AIViewModeSettings from '../components/game/AIViewModeSettings';
 import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
 import AIActionsSummary from '../components/game/AIActionsSummary';
-import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
 import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
 import RecruitmentMenu from '../components/game/RecruitmentMenu';
@@ -55,7 +53,7 @@ const GamePage: React.FC = () => {
   const [showRecruitmentMenu, setShowRecruitmentMenu] = useState<boolean>(false);
   const [combatInteraction, setCombatInteraction] = useState<any>(null); // State for combat interaction
   const combatInProgressRef = useRef<boolean>(false); // Ref to track combat progress
-  // Add state for settings modal
+  // Remove state for settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Add state for player interaction summary
@@ -66,16 +64,11 @@ const GamePage: React.FC = () => {
     selectHero, 
     moveHero, 
     endTurn, 
-    aiViewMode, 
-    setAiViewMode,
     aiThinking,
     showAiSummary,
     setShowAiSummary,
     aiActions,
     aiStrategicInfo,
-    playbackSpeed,
-    setPlaybackSpeed,
-    skipAnimation,
     loadGame: loadGameContext
   } = useGame();
   
@@ -951,9 +944,9 @@ const GamePage: React.FC = () => {
   const isPlayerTurn = gameState?.current_player === 'player';
 
   // Handler para cambio de modo de visualización de la IA
-  const handleAIViewModeChange = (mode: string) => {
-    setAiViewMode(mode as any);
-  };
+  // const handleAIViewModeChange = (mode: string) => {
+  //   setAiViewMode(mode as any);
+  // };
 
   // Mostrar panel de configuración de visualización
   const toggleSettingsPanel = () => {
@@ -968,8 +961,8 @@ const GamePage: React.FC = () => {
   };
 
   const handleOpenSettings = () => {
-    // Open settings modal
-    setShowSettingsModal(true);
+    // Open performance settings instead of AI view settings
+    setShowSettings(true);
   };
 
   if (loading) {
@@ -984,7 +977,7 @@ const GamePage: React.FC = () => {
   }
 
   return (
-    <div className={`game-page ${aiViewMode !== 'normal' ? `ai-view-mode-${aiViewMode}` : ''}`}>
+    <div className="game-page">
       <div className="game-header">
         <ResourceBar resources={getCurrentPlayerResources()} />
       </div>
@@ -1128,7 +1121,7 @@ const GamePage: React.FC = () => {
         />
       )}
       
-      {/* Add CombatModal with improved rendering logic */}
+      {/* Combat Modal */}
       {combatInteraction && combatInteraction.interaction === 'combat' && (
         <CombatModal
           isOpen={true}
@@ -1143,14 +1136,14 @@ const GamePage: React.FC = () => {
         />
       )}
       
-      {/* These components will be conditionally rendered based on their visibility props */}
-      {showSettingsModal && (
+      {/* Remove AIViewModeSettings component */}
+      {/* {showSettingsModal && (
         <AIViewModeSettings
           currentMode={aiViewMode}
           onModeChange={setAiViewMode}
           onClose={() => setShowSettingsModal(false)}
         />
-      )}
+      )} */}
 
       {/* Add player interaction summary component */}
       <PlayerInteractionSummary
