@@ -525,6 +525,9 @@ def initialize_game_state():
     # Inicialmente todo oculto
     fog_of_war = [True] * total_tiles
     
+    # Inicializar array de exploración (inicialmente nada está explorado)
+    explored = [False] * total_tiles
+    
     # Revelar área alrededor del héroe del jugador y su castillo
     player_pos = player_hero["position"]
     castle_pos = player_cities[0]["position"]  # Central castle
@@ -541,6 +544,7 @@ def initialize_game_state():
                 idx = y * map_size + x
                 if 0 <= idx < total_tiles:  # Asegurar índice válido
                     fog_of_war[idx] = False
+                    explored[idx] = True  # También marcar como explorado
     
     # Generar los tiles del mapa
     map_tiles = generate_map_tiles(map_size, map_size)
@@ -563,7 +567,7 @@ def initialize_game_state():
             "size": {"width": map_size, "height": map_size},
             "tiles": map_tiles,  # Aquí incluimos los tiles generados
             "fog_of_war": fog_of_war,
-            "explored": [],  # Se poblará después
+            "explored": explored,  # Incluir el array explored inicializado
             "visible_objects": resource_mines + artifacts  # Combinar minas y artefactos
         }
     }

@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 import requests
 import json
-import re  # Añadir importación para usar expresiones regulares
+import re
 from groq import Groq
 from groq import RateLimitError, APIError
 from ..exceptions.rate_limit_error import RateLimitExceededError
@@ -42,7 +42,17 @@ class GroqClient:
         self.default_model = self.available_models[self.current_model_index]
         self.actual_context = None  # Initialize context storage
         self.is_first_message = True  # Track if this is the first message
+        self.retry_callback = None  # Callback para notificar reintentos
         self._initialized = True
+        
+    def set_retry_callback(self, callback):
+        """
+        Establece una función de callback para notificar reintentos
+        
+        Args:
+            callback: Función que recibe un diccionario con información del reintento
+        """
+        self.retry_callback = callback
         
     def send_message(self, game_state, model=None):
         """
@@ -277,6 +287,16 @@ This is the strategic planning and context from the current game. Use this to in
             except RateLimitError as e:
                 # Handle Groq specific rate limit error
                 remaining_models -= 1
+                
+                # Notify about retry if callback is registered
+                if self.retry_callback:
+                    retry_info = {
+                        "retry_count": len(self.available_models) - remaining_models,
+                        "retry_after": getattr(e, 'retry_after', 22),  # Default to 22s if not available
+                        "original_model": self.available_models[self.current_model_index - 1 if self.current_model_index > 0 else len(self.available_models) - 1],
+                        "new_model": self.default_model
+                    }
+                    self.retry_callback(retry_info)
             
                 # Si no quedan modelos, lanzamos un error
                 if remaining_models <= 0:
@@ -297,8 +317,16 @@ This is the strategic planning and context from the current game. Use this to in
             except requests.exceptions.HTTPError as e:
                 # Si es un error HTTP 429, analizamos el contenido
                 if e.response.status_code == 429:
-                    # No mostrar el mensaje de error detallado, solo el mensaje simplificado
-                    
+                    # Notify about retry if callback is registered
+                    if self.retry_callback:
+                        retry_info = {
+                            "retry_count": len(self.available_models) - remaining_models + 1,
+                            "retry_after": e.response.headers.get('Retry-After', 22),
+                            "original_model": self.default_model,
+                            "new_model": self.available_models[(self.current_model_index + 1) % len(self.available_models)]
+                        }
+                        self.retry_callback(retry_info)
+                        
                     # Decrease remaining attempts
                     remaining_models -= 1
                 
@@ -324,7 +352,15 @@ This is the strategic planning and context from the current game. Use this to in
             except APIError as e:
                 # Check if this is a rate limit error (status code 429)
                 if getattr(e, 'status_code', 0) == 429 or "rate limit" in str(e).lower():
-                    # No mostrar el mensaje de error detallado, solo el mensaje simplificado
+                    # Notify about retry if callback is registered
+                    if self.retry_callback:
+                        retry_info = {
+                            "retry_count": len(self.available_models) - remaining_models + 1,
+                            "retry_after": getattr(e, 'retry_after', 22),
+                            "original_model": self.default_model,
+                            "new_model": self.available_models[(self.current_model_index + 1) % len(self.available_models)]
+                        }
+                        self.retry_callback(retry_info)
                     
                     # Decrease remaining attempts
                     remaining_models -= 1

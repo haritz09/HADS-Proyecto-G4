@@ -143,10 +143,12 @@ class GameMap(BaseModel):
 
 class GameState(BaseModel):
     turn: int
+    current_player: str
     player: Entity
     ai: Entity
     map: GameMap
-    current_player: str
+    cities: Optional[List[City]] = None
+    status: Optional[str] = 'ongoing'  # Add status field with default value
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,

@@ -54,6 +54,7 @@ export const HERO_CONFIG = {
   LEVEL_UP_EXPERIENCE: 1000,
   MAX_ARTIFACTS: 7,
   MAX_ARMY_SLOTS: 7,
+  VISION_RADIUS: 3, // Rango de visión estándar para héroes (en casillas)
 };
 
 // Configuración de combate
@@ -95,6 +96,9 @@ export const RESOURCE_CONFIG = {
 
 // Tiempo de respuesta máximo para AI
 export const AI_RESPONSE_TIMEOUT = 30000; // 30 segundos
+export const AI_STATUS_POLL_TIMEOUT = 30000; // 30 segundos para consultas de estado
+export const AI_STATUS_POLL_INTERVAL = 2000; // 2 segundos entre consultas
+export const AI_STATUS_MAX_RETRIES = 15; // Máximo número de reintentos antes de mostrar advertencia
 
 // Acciones del juego
 export enum GameAction {
@@ -113,4 +117,11 @@ export enum GameStatus {
   VICTORY = 'victory',
   DEFEAT = 'defeat',
   DRAW = 'draw',
+}
+
+// Tipos de visibilidad de las casillas
+export enum TileVisibility {
+  UNEXPLORED = 'unexplored',  // Nunca visto (negro)
+  EXPLORED = 'explored',      // Visto anteriormente (gris)
+  VISIBLE = 'visible',        // Visible actualmente (normal)
 }

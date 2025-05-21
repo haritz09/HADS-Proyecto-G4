@@ -15,15 +15,14 @@ import GameMap, { GameMapRef } from '../components/game/GameMap';
 import GameControls from '../components/game/GameControls';
 import ResourceBar from '../components/game/ResourceBar';
 import HeroInfo from '../components/game/HeroInfo';
-import AIViewModeSettings from '../components/game/AIViewModeSettings';
 import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
 import AIActionsSummary from '../components/game/AIActionsSummary';
-import AIPlaybackControls from '../components/game/AIPlaybackControls';
 import Button from '../components/ui/Button';
 import BuildingConstructionMenu from '../components/game/BuildingConstructionMenu';
 import RecruitmentMenu from '../components/game/RecruitmentMenu';
 import CombatModal from '../components/game/CombatModal';
 import PlayerInteractionSummary from '../components/game/PlayerInteractionSummary';
+import GameOverScreen from '../components/screens/GameOverScreen';
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
@@ -55,9 +54,16 @@ const GamePage: React.FC = () => {
   const [showRecruitmentMenu, setShowRecruitmentMenu] = useState<boolean>(false);
   const [combatInteraction, setCombatInteraction] = useState<any>(null); // State for combat interaction
   const combatInProgressRef = useRef<boolean>(false); // Ref to track combat progress
-  // Add state for settings modal
+  // Remove state for settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  
+  // Add state for AI view mode
+  const [aiViewMode, setAiViewMode] = useState<'normal' | 'changeView' | 'splitView'>('normal');
+  const isAiViewMode = aiViewMode !== 'normal';
 
+  // Add only the missing showCombatModal state (not duplicating combatInteraction)
+  const [showCombatModal, setShowCombatModal] = useState<boolean>(false);
+  
   // Add state for player interaction summary
   const [playerInteraction, setPlayerInteraction] = useState<any>(null);
   const [showPlayerInteraction, setShowPlayerInteraction] = useState<boolean>(false);
@@ -66,16 +72,11 @@ const GamePage: React.FC = () => {
     selectHero, 
     moveHero, 
     endTurn, 
-    aiViewMode, 
-    setAiViewMode,
     aiThinking,
     showAiSummary,
     setShowAiSummary,
     aiActions,
     aiStrategicInfo,
-    playbackSpeed,
-    setPlaybackSpeed,
-    skipAnimation,
     loadGame: loadGameContext
   } = useGame();
   
@@ -951,9 +952,9 @@ const GamePage: React.FC = () => {
   const isPlayerTurn = gameState?.current_player === 'player';
 
   // Handler para cambio de modo de visualización de la IA
-  const handleAIViewModeChange = (mode: string) => {
-    setAiViewMode(mode as any);
-  };
+  // const handleAIViewModeChange = (mode: string) => {
+  //   setAiViewMode(mode as any);
+  // };
 
   // Mostrar panel de configuración de visualización
   const toggleSettingsPanel = () => {
@@ -968,23 +969,31 @@ const GamePage: React.FC = () => {
   };
 
   const handleOpenSettings = () => {
-    // Open settings modal
-    setShowSettingsModal(true);
+    // Open performance settings instead of AI view settings
+    setShowSettings(true);
   };
 
-  if (loading) {
-    return <div className="loading-screen">Cargando partida...</div>;
-  }
+  // Función para manejar reinicio de partida
+  const handleRestartGame = async () => {
+    try {
+      if (!gameId) return;
+      // Crear una nueva partida con el mismo escenario
+      const scenarioId = "default"; // O recuperar de algún lugar si está disponible
+      const response = await gameService.initializeGame(scenarioId);
+      
+      // Redirigir a la nueva partida
+      navigate(`/game/${response.data._id}`);
+    } catch (error) {
+      console.error("Error restarting game:", error);
+      setError('Error al reiniciar la partida');
+    }
+  };
   
-  if (error || !gameState) {
-    return <div className="error-screen">
-      {error || 'Error desconocido al cargar la partida'}
-      <Button onClick={() => navigate('/menu')}>Volver al menú</Button>
-    </div>;
-  }
-
+  // Verificar si la partida ha terminado
+  const isGameOver = gameState?.status && gameState.status !== 'ongoing';
+  
   return (
-    <div className={`game-page ${aiViewMode !== 'normal' ? `ai-view-mode-${aiViewMode}` : ''}`}>
+    <div className={`game-page ${isAiViewMode ? `ai-view-mode-${aiViewMode}` : ''}`}>
       <div className="game-header">
         <ResourceBar resources={getCurrentPlayerResources()} />
       </div>
@@ -1128,14 +1137,13 @@ const GamePage: React.FC = () => {
         />
       )}
       
-      {/* Add CombatModal with improved rendering logic */}
-      {combatInteraction && combatInteraction.interaction === 'combat' && (
+      {/* Combat Modal */}
+      {showCombatModal && combatInteraction && gameState && (
         <CombatModal
-          isOpen={true}
+          isOpen={showCombatModal}
           onClose={() => {
-            console.log('GamePage: Closing combat modal');
+            setShowCombatModal(false);
             setCombatInteraction(null);
-            combatInProgressRef.current = false;
           }}
           combatResult={combatInteraction.combat_result}
           playerHero={gameState.player.heroes.find(h => h.id === selectedHero?.id) || gameState.player.heroes[0]}
@@ -1143,14 +1151,14 @@ const GamePage: React.FC = () => {
         />
       )}
       
-      {/* These components will be conditionally rendered based on their visibility props */}
-      {showSettingsModal && (
+      {/* Remove AIViewModeSettings component */}
+      {/* {showSettingsModal && (
         <AIViewModeSettings
           currentMode={aiViewMode}
           onModeChange={setAiViewMode}
           onClose={() => setShowSettingsModal(false)}
         />
-      )}
+      )} */}
 
       {/* Add player interaction summary component */}
       <PlayerInteractionSummary
@@ -1158,6 +1166,15 @@ const GamePage: React.FC = () => {
         onClose={() => setShowPlayerInteraction(false)}
         interactionData={playerInteraction}
       />
+      
+      {/* Mostrar pantalla de fin de juego si la partida ha terminado */}
+      {isGameOver && gameState?.status && (
+        <GameOverScreen 
+          status={gameState.status as 'victory' | 'defeat' | 'draw'}
+          gameState={gameState}
+          onRestart={handleRestartGame}
+        />
+      )}
     </div>
   );
 };

@@ -137,14 +137,44 @@
 /* Indicador visual del camino más claro */
 .path-indicator {
   position: absolute;
-  width: 10px;
-  height: 10px;
-  background-color: rgba(255, 255, 255, 0.7);
+  width: 12px;
+  height: 12px;
+  background-color: rgba(50, 150, 255, 0.8); /* Changed to blue for better visibility */
   border-radius: 50%;
+  box-shadow: 0 0 5px rgba(0, 100, 255, 0.8);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 8;
+  pointer-events: none;
+  animation: pathPulse 1.5s infinite;
+}
+
+/* Animation for path indicators */
+@keyframes pathPulse {
+  0% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.8); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.8); }
+}
+
+/* Styling for explored but not currently visible tiles */
+.explored-tile {
+  position: relative;
+  filter: grayscale(70%);
+  opacity: 0.8;
+}
+
+/* Styling for structures in explored areas */
+.explored-only {
+  opacity: 0.7;
+  filter: grayscale(80%);
+  pointer-events: none; /* Prevent interaction with structures not in current view */
+}
+
+/* Unexplored tiles */
+.unexplored-tile {
+  background-color: #000;
+  cursor: not-allowed;
 }
 
 /* Estilos para casillas con héroes moviéndose */
@@ -168,100 +198,8 @@
 .hero-sprite.moving {
   animation: heroMove 0.2s ease-in-out;
   z-index: 25; /* Ensure moving heroes appear above other elements */
-}
-
-/* Resaltado para héroe seleccionado */
-.selected-hero {
-  box-shadow: inset 0 0 0 3px gold;
-  animation: selectedPulse 1.5s infinite;
-}
-
-/* Estilo para castillo cuando el héroe está cerca (a 2 casillas o menos) */
-.castle-near-hero {
-  cursor: pointer !important;
-  box-shadow: inset 0 0 0 4px rgba(0, 255, 255, 0.9) !important;
-  animation: castleNearPulse 1.5s infinite !important;
-  z-index: 10 !important;
-  pointer-events: auto !important;
-}
-
-.building-sprite.castle-near-hero {
-  cursor: pointer !important;
-  filter: brightness(1.5) !important;
-  transform: scale(1.15) !important;
-  pointer-events: auto !important;
-}
-
-/* Animación mejorada para castillos cercanos */
-@keyframes castleNearPulse {
-  0% { box-shadow: inset 0 0 0 4px rgba(0, 255, 255, 0.7); }
-  50% { box-shadow: inset 0 0 0 6px rgba(0, 255, 255, 1); }
-  100% { box-shadow: inset 0 0 0 4px rgba(0, 255, 255, 0.7); }
-}
-
-.interactive-building {
-  cursor: pointer !important;
-  filter: brightness(1.2) !important;
-  box-shadow: inset 0 0 0 3px rgba(255, 215, 0, 0.8) !important;
-  z-index: 5 !important;
-  pointer-events: auto !important;
-}
-
-/* Iconos para objetos en el mapa */
-.hero-icon, .city-icon, .object-icon {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  z-index: 10;
-}
-
-.hero-icon {
-  z-index: 20; /* Héroes siempre por encima de otros objetos */
-}
-
-.hero-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid currentColor;
-}
-
-.hero-sprite {
-  position: absolute;
-  width: 32px;
-  height: 32px;
-  background-color: #4a90e2;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  z-index: 20;
-  transition: all 0.2s ease-in-out;
-}
-
-.hero-sprite.moving {
-  animation: heroMove 0.2s ease-in-out;
-}
-
-@keyframes heroMove {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.2);
-  }
-  100% {
-    transform: scale(1);
-  }
+  filter: brightness(1.2); /* Make moving heroes slightly brighter */
+  transition: all 0.2s ease-in-out; /* Smooth transition for all properties */
 }
 
 .hero-sprite.selected {
@@ -676,6 +614,13 @@
   opacity: 1;
 }
 
+/* New style for mines in explored but not currently visible areas */
+.resource-mine.explored-only {
+  opacity: 0.5;
+  filter: grayscale(0.8);
+  pointer-events: none; /* Disallow interaction with non-visible mines */
+}
+
 /* Añadir animaciones para acciones de la IA */
 /* Animación para construcción de edificios */
 @keyframes buildingConstruction {
@@ -927,4 +872,30 @@
   animation: none !important;
   background-color: rgba(255, 165, 0, 0.9) !important;
   box-shadow: none !important;
+}
+
+/* Estilos para Fog of War */
+.unexplored-tile {
+  background-color: black !important;
+  z-index: 15; /* Asegurar que cubre otros elementos */
+}
+
+.explored-tile {
+  filter: brightness(0.7) grayscale(0.5);
+}
+
+/* Animación para revelar tiles */
+@keyframes revealTile {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.tile-revealed {
+  animation: revealTile 0.3s ease-out;
 }
