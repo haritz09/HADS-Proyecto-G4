@@ -587,13 +587,13 @@ def check_game_over_conditions(game_state: GameState) -> str:
     if game_state.turn > MAX_TURNS:
         return 'draw'
     
-    # Verificar condición de derrota (sin héroes ni ciudades del jugador)
-    player_defeated = (len(game_state.player.heroes) == 0 and len(game_state.player.cities) == 0)
+    # Verificar condición de derrota (sin héroes del jugador)
+    player_defeated = (len(game_state.player.heroes) == 0)
     if player_defeated:
         return 'defeat'
     
-    # Verificar condición de victoria (sin héroes ni ciudades de la IA)
-    ai_defeated = (len(game_state.ai.heroes) == 0 and len(game_state.ai.cities) == 0)
+    # Verificar condición de victoria (sin héroes de la IA)
+    ai_defeated = (len(game_state.ai.heroes) == 0)
     if ai_defeated:
         return 'victory'
     

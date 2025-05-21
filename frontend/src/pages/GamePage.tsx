@@ -67,6 +67,10 @@ const GamePage: React.FC = () => {
   // Add state for player interaction summary
   const [playerInteraction, setPlayerInteraction] = useState<any>(null);
   const [showPlayerInteraction, setShowPlayerInteraction] = useState<boolean>(false);
+  
+  // Add missing GameOver states
+  const [showGameOver, setShowGameOver] = useState<boolean>(false);
+  const [gameOverStatus, setGameOverStatus] = useState<'victory' | 'defeat' | 'draw'>('defeat');
 
   const { 
     selectHero, 
@@ -218,40 +222,57 @@ const GamePage: React.FC = () => {
         console.log('GamePage: Checking for combat interaction. Result object:', response.data.result);
         
         if (response.data.result && response.data.result.interaction === 'combat') {
-          console.log('GamePage: Combat detected! Combat data:', response.data.result);
+          console.log('GamePage: Combat detected!', response.data.result.combat_result);
+          setCombatInteraction({
+            playerHero: selectedHero,
+            enemyHero: response.data.result.enemy_hero,
+            combatResult: response.data.result.combat_result
+          });
+          setShowCombatModal(true);
+          combatInProgressRef.current = true;
           
-          // Buscar el héroe enemigo de forma más robusta
-          const enemyHeroId = response.data.result.enemy_hero;
-          console.log('GamePage: Enemy hero ID from response:', enemyHeroId);
-          
-          // Asegurar que tenemos estado del juego y acceso a los héroes
-          if (gameState && gameState.ai && gameState.ai.heroes && gameState.player && gameState.player.heroes) {
-            const enemyHero = gameState.ai.heroes.find(h => h.id === enemyHeroId);
-            const playerHero = gameState.player.heroes.find(h => h.id === heroId);
+          // MODIFICACIÓN: Usar la misma lógica que el backend para determinar game over
+          const combatResult = response.data.result.combat_result;
+          if (combatResult && combatResult.winner) {
+            // Crear una copia actualizada del estado del juego que refleje el resultado del combate
+            const updatedGameState = {...gameState};
             
-            console.log('GamePage: Found enemy hero:', enemyHero ? enemyHero.id : 'not found');
-            console.log('GamePage: Found player hero:', playerHero ? playerHero.id : 'not found');
-            
-            if (playerHero && enemyHero) {
-              // Configurar los datos para el modal de combate
-              const combatData = {
-                combatResult: response.data.result.combat_result,
-                playerHero: playerHero,
-                enemyHero: enemyHero
-              };
+            // Si el jugador ganó el combate, eliminamos el héroe enemigo
+            if (combatResult.winner === 'player') {
+              // Filtrar el héroe derrotado de la lista de héroes de la IA
+              const enemyHeroId = response.data.result.enemy_hero;
+              updatedGameState.ai.heroes = updatedGameState.ai.heroes.filter(h => h.id !== enemyHeroId);
               
-              console.log('GamePage: Setting combat interaction data:', combatData);
-              setCombatInteraction(combatData);
+              // Verificar la condición de victoria: IA sin héroes NI ciudades
+              const aiDefeated = updatedGameState.ai.heroes.length === 0 && 
+                                (updatedGameState.ai.cities.length === 0 || 
+                                 updatedGameState.ai.cities.every(city => city.owner !== 'ai'));
               
-              // ¡IMPORTANTE! Establecer el estado showCombatModal a true de forma explícita
-              console.log('GamePage: Opening combat modal (setting showCombatModal to true)');
-              setShowCombatModal(true);
-            } else {
-              console.error('GamePage: Could not find one or both heroes for combat!', 
-                           { playerHeroId: heroId, enemyHeroId: enemyHeroId });
+              if (aiDefeated) {
+                console.log('GamePage: AI has no heroes and no cities. Victory!');
+                setGameOverStatus('victory');
+                setShowGameOver(true);
+              }
+            } 
+            // Si la IA ganó el combate, eliminamos el héroe del jugador
+            else if (combatResult.winner === 'ai') {
+              // Filtrar el héroe derrotado de la lista de héroes del jugador
+              updatedGameState.player.heroes = updatedGameState.player.heroes.filter(h => h.id !== heroId);
+              
+              // Verificar la condición de derrota: Jugador sin héroes NI ciudades
+              const playerDefeated = updatedGameState.player.heroes.length === 0 && 
+                                    (updatedGameState.player.cities.length === 0 || 
+                                     updatedGameState.player.cities.every(city => city.owner !== 'player'));
+              
+              if (playerDefeated) {
+                console.log('GamePage: Player has no heroes and no cities. Defeat!');
+                setGameOverStatus('defeat');
+                setShowGameOver(true);
+              }
             }
-          } else {
-            console.error('GamePage: Game state is incomplete, cannot find heroes for combat');
+            
+            // Actualizar el estado del juego
+            setGameState(updatedGameState);
           }
         } else {
           console.log('GamePage: No combat interaction detected in the response');
@@ -1067,12 +1088,77 @@ const GamePage: React.FC = () => {
   // Verificar si la partida ha terminado
   const isGameOver = gameState?.status && gameState.status !== 'ongoing';
   
+  // Añadir una función para manejar el resultado del combate
+  const handleCombatResult = (result: any) => {
+    console.log('GamePage: handleCombatResult llamado con resultado', result);
+    if (!gameState || !result || !result.winner) return;
+
+    // Crear copia del estado para modificarlo
+    const updatedGameState = { ...gameState };
+
+    if (result.winner === 'player') {
+      // El jugador ganó, eliminar el héroe enemigo
+      console.log('GamePage: Jugador ganó, eliminando héroe enemigo', combatInteraction.enemyHero.id);
+      updatedGameState.ai.heroes = updatedGameState.ai.heroes.filter(
+        hero => hero.id !== combatInteraction.enemyHero.id
+      );
+      console.log('GamePage: Héroes AI restantes:', updatedGameState.ai.heroes.length);
+    } else if (result.winner === 'ai') {
+      // La IA ganó, eliminar el héroe del jugador
+      console.log('GamePage: IA ganó, eliminando héroe del jugador', combatInteraction.playerHero.id);
+      updatedGameState.player.heroes = updatedGameState.player.heroes.filter(
+        hero => hero.id !== combatInteraction.playerHero.id
+      );
+      console.log('GamePage: Héroes jugador restantes:', updatedGameState.player.heroes.length);
+    }
+
+    // Actualizar el estado del juego
+    setGameState(updatedGameState);
+
+    // Verificar condiciones de victoria/derrota
+    if (updatedGameState.ai.heroes.length === 0) {
+      console.log('GamePage: IA sin héroes, victoria');
+      setGameOverStatus('victory');
+      setShowGameOver(true);
+    } else if (updatedGameState.player.heroes.length === 0) {
+      console.log('GamePage: Jugador sin héroes, derrota');
+      setGameOverStatus('defeat');
+      setShowGameOver(true);
+    }
+  };
+
+  // Método para manejar el cierre del modal de combate con el resultado
+  const handleCombatModalClose = () => {
+    console.log('GamePage: Cerrando modal de combate');
+    
+    // Procesar el resultado del combate antes de cerrar el modal
+    if (combatInteraction && combatInteraction.combatResult) {
+      handleCombatResult(combatInteraction.combatResult);
+    }
+    
+    setShowCombatModal(false);
+  };
+
   // Función para cerrar el modal de combate
   const handleCloseCombatModal = () => {
     console.log('GamePage: Closing combat modal');
     setShowCombatModal(false);
     setCombatInteraction(null);
   };
+
+  // Agregar logs en la función handleGameOver
+  const handleGameOver = (status: 'victory' | 'defeat' | 'draw') => {
+    console.log('GamePage: handleGameOver llamado con status =', status);
+    setGameOverStatus(status);
+    console.log('GamePage: setGameOverStatus cambiado a', status);
+    setShowGameOver(true);
+    console.log('GamePage: setShowGameOver cambiado a true');
+  };
+
+  useEffect(() => {
+    console.log('GamePage: Estado showGameOver cambiado a', showGameOver);
+    console.log('GamePage: Estado gameOverStatus =', gameOverStatus);
+  }, [showGameOver, gameOverStatus]);
 
   return (
     <div className={`game-page ${isAiViewMode ? `ai-view-mode-${aiViewMode}` : ''}`}>
@@ -1220,13 +1306,15 @@ const GamePage: React.FC = () => {
       )}
       
       {/* Combat Modal - Use the dedicated close handler */}
-      {showCombatModal && combatInteraction && (
+      {showCombatModal && combatInteraction && gameState && (
         <CombatModal
           isOpen={showCombatModal}
-          onClose={handleCloseCombatModal}
+          onClose={handleCombatModalClose} // Cambiado para usar el nuevo método
           combatResult={combatInteraction.combatResult}
           playerHero={combatInteraction.playerHero}
           enemyHero={combatInteraction.enemyHero}
+          gameState={gameState}  // Verifica que se esté pasando gameState
+          onGameOver={handleGameOver}  // Verifica que se esté pasando handleGameOver
         />
       )}
       
@@ -1247,11 +1335,14 @@ const GamePage: React.FC = () => {
       />
       
       {/* Mostrar pantalla de fin de juego si la partida ha terminado */}
-      {isGameOver && gameState?.status && (
+      {showGameOver && gameState && (
         <GameOverScreen 
-          status={gameState.status as 'victory' | 'defeat' | 'draw'}
+          status={gameOverStatus}
           gameState={gameState}
-          onRestart={handleRestartGame}
+          onRestart={() => {
+            console.log('GamePage: onRestart llamado');
+            navigate('/');
+          }}
         />
       )}
     </div>

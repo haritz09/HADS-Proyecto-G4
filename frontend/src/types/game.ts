@@ -46,9 +46,26 @@ export interface Hero {
   id: string;
   name: string;
   position: Position;
-  stats: Stats;
-  army: ArmyUnit[];
-  artifacts: any[];
+  stats: {
+    attack: number;
+    defense: number;
+    power: number;
+    knowledge: number;
+    speed: number; // Add the missing speed property
+    movement_points: number;
+    movement_points_left: number;
+    vision_radius?: number;
+  };
+  army: Array<{
+    type: string;
+    count: number;
+  }>;
+  artifacts?: Array<{
+    id: string;
+    name: string;
+    subtype?: string;
+  }>;
+  is_main_hero?: boolean; // Añadimos esta propiedad para identificar héroes principales
 }
 
 export interface Creature {
@@ -115,7 +132,7 @@ export interface Building {
   is_castle: boolean;
   has_tavern: boolean;
   requirements: string[];
-  available_creatures: AvailableCreature[];
+  available_creatures: AvailableCreature[]; 
   owner: string | null;
 }
 

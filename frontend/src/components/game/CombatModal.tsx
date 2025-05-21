@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Hero } from '../../types/game';
+import { Hero, GameState } from '../../types/game';
 import Button from '../ui/Button';
 import '../../styles/components/CombatModal.css';
 
@@ -29,6 +29,8 @@ interface CombatModalProps {
   };
   playerHero: Hero;
   enemyHero: Hero;
+  gameState: GameState;
+  onGameOver: (status: 'victory' | 'defeat' | 'draw') => void;
 }
 
 const UNIT_HEALTH = {
@@ -56,9 +58,10 @@ const CombatModal: React.FC<CombatModalProps> = ({
   onClose,
   combatResult,
   playerHero,
-  enemyHero
+  enemyHero,
+  gameState,
+  onGameOver
 }) => {
-  // Add additional logging to track modal rendering
   console.log('CombatModal: Component rendering with props:', {
     isOpen,
     combatResult: combatResult ? 'present' : 'missing',
@@ -534,7 +537,6 @@ const CombatModal: React.FC<CombatModalProps> = ({
       
       if (step.casualties) {
         setRemainingTroops(prev => {
-          // Explicitly determine casualties side with proper type
           let casualtiesSide: 'player' | 'ai';
           
           if (step.casualties!.side === 'attacker') {
@@ -546,7 +548,6 @@ const CombatModal: React.FC<CombatModalProps> = ({
           } else if (step.casualties!.side === 'ai') {
             casualtiesSide = 'ai';
           } else {
-            // Default case if we somehow get an invalid side
             console.warn('Invalid casualty side:', step.casualties!.side);
             casualtiesSide = 'player';
           }
@@ -574,6 +575,13 @@ const CombatModal: React.FC<CombatModalProps> = ({
     setBattleFinished(false);
     setCurrentStep(0);
     setCumulativeDamage({player: 0, ai: 0});
+    
+    console.log('DEBUG CombatModal: handleClose called');
+    
+    // Ya no necesitamos verificar condiciones de game over aquí
+    // porque lo hará GamePage al procesar el resultado
+    
+    console.log('CombatModal: Llamando a onClose()');
     onClose();
   };
 
