@@ -288,9 +288,10 @@ const GameMap: React.FC<GameMapProps> = ({
     let artifact: VisibleObject | null = null;
     
     if (tile?.object_type === 'artifact' && tile?.object_id) {
-      const foundArtifact = gameState.map.visible_objects?.find(obj => obj.id === tile.object_id);
+      const foundArtifact = gameState.map.visible_objects?.find(
+        obj => obj.id === tile.object_id && obj.type === 'artifact'
+      );
       if (foundArtifact) {
-        //console.log("Artefacto encontrado por ID en tile:", foundArtifact);
         artifact = foundArtifact;
       }
     }
@@ -404,10 +405,57 @@ const GameMap: React.FC<GameMapProps> = ({
           top: `${building.position.y * 32}px`,
           width: `32px`,
           height: `32px`,
+          position: 'absolute',
         }}
         onClick={handleBuildingClick}
       >
-        {getBuildingIcon(building.building_type)}
+        <img
+          src={
+            building && building.building_type === 'castle'
+              ? castleImagePath
+              : building && building.building_type === 'barracks'
+                ? barracksImagePath
+                : building && building.building_type === 'archery'
+                  ? archeryImagePath
+                  : building && building.building_type === 'knights_tower'
+                    ? knightsTowerImagePath
+                  : building && building.building_type === 'mage_tower'
+                    ? mageTowerImagePath
+                  : building && building.building_type === 'dragons_lair'
+                    ? dragonsLairImagePath
+                  : buildingImagePath
+          }
+          alt={
+            building && building.building_type === 'castle'
+              ? 'castle'
+              : building.building_type === 'barracks'
+                ? 'barracks'
+                : building.building_type === 'archery'
+                  ? 'archery'
+                  : building.building_type === 'knights_tower'
+                    ? 'knights_tower'
+                    : building.building_type === 'mage_tower'
+                      ? 'mage_tower'
+                      : building.building_type === 'dragons_lair'
+                        ? 'dragons_lair'
+                      : 'building'
+          }
+          className="tile-building"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            zIndex: 2,
+            pointerEvents: 'none'
+          }}
+          onError={e => {
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }}
+        />
       </div>
     );
   };
@@ -431,6 +479,24 @@ const GameMap: React.FC<GameMapProps> = ({
     }
   };
   
+  const goldMineImagePath = '/assets/images/tiles/grass/gold_mine.PNG';
+  const quarryImagePath = '/assets/images/tiles/grass/rock.png';
+  const sawmillImagePath = '/assets/images/tiles/grass/wood.png'; // Añadido para sawmill
+  const barracksImagePath = '/assets/images/tiles/grass/cuartel.PNG'; // Añadido para barracks
+  const archeryImagePath = '/assets/images/tiles/grass/archery.png'; // Añadido para archery
+  const knightsTowerImagePath = '/assets/images/tiles/grass/tower.svg'; // Añadido para knights_tower
+  const mageTowerImagePath = '/assets/images/tiles/grass/mage_tower.png'; // Añadido para mage_tower
+  const dragonsLairImagePath = '/assets/images/tiles/grass/dragons_lair.png'; // Añadido para dragons_lair
+  const artifactImagePath = '/assets/images/tiles/grass/TreasureChestclosed.png';
+  const grassImagePath = '/assets/images/tiles/grass/grass_01.png';
+  const treeImagePath = '/assets/images/tiles/grass/Sprite_01.png';
+  const heroImagePath = '/assets/images/tiles/grass/knight.png';
+  const hero2ImagePath = '/assets/images/tiles/grass/knight.png';
+  const buildingImagePath = '/assets/images/tiles/grass/building1.png'; // Añadido para buildings
+  const castleImagePath = '/assets/images/tiles/grass/castle.gif'; // Añadido para castillos
+  const mountainImagePath = '/assets/images/tiles/grass/mont3.png'; // Añadido para montaña
+  const waterImagePath = '/assets/images/tiles/grass/water.png'; // Añadido para river
+
   // Enhanced renderMine function with better logging
   const renderMine = (mine: VisibleObject) => {
     if (!mine.position) {
@@ -468,7 +534,128 @@ const GameMap: React.FC<GameMapProps> = ({
       ownerClass,
       mine.justCaptured ? 'just-captured' : ''
     ].filter(Boolean).join(' ');
-    
+
+    // Mostrar imagen para goldmine
+    if (mineType === 'goldmine' || resourceType === 'gold') {
+      return (
+        <div
+          key={`mine-${mine.id}`}
+          className={mineClasses}
+          style={{
+            left: `${mine.position.x * 32}px`,
+            top: `${mine.position.y * 32}px`,
+            width: '32px',
+            height: '32px',
+            position: 'absolute',
+            zIndex: 3
+          }}
+          title={getTooltip()}
+          data-income={`+${resourcePerTurn}`}
+        >
+          <img
+            src={goldMineImagePath}
+            alt="goldmine"
+            className="tile-goldmine"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              zIndex: 2,
+              pointerEvents: 'none'
+            }}
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+        </div>
+      );
+    }
+
+    // Mostrar imagen para sawmill (solo la imagen de wood.png)
+    if (mineType === 'sawmill' || resourceType === 'wood') {
+      return (
+        <div
+          key={`mine-${mine.id}`}
+          className={mineClasses}
+          style={{
+            left: `${mine.position.x * 32}px`,
+            top: `${mine.position.y * 32}px`,
+            width: '32px',
+            height: '32px',
+            position: 'absolute',
+            zIndex: 3
+          }}
+          title={getTooltip()}
+          data-income={`+${resourcePerTurn}`}
+        >
+          <img
+            src={sawmillImagePath}
+            alt="sawmill"
+            className="tile-sawmill"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              zIndex: 2,
+              pointerEvents: 'none'
+            }}
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+        </div>
+      );
+    }
+
+    // Mostrar imagen para quarry
+    if (mineType === 'quarry' || resourceType === 'stone') {
+      return (
+        <div
+          key={`mine-${mine.id}`}
+          className={mineClasses}
+          style={{
+            left: `${mine.position.x * 32}px`,
+            top: `${mine.position.y * 32}px`,
+            width: '32px',
+            height: '32px',
+            position: 'absolute',
+            zIndex: 3
+          }}
+          title={getTooltip()}
+          data-income={`+${resourcePerTurn}`}
+        >
+          <img
+            src={quarryImagePath}
+            alt="quarry"
+            className="tile-quarry"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              zIndex: 2,
+              pointerEvents: 'none'
+            }}
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+        </div>
+      );
+    }
+
+    // ...existing code for other mine types...
     return (
       <div
         key={`mine-${mine.id}`}
@@ -485,11 +672,32 @@ const GameMap: React.FC<GameMapProps> = ({
     );
   };
 
+  // Precalcular el mapa de árboles: ahora todos los tiles de tipo forest tendrán árbol
+  const [treeMap, setTreeMap] = useState<boolean[][]>([]);
+
+  useEffect(() => {
+    const width = gameState.map.size.width;
+    const height = gameState.map.size.height;
+    const newTreeMap: boolean[][] = [];
+    for (let y = 0; y < height; y++) {
+      const row: boolean[] = [];
+      for (let x = 0; x < width; x++) {
+        const tile = gameState.map.tiles[y * width + x];
+        // Mostrar árbol en TODOS los tiles de tipo forest
+        row.push(tile?.terrain === 'forest');
+      }
+      newTreeMap.push(row);
+    }
+    setTreeMap(newTreeMap);
+    // eslint-disable-next-line
+  }, [gameState.map.tiles]);
+
   // Actualizar el método renderTile para detectar minas en el tile
   const renderTile = (x: number, y: number) => {
     const index = y * gameState.map.size.width + x;
     const tile = gameState.map.tiles[index];
 
+    // Buscar todos los objetos relevantes en este tile
     const heroForRendering = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
       const visualPos = getHeroCurrentPosition(h.id, true);
       return visualPos && visualPos.x === x && visualPos.y === y;
@@ -574,6 +782,45 @@ const GameMap: React.FC<GameMapProps> = ({
       additionalClasses
     ].filter(Boolean).join(' ');
 
+
+     // NUEVO: Mostrar imagen para tiles de tipo grass, forest y mountain SIEMPRE como fondo
+    const isGrass = tile?.terrain === 'grass';
+    const isForest = tile?.terrain === 'forest';
+    const isMountain = tile?.terrain === 'mountain';
+    const isRiver = tile?.terrain === 'water';
+    const showTree = isForest && treeMap[y]?.[x];
+
+    // Detectar si el tile es de tipo artefacto
+    
+
+    // Detectar si el tile es de tipo mina de oro (debe coincidir con visible_object en la misma casilla)
+    
+
+    // Detectar si el tile es de tipo mina de piedra (quarry)
+    
+    // Detectar si este es el primer héroe del jugador
+    const isFirstPlayerHero =
+      heroForRendering &&
+      heroForRendering.id === gameState.player.heroes[0]?.id;
+
+
+    // NUEVO: Lógica de prioridad para renderizado exclusivo
+    // Prioridad: héroe > edificio > mina > artefacto > árbol > grass
+    let renderHero = false, renderBuildingImg = false, shouldRenderMine = false, renderArtifact = false, renderTree = false;
+
+    if (heroForRendering) {
+      renderHero = true;
+    } else if (building) {
+      renderBuildingImg = true;
+    } else if (mineAtPosition) {
+      shouldRenderMine = true;
+    } else if (artifact && artifact.type === 'artifact') {
+      renderArtifact = true;
+    } else if (tile?.terrain === 'forest' && treeMap[y]?.[x]) {
+      renderTree = true;
+    }
+    // grass se renderiza siempre como fondo
+
     // Modificar onClick para respetar isReadOnly
     return (
       <div
@@ -583,45 +830,223 @@ const GameMap: React.FC<GameMapProps> = ({
           `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
           (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : tooltipMessage || undefined)}
       >
-        {artifact && (
+         {/* Mostrar grass, forest o mountain SIEMPRE como fondo */}
+        {(isGrass || isForest) && (
+          <img
+            src={grassImagePath}
+            alt="grass"
+            className="tile-image"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              zIndex: 0
+            }}
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+        )}
+        {isRiver && (
+          <img
+            src={waterImagePath}
+            alt="river"
+            className="tile-image"
+            style={{
+              position: 'absolute',
+              top: -10,
+              left: -10,
+              width: '150%',
+              height: '150%',
+              objectFit: 'cover',
+              zIndex: 0
+            }}
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+        )}
+        {isMountain && (
+          <>
+            {/* Fondo grass debajo */}
+            <img
+              src={grassImagePath}
+              alt="grass"
+              className="tile-image"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                zIndex: 0
+              }}
+              onError={e => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
+            />
+            {/* Montaña encima, más pequeña y centrada */}
+            <img
+              src={mountainImagePath}
+              alt="mountain"
+              className="tile-image"
+              style={{
+                position: 'absolute',
+                top: '16%',
+                left: '16%',
+                width: '68%',
+                height: '68%',
+                objectFit: 'contain',
+                zIndex: 1,
+                pointerEvents: 'none'
+              }}
+              onError={e => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
+            />
+          </>
+        )}
+        {/* Solo mostrar árbol si no hay objeto de mayor prioridad */}
+        {renderTree && (
+          <img
+            src={treeImagePath}
+            alt="tree"
+            className="tile-tree"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              zIndex: 1,
+              pointerEvents: 'none'
+            }}
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+        )}
+        {/* Solo mostrar imagen de building si no hay héroe */}
+        {renderBuildingImg && (
+          <img
+            src={
+              building && building.building_type === 'castle'
+                ? castleImagePath
+                : building && building.building_type === 'barracks'
+                  ? barracksImagePath
+                  : building && building.building_type === 'archery'
+                    ? archeryImagePath
+                    : building && building.building_type === 'knights_tower'
+                      ? knightsTowerImagePath
+                    : building && building.building_type === 'mage_tower'
+                      ? mageTowerImagePath
+                    : building && building.building_type === 'dragons_lair'
+                      ? dragonsLairImagePath
+                      : buildingImagePath
+            }
+            alt={
+              building && building.building_type === 'castle'
+                ? 'castle'
+                : building && building.building_type === 'barracks'
+                  ? 'barracks'
+                  : building && building.building_type === 'archery'
+                    ? 'archery'
+                    : building && building.building_type === 'knights_tower'
+                      ? 'knights_tower'
+                      : building && building.building_type === 'mage_tower'
+                        ? 'mage_tower'
+                        : building && building.building_type === 'dragons_lair'
+                          ? 'dragons_lair'
+                          : 'building'
+            }
+            className="tile-building"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              zIndex: 2,
+              pointerEvents: 'none'
+            }}
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
+          />
+        )}
+        {/* Solo mostrar mina si no hay héroe ni edificio */}
+        {shouldRenderMine && renderMine(mineAtPosition!)}
+        {/* Solo mostrar artefacto si no hay héroe, edificio ni mina */}
+        {renderArtifact && (
           <div 
             className={`artifact-sprite artifact-${artifactSubtype || 'unknown'}`}
             onClick={(e) => {
               e.stopPropagation();
             }}
           >
-            {artifactSubtype && typeof artifactSubtype === 'string' 
-              ? getArtifactIcon(artifactSubtype) 
-              : '🏆'}
+            <img
+              src={artifactImagePath}
+              alt="artifact"
+              className="tile-artifact"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                zIndex: 2,
+                pointerEvents: 'none'
+              }}
+              onError={e => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+              }}
+            />
           </div>
         )}
-
-        {heroForRendering && !animatingHero && (
-          <div 
-            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''} ${isAIView && heroForRendering.id.startsWith('ai_') ? 'ai-perspective' : ''}`}
-            onClick={(e) => {
+        {/* Solo mostrar héroe si está en este tile */}
+        {renderHero && (
+          <img
+            src={getHeroImage(heroForRendering!)}
+            alt="hero"
+            className="hero-sprite"
+            style={{
+              position: 'absolute',
+              width: 42,
+              height: 42,
+              left: 0,
+              top: 0,
+              zIndex: 20,
+              pointerEvents: 'auto'
+            }}
+            onClick={e => {
               if (isReadOnly) return;
               e.stopPropagation();
-              onHeroClick(heroForRendering.id);
+              if (heroForRendering) {
+                onHeroClick(heroForRendering.id);
+              }
             }}
-          >
-            H
-          </div>
-        )}
-
-        {heroForRendering && animatingHero && heroForRendering.id === animatingHero.heroId && (
-          <div 
-            className="hero-sprite moving"
-            onClick={(e) => {
-              e.stopPropagation();
-              onHeroClick(heroForRendering.id);
+            onError={e => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
             }}
-          >
-            H
-          </div>
+          />
         )}
-
-        {building && renderBuilding(building, city?.id || '')}
+        {/* Renderizar cualquier overlay de building (iconos, etc) solo si building es el objeto principal */}
+        {renderBuildingImg && building && renderBuilding(building, city?.id || '')}
       </div>
     );
   };
@@ -648,7 +1073,7 @@ const GameMap: React.FC<GameMapProps> = ({
         //console.log(`Artefacto ${artifact.id} en posición (${x},${y}), índice: ${idx}`);
         //console.log(`- Tamaño del mapa: ${gameState.map.size.width}x${gameState.map.size.height}`);
         //console.log(`- Longitud de tiles: ${gameState.map.tiles.length}`);
-        //console.log(`- ¿Índice válido? ${idx >= 0 && idx < gameState.map.tiles.length}`);
+        //console.log(`- ¿Índice válido? ${idx >= 0 y idx < gameState.map.tiles.length}`);
         
         if (idx >= 0 && idx < gameState.map.tiles.length) {
           const tile = gameState.map.tiles[idx];
@@ -772,6 +1197,18 @@ const GameMap: React.FC<GameMapProps> = ({
       </div>
     </div>
   );
+};
+
+const getHeroImage = (hero: Hero) => {
+  // Puedes usar hero.id, hero.name, o una propiedad custom como hero.sprite
+  switch (hero.id) {
+    case 'player_hero_1':
+      return '/assets/images/tiles/grass/knight.png';
+    case 'ai_hero_1':
+      return '/assets/images/tiles/grass/knight2.png';
+    default:
+      return '/assets/images/tiles/grass/knight.png';
+  }
 };
 
 export default GameMap;
