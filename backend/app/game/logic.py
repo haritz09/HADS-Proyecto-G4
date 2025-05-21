@@ -287,12 +287,17 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         print(f"DEBUG: Hero has {hero.stats.movement_points_left} movement points left")
         print(f"DEBUG: Updated fog of war with vision radius {vision_radius}")
         
-        # NEW: Check for enemy heroes at the same position BEFORE calling process_tile_interaction
+        # Improved enemy hero detection - ensure positions are compared as integers
         enemy_hero = None
         for e_hero in enemy_heroes:
-            if e_hero.position.x == hero.position.x and e_hero.position.y == hero.position.y:
+            # Convert positions to integers to ensure accurate comparison
+            hero_x, hero_y = int(hero.position.x), int(hero.position.y)
+            e_hero_x, e_hero_y = int(e_hero.position.x), int(e_hero.position.y)
+            
+            print(f"DEBUG: Checking if hero at ({hero_x}, {hero_y}) is on same position as enemy at ({e_hero_x}, {e_hero_y})")
+            if e_hero_x == hero_x and e_hero_y == hero_y:
                 enemy_hero = e_hero
-                print(f"DEBUG: Enemy hero detected at position ({hero.position.x}, {hero.position.y}): {enemy_hero.id}")
+                print(f"DEBUG: Enemy hero detected at position ({hero_x}, {hero_y}): {enemy_hero.id}")
                 break
                 
         # If an enemy hero was found, trigger combat

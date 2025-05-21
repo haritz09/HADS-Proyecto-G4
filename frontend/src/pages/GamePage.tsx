@@ -191,6 +191,8 @@ const GamePage: React.FC = () => {
     try {
       if (!gameId || !gameState) return;
 
+      console.log('GamePage: Sending moveHero action for hero', heroId, 'to destination:', destination);
+      
       const response = await gameService.executeAction(gameId, {
         type: 'moveHero',
         details: {
@@ -202,18 +204,57 @@ const GamePage: React.FC = () => {
         }
       });
 
+      console.log('GamePage: MoveHero response received:', response.data);
+
       if (response.data?.success) {
         const newPosition = response.data.result.new_position;
         
         // Verificar y forzar la posición si es necesario
         if (destination.x === 48 && destination.y === 48) {
-          console.log('GamePage: Verifying castle position update...');
-          const updatedGameState = { ...gameState };
-          const hero = updatedGameState.player.heroes.find(h => h.id === heroId);
-          if (hero) {
-            hero.position = newPosition;
-            setGameState(updatedGameState);
+          // ...existing code...
+        }
+        
+        // Mejorar la detección de combate con más logging
+        console.log('GamePage: Checking for combat interaction. Result object:', response.data.result);
+        
+        if (response.data.result && response.data.result.interaction === 'combat') {
+          console.log('GamePage: Combat detected! Combat data:', response.data.result);
+          
+          // Buscar el héroe enemigo de forma más robusta
+          const enemyHeroId = response.data.result.enemy_hero;
+          console.log('GamePage: Enemy hero ID from response:', enemyHeroId);
+          
+          // Asegurar que tenemos estado del juego y acceso a los héroes
+          if (gameState && gameState.ai && gameState.ai.heroes && gameState.player && gameState.player.heroes) {
+            const enemyHero = gameState.ai.heroes.find(h => h.id === enemyHeroId);
+            const playerHero = gameState.player.heroes.find(h => h.id === heroId);
+            
+            console.log('GamePage: Found enemy hero:', enemyHero ? enemyHero.id : 'not found');
+            console.log('GamePage: Found player hero:', playerHero ? playerHero.id : 'not found');
+            
+            if (playerHero && enemyHero) {
+              // Configurar los datos para el modal de combate
+              const combatData = {
+                combatResult: response.data.result.combat_result,
+                playerHero: playerHero,
+                enemyHero: enemyHero
+              };
+              
+              console.log('GamePage: Setting combat interaction data:', combatData);
+              setCombatInteraction(combatData);
+              
+              // ¡IMPORTANTE! Establecer el estado showCombatModal a true de forma explícita
+              console.log('GamePage: Opening combat modal (setting showCombatModal to true)');
+              setShowCombatModal(true);
+            } else {
+              console.error('GamePage: Could not find one or both heroes for combat!', 
+                           { playerHeroId: heroId, enemyHeroId: enemyHeroId });
+            }
+          } else {
+            console.error('GamePage: Game state is incomplete, cannot find heroes for combat');
           }
+        } else {
+          console.log('GamePage: No combat interaction detected in the response');
         }
         
         if (response.data.game_state) {
@@ -427,8 +468,35 @@ const GamePage: React.FC = () => {
             
             // Check if it's a combat interaction
             if (interaction === 'combat') {
-              setCombatInteraction(response.data.result);
-              combatInProgressRef.current = true;
+              console.log('Combat detected from server response:', response.data.result);
+              
+              // Find the enemy hero
+              const enemyHeroId = response.data.result.enemy_hero;
+              const enemyHero = gameState.ai.heroes.find(h => h.id === enemyHeroId);
+              const playerHero = gameState.player.heroes.find(h => h.id === selectedHero.id);
+              
+              if (playerHero && enemyHero) {
+                // Format the combat data properly
+                const combatData = {
+                  combatResult: response.data.result.combat_result,
+                  playerHero: playerHero,
+                  enemyHero: enemyHero
+                };
+                
+                console.log('Setting combat data for modal:', combatData);
+                setCombatInteraction(combatData);
+                
+                // CRITICAL: Set this to true to show the modal
+                setShowCombatModal(true);
+                console.log('Combat modal should now be visible (showCombatModal=true)');
+              } else {
+                console.error('Could not find heroes for combat modal', {
+                  playerHeroId: selectedHero.id,
+                  enemyHeroId: enemyHeroId,
+                  foundPlayerHero: !!playerHero,
+                  foundEnemyHero: !!enemyHero
+                });
+              }
             } 
             // Handle artifact or resource interaction
             else if (typeof interaction === 'object') {
@@ -992,6 +1060,13 @@ const GamePage: React.FC = () => {
   // Verificar si la partida ha terminado
   const isGameOver = gameState?.status && gameState.status !== 'ongoing';
   
+  // Función para cerrar el modal de combate
+  const handleCloseCombatModal = () => {
+    console.log('GamePage: Closing combat modal');
+    setShowCombatModal(false);
+    setCombatInteraction(null);
+  };
+
   return (
     <div className={`game-page ${isAiViewMode ? `ai-view-mode-${aiViewMode}` : ''}`}>
       <div className="game-header">
@@ -1137,17 +1212,14 @@ const GamePage: React.FC = () => {
         />
       )}
       
-      {/* Combat Modal */}
-      {showCombatModal && combatInteraction && gameState && (
+      {/* Combat Modal - Use the dedicated close handler */}
+      {showCombatModal && combatInteraction && (
         <CombatModal
           isOpen={showCombatModal}
-          onClose={() => {
-            setShowCombatModal(false);
-            setCombatInteraction(null);
-          }}
-          combatResult={combatInteraction.combat_result}
-          playerHero={gameState.player.heroes.find(h => h.id === selectedHero?.id) || gameState.player.heroes[0]}
-          enemyHero={gameState.ai.heroes.find(h => h.id === combatInteraction.enemy_hero) || gameState.ai.heroes[0]}
+          onClose={handleCloseCombatModal}
+          combatResult={combatInteraction.combatResult}
+          playerHero={combatInteraction.playerHero}
+          enemyHero={combatInteraction.enemyHero}
         />
       )}
       

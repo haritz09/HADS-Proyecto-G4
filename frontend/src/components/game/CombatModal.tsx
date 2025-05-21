@@ -58,6 +58,14 @@ const CombatModal: React.FC<CombatModalProps> = ({
   playerHero,
   enemyHero
 }) => {
+  // Add additional logging to track modal rendering
+  console.log('CombatModal: Component rendering with props:', {
+    isOpen,
+    combatResult: combatResult ? 'present' : 'missing',
+    playerHero: playerHero ? playerHero.id : 'missing',
+    enemyHero: enemyHero ? enemyHero.id : 'missing'
+  });
+
   const [battleSteps, setBattleSteps] = useState<any[]>([]);
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [battleStarted, setBattleStarted] = useState<boolean>(false);
