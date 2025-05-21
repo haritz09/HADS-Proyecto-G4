@@ -104,6 +104,21 @@ You can also build a tavern in the castle to increase the maximum number of hero
  you'll provide your response in PURE JSON format. Do not include any XML tags inside the JSON values!
  The fields like "summary", "reasoning", etc. should contain plain text without any XML tags.
  
+ CRITICAL JSON FORMATTING REQUIREMENTS:
+ 1. Your response MUST be valid, parseable JSON
+ 2. Pay EXTREMELY careful attention to commas in your JSON:
+    - Every item in an array or object MUST be followed by a comma, EXCEPT the last item
+    - Example correct format: {"x": 10, "y": 20}
+    - Example INCORRECT format: {"x": 10 "y": 20} or {"x": 10, "y": 20,}
+ 3. All property names must be enclosed in double quotes
+ 4. All string values must be enclosed in double quotes
+ 5. Nested objects must have proper structure and closing braces
+ 6. For position objects like coordinates, always follow this exact format:
+    {"x": 10, "y": 20} - with the comma between x and y values!
+ 7. Double-check all property values - numbers must not have quotes, strings must have quotes
+ 8. DO NOT use XML tags inside ANY string values - just use plain text
+ 9. Before submitting your response, scan it entirely to make sure it's properly closed with all brackets matched
+
  Your final response should be in the following JSON format:
 {
   "actions": [
@@ -138,7 +153,7 @@ You can also build a tavern in the castle to increase the maximum number of hero
   "reasoning": "Explicación general de la estrategia y decisiones tomadas.",
   "analysis": "Breve análisis del estado del juego y la posición del oponente."
 }
- Here's an example of the action format:
+ Here's an example of the action format with CORRECT JSON SYNTAX:
 {
   "actions": [
     {
@@ -159,8 +174,8 @@ You can also build a tavern in the castle to increase the maximum number of hero
     {
       "type": "buildStructure",
       "details": {
-      "cityId": "city1",
-      "structureType": "barracks"
+        "cityId": "city1",
+        "structureType": "barracks"
       }
     },
     {
@@ -191,6 +206,10 @@ You can also build a tavern in the castle to increase the maximum number of hero
 
 Your response must be a valid JSON object. Do not include XML tags or text markers like <strategic_planning> 
 inside your JSON values. Only output this JSON object without any additional text.
+
+FINAL CHECK: Before submitting, visually verify that all objects have matching braces, all arrays have 
+matching brackets, all string values have matching quotes, and every item in objects and arrays 
+(except the last one) is followed by a comma.
 """
 
 
