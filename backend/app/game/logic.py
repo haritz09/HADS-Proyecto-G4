@@ -25,6 +25,7 @@ LEVELS_THRESHOLDS = [100, 300, 600, 1000, 1500]  # Experiencia necesaria para ca
 STAT_POINTS_PER_LEVEL = 2
 MOVEMENT_POINTS_BASE = 10
 HERO_VISION_RADIUS = 3  # Radio de visión estándar para héroes
+MAX_TURNS = 10  # Número máximo de turnos antes de un empate
 
 def calculate_distance(pos1: Position, pos2: Position) -> float:
     """Calcula la distancia entre dos posiciones."""
@@ -386,6 +387,14 @@ def process_hero_attack(game_state: GameState, action: Dict[str, Any]) -> Dict[s
     if combat_result["winner"] == "player":
         grant_experience(attacker, EXPERIENCE_PER_COMBAT)
     
+    # Después de resolver el combate, verificar si la partida ha terminado
+    game_status = check_game_over_conditions(game_state)
+    if game_status != 'ongoing':
+        game_state.status = game_status
+    
+    # Incluir el estado del juego en el resultado
+    combat_result["game_status"] = game_status
+    
     return combat_result
 
 def is_hero_in_city(hero: Heroe, city: City, radius: int = 1) -> bool:
@@ -548,11 +557,46 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
             process_weekly_growth_both(game_state)
             print(f"DEBUG: Processed weekly growth at turn {game_state.turn}")
     
+    # Verificar condiciones de fin de juego después de procesar el turno
+    game_status = check_game_over_conditions(game_state)
+    if not hasattr(game_state, 'status'):
+        game_state.status = 'ongoing'
+    
+    # Actualizar el estado de la partida si ha cambiado
+    if game_status != 'ongoing':
+        print(f"DEBUG: Game over condition detected: {game_status}")
+        game_state.status = game_status
+    
     return {
         "next_player": game_state.current_player,
         "turn": game_state.turn,
-        "resources_collected": True
+        "resources_collected": True,
+        "game_status": game_status
     }
+
+def check_game_over_conditions(game_state: GameState) -> str:
+    """
+    Verifica si la partida ha terminado y determina el resultado.
+    
+    Returns:
+        str: 'ongoing', 'victory', 'defeat', o 'draw'
+    """
+    # Verificar condición de empate por número de turnos
+    if game_state.turn > MAX_TURNS:
+        return 'draw'
+    
+    # Verificar condición de derrota (sin héroes ni ciudades del jugador)
+    player_defeated = (len(game_state.player.heroes) == 0 and len(game_state.player.cities) == 0)
+    if player_defeated:
+        return 'defeat'
+    
+    # Verificar condición de victoria (sin héroes ni ciudades de la IA)
+    ai_defeated = (len(game_state.ai.heroes) == 0 and len(game_state.ai.cities) == 0)
+    if ai_defeated:
+        return 'victory'
+    
+    # La partida continúa
+    return 'ongoing'
 
 def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     try:

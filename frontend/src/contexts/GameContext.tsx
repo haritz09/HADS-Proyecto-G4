@@ -145,6 +145,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Sincronizar artefactos con tiles
       if (response.data && response.data.game_state) {
         const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
+        
+        // Si la partida ha terminado, asegurarnos de que el estado se refleje
+        if (syncedGameState.status && syncedGameState.status !== 'ongoing') {
+          console.log(`Partida cargada con estado: ${syncedGameState.status}`);
+        }
+        
         setGameState(syncedGameState);
       } else {
         setGameState(response.data);
@@ -345,6 +351,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await processAITurn();
       } else {
         setGameMessage('Turno finalizado. Es tu turno');
+      }
+      
+      // Actualizar estado y verificar si la partida ha terminado
+      if (response.data.game_state && response.data.game_state.status && response.data.game_state.status !== 'ongoing') {
+        console.log(`Partida terminada con estado: ${response.data.game_state.status}`);
+        // Mostrar mensaje apropiado
+        switch (response.data.game_state.status) {
+          case 'victory':
+            setGameMessage('¡Victoria! Has ganado la partida.');
+            break;
+          case 'defeat':
+            setGameMessage('Derrota. Has perdido la partida.');
+            break;
+          case 'draw':
+            setGameMessage('Empate. La partida ha terminado en tablas.');
+            break;
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al finalizar el turno');

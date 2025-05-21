@@ -22,6 +22,7 @@ import BuildingConstructionMenu from '../components/game/BuildingConstructionMen
 import RecruitmentMenu from '../components/game/RecruitmentMenu';
 import CombatModal from '../components/game/CombatModal';
 import PlayerInteractionSummary from '../components/game/PlayerInteractionSummary';
+import GameOverScreen from '../components/screens/GameOverScreen';
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
@@ -55,7 +56,14 @@ const GamePage: React.FC = () => {
   const combatInProgressRef = useRef<boolean>(false); // Ref to track combat progress
   // Remove state for settings modal
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  
+  // Add state for AI view mode
+  const [aiViewMode, setAiViewMode] = useState<'normal' | 'changeView' | 'splitView'>('normal');
+  const isAiViewMode = aiViewMode !== 'normal';
 
+  // Add only the missing showCombatModal state (not duplicating combatInteraction)
+  const [showCombatModal, setShowCombatModal] = useState<boolean>(false);
+  
   // Add state for player interaction summary
   const [playerInteraction, setPlayerInteraction] = useState<any>(null);
   const [showPlayerInteraction, setShowPlayerInteraction] = useState<boolean>(false);
@@ -965,19 +973,27 @@ const GamePage: React.FC = () => {
     setShowSettings(true);
   };
 
-  if (loading) {
-    return <div className="loading-screen">Cargando partida...</div>;
-  }
+  // Función para manejar reinicio de partida
+  const handleRestartGame = async () => {
+    try {
+      if (!gameId) return;
+      // Crear una nueva partida con el mismo escenario
+      const scenarioId = "default"; // O recuperar de algún lugar si está disponible
+      const response = await gameService.initializeGame(scenarioId);
+      
+      // Redirigir a la nueva partida
+      navigate(`/game/${response.data._id}`);
+    } catch (error) {
+      console.error("Error restarting game:", error);
+      setError('Error al reiniciar la partida');
+    }
+  };
   
-  if (error || !gameState) {
-    return <div className="error-screen">
-      {error || 'Error desconocido al cargar la partida'}
-      <Button onClick={() => navigate('/menu')}>Volver al menú</Button>
-    </div>;
-  }
-
+  // Verificar si la partida ha terminado
+  const isGameOver = gameState?.status && gameState.status !== 'ongoing';
+  
   return (
-    <div className="game-page">
+    <div className={`game-page ${isAiViewMode ? `ai-view-mode-${aiViewMode}` : ''}`}>
       <div className="game-header">
         <ResourceBar resources={getCurrentPlayerResources()} />
       </div>
@@ -1122,13 +1138,12 @@ const GamePage: React.FC = () => {
       )}
       
       {/* Combat Modal */}
-      {combatInteraction && combatInteraction.interaction === 'combat' && (
+      {showCombatModal && combatInteraction && gameState && (
         <CombatModal
-          isOpen={true}
+          isOpen={showCombatModal}
           onClose={() => {
-            console.log('GamePage: Closing combat modal');
+            setShowCombatModal(false);
             setCombatInteraction(null);
-            combatInProgressRef.current = false;
           }}
           combatResult={combatInteraction.combat_result}
           playerHero={gameState.player.heroes.find(h => h.id === selectedHero?.id) || gameState.player.heroes[0]}
@@ -1151,6 +1166,15 @@ const GamePage: React.FC = () => {
         onClose={() => setShowPlayerInteraction(false)}
         interactionData={playerInteraction}
       />
+      
+      {/* Mostrar pantalla de fin de juego si la partida ha terminado */}
+      {isGameOver && gameState?.status && (
+        <GameOverScreen 
+          status={gameState.status as 'victory' | 'defeat' | 'draw'}
+          gameState={gameState}
+          onRestart={handleRestartGame}
+        />
+      )}
     </div>
   );
 };

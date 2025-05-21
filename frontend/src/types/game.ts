@@ -155,6 +155,7 @@ export interface GameState {
   };
   map: GameMap;
   cities?: City[]; // Optional cities directly on gameState
+  status?: 'ongoing' | 'victory' | 'defeat' | 'draw'; // Estado de la partida
 }
 
 // Asegúrate de que GameContextType incluya las nuevas propiedades
