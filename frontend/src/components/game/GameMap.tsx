@@ -22,17 +22,19 @@ interface GameMapProps {
 }
 
 // Corregir la sintaxis de forwardRef
-const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
-  gameState,
-  selectedHeroId,
-  onHeroClick,
-  onCityClick,
-  onTileClick,
-  onBuildingClick,
-  isPlayerTurn,
-  isReadOnly = false,
-  isAIView = false
-}, ref) => {
+const GameMap = React.forwardRef<GameMapRef, GameMapProps>((props, ref) => {
+  const {
+    gameState,
+    selectedHeroId,
+    onHeroClick,
+    onCityClick,
+    onTileClick,
+    onBuildingClick,
+    isPlayerTurn,
+    isReadOnly = false,
+    isAIView = false
+  } = props;
+
   const mapRef = useRef<HTMLDivElement>(null);
   const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
   // Remove zoom state and set fixed zoom of 1
@@ -53,8 +55,8 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
     step: number;
   } | null>(null);
   const [forceUpdate, setForceUpdate] = useState({});
-
   const { currentPath } = useGame();
+  const [animationPath, setAnimationPath] = useState<Position[]>([]);
 
   useEffect(() => {
     if (animatingHero && animatingHero.step < animatingHero.path.length) {
@@ -83,7 +85,8 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
           const nextStep = prev.step + 1;
           return {
             ...prev,
-            currentPosition: prev.path[prev.step], // Usar la posición actual del paso
+            // FIXED: Use nextStep to get the NEXT position instead of current
+            currentPosition: prev.path[nextStep],
             step: nextStep
           };
         });
@@ -229,20 +232,30 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
   const getHeroCurrentPosition = (heroId: string, forAnimation = false) => {
     // Si es para animación y hay un héroe animándose, usar su posición visual
     if (forAnimation && animatingHero && heroId === animatingHero.heroId) {
-      return { ...animatingHero.currentPosition };
+      return { 
+        ...animatingHero.currentPosition,
+        isAnimating: true // Add flag to indicate this hero is moving
+      };
     }
     
     // Para cálculos de interacción o cuando no hay animación, usar la posición del estado
     const hero = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => h.id === heroId);
-    return hero?.position ? { ...hero.position } : undefined;
+    // Always include isAnimating property, set to false when not animating
+    return hero?.position ? { ...hero.position, isAnimating: false } : undefined;
   };
 
-  // Modify the existing handleHeroMovement to return a Promise
+  // Update the handleHeroMovement function to use the animationPath state:
   const handleHeroMovement = (heroId: string, path: Position[]): Promise<void> => {
     const startPosition = getHeroCurrentPosition(heroId);
     if (!startPosition || path.length < 2) return Promise.resolve();
 
     console.log(`GameMap: Animating hero ${heroId} movement with ${path.length} steps`);
+    
+    // Set the animation path for path indicators
+    setAnimationPath(path);
+    
+    // Calculate total animation time based on path length
+    const totalAnimationTime = path.length * 200; // 200ms per step
     
     return new Promise<void>((resolve) => {
       // Set the animating state
@@ -253,14 +266,14 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
         step: 0
       });
 
-      // Create an interval to check when animation is complete
-      const checkInterval = setInterval(() => {
-        if (!animatingHero) {
-          clearInterval(checkInterval);
-          console.log(`GameMap: Animation completed for hero ${heroId}`);
-          resolve();
-        }
-      }, 100);
+      // Instead of using an interval check which can have closure issues,
+      // resolve the promise after the expected animation duration
+      setTimeout(() => {
+        console.log(`GameMap: Animation completed for hero ${heroId}`);
+        // Clear the path after animation completes
+        setAnimationPath([]);
+        resolve();
+      }, totalAnimationTime + 100); // Add a small buffer for safety
     });
   };
 
@@ -376,8 +389,8 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
     return { name, subtype };
   };
 
-  // Add the missing renderMine function
-  const renderMine = (mine: VisibleObject) => {
+  // The fixed renderMine function with proper variable naming
+  const renderMine = (mine: VisibleObject & { exploredOnly?: boolean }) => {
     if (!mine.position) {
       console.warn('Trying to render mine without position:', mine);
       return null;
@@ -393,6 +406,15 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
     const resourcePerTurn = 'resource_per_turn' in mine ? resourceMine.resource_per_turn : 0;
     const symbol = 'symbol' in mine ? (mine as any).symbol : undefined;
     const ownerClass = owner === 'player' ? 'player-owned' : owner === 'ai' ? 'ai-owned' : 'neutral';
+    
+    // Add CSS class for explored-only mines
+    const cssClasses = [
+      'resource-mine',
+      mineType,
+      ownerClass,
+      mine.justCaptured ? 'just-captured' : '',
+      (mine.exploredOnly ? 'explored-only' : '') // Add this class for explored-only mines
+    ].filter(Boolean).join(' ');
     
     const getTooltip = (): string => {
       const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
@@ -426,17 +448,10 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
       }
     };
     
-    const mineClasses = [
-      'resource-mine',
-      mineType,
-      ownerClass,
-      mine.justCaptured ? 'just-captured' : ''
-    ].filter(Boolean).join(' ');
-    
     return (
       <div
         key={`mine-${mine.id}`}
-        className={mineClasses}
+        className={cssClasses}
         style={{
           left: `${mine.position.x * 32}px`,
           top: `${mine.position.y * 32}px`,
@@ -639,10 +654,15 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
           </div>
         )}
 
-        {/* Solo renderizar héroe si es visible */}
-        {!isExploredOnly && heroForRendering && !animatingHero && (
+        {/* Path indicator for movement animation - add this section */}
+        {animatingHero && animationPath.some(pos => pos.x === x && pos.y === y) && (
+          <div className="path-indicator"></div>
+        )}
+
+        {/* FIXED: Removed !animatingHero condition to ensure heroes remain visible during animation */}
+        {!isExploredOnly && heroForRendering && (
           <div 
-            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''} ${isAIView && heroForRendering.id.startsWith('ai_') ? 'ai-perspective' : ''}`}
+            className={`hero-sprite ${selectedHeroId === heroForRendering.id ? 'selected' : ''} ${isAIView && heroForRendering.id.startsWith('ai_') ? 'ai-perspective' : ''} ${getHeroCurrentPosition(heroForRendering.id, true)?.isAnimating ? 'moving' : ''}`}
             onClick={(e) => {
               if (isReadOnly) return;
               e.stopPropagation();
@@ -783,24 +803,27 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(({
       >
         {grid}
         
-        {/* CRITICAL DEBUG: Add logging to show how many mines we're about to render */}
-        {(() => {
-          const minesToRender = gameState.map.visible_objects?.filter((obj: VisibleObject) =>
-            obj.position &&
-            (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-             ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
-          ) || [];
-          
-          return null;
-        })()}
-        
-        {/* Renderizado explícito de todas las minas */}
+        {/* Modify this section to check visibility before rendering mines */}
         {gameState.map.visible_objects?.filter((obj: VisibleObject) =>
           obj.position &&
           (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
            ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
         ).map((mine: VisibleObject) => {
-          return renderMine(mine);
+          // Check visibility of the mine's position before rendering
+          const visibility = getTileVisibility(mine.position.x, mine.position.y);
+          
+          // Only render if the position is currently visible
+          if (visibility === TileVisibility.VISIBLE) {
+            return renderMine(mine);
+          } else if (visibility === TileVisibility.EXPLORED) {
+            // For explored but not visible positions, render with modified appearance
+            return renderMine({
+              ...mine,
+              exploredOnly: true // Add custom property to modify appearance
+            });
+          }
+          // Don't render in unexplored areas
+          return null;
         })}
       </div>
     </div>
