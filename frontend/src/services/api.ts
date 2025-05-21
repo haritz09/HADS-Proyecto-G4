@@ -111,6 +111,11 @@ export const authService = {
   
   getProfile: async () => {
     return await API.get('/auth/profile');
+  },
+  
+  // Add the missing getToken method
+  getToken: () => {
+    return localStorage.getItem('authToken');
   }
 };
 
@@ -839,11 +844,44 @@ export const gameService = {
       throw error;
     }
   },
-
-  // Método para enviar cheat al backend
-  applyCheat: (gameId: string, cheatData: any) => {
-    return API.post(`/games/${gameId}/cheat`, cheatData);
+  
+  applyCheat: async (gameId: string, cheatData: any) => {
+    try {
+      const response = await API.post(
+        `/games/${gameId}/cheat`,
+        cheatData,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authService.getToken()}`
+          }
+        }
+      );
+      
+      console.log('Cheat aplicado:', response.data);
+      
+      // Devolver los datos de la respuesta para que el frontend pueda usarlos
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('Error aplicando cheat:', error);
+      return { 
+        success: false, 
+        error: getErrorMessage(error) 
+      };
+    }
   },
+};
+
+// Add this utility function to handle error messages from API responses
+const getErrorMessage = (error: any): string => {
+  if (error.response?.data?.detail) {
+    return error.response.data.detail;
+  } else if (error.response?.data?.message) {
+    return error.response.data.message;
+  } else if (error.message) {
+    return error.message;
+  }
+  return 'Error desconocido';
 };
 
 export default API;

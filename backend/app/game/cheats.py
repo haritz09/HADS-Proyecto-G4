@@ -1,6 +1,7 @@
 from backend.app.db.schema import GameState, Heroe, City
 from typing import Dict, Any, Optional
 import copy
+from datetime import datetime
 
 # --- Funciones de ayuda ---
 def find_hero(game_state: GameState, hero_id: str) -> Optional[Heroe]:
@@ -59,7 +60,8 @@ def cheat_construir_todos_edificios(game_state: GameState, target: Dict[str, Any
     }
 
 def cheat_derrota_inmediata(game_state: GameState, target: Dict[str, Any]) -> Dict[str, Any]:
-    game_state.status = 'lost'
+    # Cambiado de 'lost' a 'defeat' para que corresponda con lo que espera el frontend
+    game_state.status = 'defeat'
     return {'success': True, 'message': 'Has perdido la partida', 'affected_entity': None}
 
 def cheat_victoria_inmediata(game_state: GameState, target: Dict[str, Any]) -> Dict[str, Any]:
@@ -118,9 +120,15 @@ def cheat_revelar_tesoros(game_state: GameState, target: Dict[str, Any]) -> Dict
     return {'success': True, 'message': 'Todos los tesoros han sido revelados', 'affected_entity': None}
 
 def cheat_revelar_mapa(game_state: GameState, target: Dict[str, Any]) -> Dict[str, Any]:
-    # Suponiendo que hay un campo fog_of_war en el mapa
+    # Fog of war is implemented as a 1D array, not 2D
     if hasattr(game_state, 'map') and hasattr(game_state.map, 'fog_of_war'):
-        game_state.map.fog_of_war = [[False for _ in row] for row in game_state.map.fog_of_war]
+        # Set all fog of war values to False (revealing the entire map)
+        game_state.map.fog_of_war = [False] * len(game_state.map.fog_of_war)
+        
+        # Also mark all tiles as explored
+        if hasattr(game_state.map, 'explored'):
+            game_state.map.explored = [True] * len(game_state.map.explored)
+    
     return {'success': True, 'message': 'El mapa ha sido completamente revelado', 'affected_entity': None}
 
 # --- Procesador principal ---
@@ -143,6 +151,25 @@ def process_cheat(game_state: GameState, cheat: Dict[str, Any]) -> Dict[str, Any
     target = cheat.get('target', {})
     if code not in CHEAT_MAP:
         raise ValueError('Tipo de cheat no válido')
+    
+    # Registrar el cheat utilizado si el estado del juego tiene el campo cheats_used
+    if hasattr(game_state, 'cheats_used'):
+        # Asegurarnos de que cheats_used es una lista
+        if game_state.cheats_used is None:
+            game_state.cheats_used = []
+        
+        # Añadir el cheat con información sobre el objetivo si es relevante
+        cheat_info = {
+            'code': code,
+            'timestamp': datetime.now().isoformat(),
+        }
+        
+        # Añadir información del objetivo si existe
+        if target and 'id' in target:
+            cheat_info['target_id'] = target['id']
+            
+        game_state.cheats_used.append(cheat_info)
+        
     result = CHEAT_MAP[code](game_state, target)
     result['game_state'] = game_state
     return result

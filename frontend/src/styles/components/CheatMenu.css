@@ -148,10 +148,50 @@
 }
 
 .cheat-message {
-  margin-top: 15px;
+  margin-top: 16px;
   padding: 10px;
   border-radius: 4px;
   text-align: center;
-  background-color: rgba(233, 196, 106, 0.2);
-  color: #e9c46a;
+  font-weight: bold;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+.cheat-message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.cheat-message.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animación para cuando se aplica un cheat */
+.cheat-applied {
+  animation: pulseGlow 1.5s ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 15px rgba(76, 175, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+  }
 }
