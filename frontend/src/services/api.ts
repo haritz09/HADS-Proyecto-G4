@@ -839,6 +839,11 @@ export const gameService = {
       throw error;
     }
   },
+
+  // Método para enviar cheat al backend
+  applyCheat: (gameId: string, cheatData: any) => {
+    return API.post(`/games/${gameId}/cheat`, cheatData);
+  },
 };
 
 export default API;

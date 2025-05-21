@@ -23,6 +23,7 @@ import RecruitmentMenu from '../components/game/RecruitmentMenu';
 import CombatModal from '../components/game/CombatModal';
 import PlayerInteractionSummary from '../components/game/PlayerInteractionSummary';
 import GameOverScreen from '../components/screens/GameOverScreen';
+import CheatMenu from '../components/game/CheatMenu'; // Import CheatMenu
 import { gameService } from '../services/api';
 import { executeAction, createEndTurnAction } from '../services/actionService';
 import { syncArtifactsWithTiles, syncMinesWithTiles } from '../utils/gameMapUtils';
@@ -86,6 +87,9 @@ const GamePage: React.FC = () => {
   
   // Estado local para UI
   const [showSettings, setShowSettings] = useState(false);
+  
+  // Añadir estado para controlar la visibilidad del menú de cheats
+  const [showCheatMenu, setShowCheatMenu] = useState<boolean>(false);
   
   // Cargar el estado del juego
   useEffect(() => {
@@ -1343,6 +1347,25 @@ const GamePage: React.FC = () => {
             console.log('GamePage: onRestart llamado');
             navigate('/');
           }}
+        />
+      )}
+      
+      {/* Botón para abrir el menú de cheats */}
+      <div className="cheat-button-container">
+        <button 
+          className="cheat-button"
+          onClick={() => setShowCheatMenu(true)}
+          title="Abrir menú de cheats"
+        >
+          🔮
+        </button>
+      </div>
+      
+      {/* Renderizar el menú de cheats si showCheatMenu es true */}
+      {showCheatMenu && (
+        <CheatMenu 
+          onClose={() => setShowCheatMenu(false)} 
+          gameState={gameState}
         />
       )}
     </div>
