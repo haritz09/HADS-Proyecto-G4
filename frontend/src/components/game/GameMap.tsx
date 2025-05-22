@@ -872,10 +872,15 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
       <div
         className={tileClasses}
         onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
-        title={isExploredOnly ? 'Territorio explorado (no visible actualmente)' : 
-              (mineAtPosition ? 
-                `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
-                (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : undefined))}
+        title={isExploredOnly
+    ? 'Territorio explorado (no visible actualmente)'
+    : mineAtPosition
+      ? `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno`
+      : artifact
+        ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}`
+        : building
+          ? `Edificio: ${building.name || building.building_type}`
+          : undefined}
       >
          {/* Mostrar grass, forest o mountain SIEMPRE como fondo */}
         {!isExploredOnly && (isGrass || isForest) && (
@@ -1016,6 +1021,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
                           ? 'dragons_lair'
                           : 'building'
             }
+            title={building ? building.name || building.building_type : ''} // Esto es clave
             className={`tile-building 
               ${isCastleBuilding && isNearCastle ? 'castle-near-hero' : ''} 
               ${isBuildingInteractive ? 'interactive-building' : ''} 

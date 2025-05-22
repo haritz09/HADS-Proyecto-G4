@@ -200,7 +200,7 @@ def initialize_game_cities():
     cities.append(knights_city)
     
     # Mage city - near magical ley lines
-    mage_pos = {"x": 40, "y": 40}
+    mage_pos = {"x": 35, "y": 40}
     mage_city = initialize_city(mage_pos, owner=None)
     mage_city["id"] = "mage_city"
     mage_city["buildings"] = [

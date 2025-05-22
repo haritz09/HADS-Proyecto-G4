@@ -34,7 +34,8 @@
   height: 80vh;
   width: 100%;
   padding: 0px 0;
-  padding-left: 30%;
+  padding-left: 50%;
+  top: 150px;
 }
 
 .title-container {
@@ -42,19 +43,20 @@
   background-image: url('../../assets/images/background/titleBase.png');
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  background-position: center 30%; /* Ajustado para mover la imagen un poco más arriba */
-  padding: 120px 150px;  /* Aumentando aún más el padding vertical y horizontal */
+  background-position: center 40%; /* Ajustado para mover la imagen un poco más arriba */
+  padding: 110px 200px;  /* Aumentando aún más el padding vertical y horizontal */
   border-radius: 8px;
   display: inline-block;
   width: auto;
   box-shadow: none;
   align-self: flex-start;
   position: relative;
+  left: 200px;
 }
 
 .game-title {
   font-family: 'MedievalSharp', serif;
-  font-size: 48px; /* Ajusta el tamaño del texto */
+  font-size: 30px; /* Ajusta el tamaño del texto */
   color: #FFD700;
   text-shadow: 
     0 0 5px #000,
@@ -64,8 +66,8 @@
   text-align: center;
   letter-spacing: 2px;
   position: absolute; /* Superpone el texto sobre la imagen */
-  top: 39%;
-  left: 31,5%;
+  top: 37%;
+  left: 20%;
   z-index: 2; /* Asegura que el texto esté encima de la imagen */
 }
 
@@ -284,4 +286,21 @@
   0% { transform: scale(1); }
   50% { transform: scale(1.05); box-shadow: 0 0 10px rgba(255, 215, 0, 0.7); }
   100% { transform: scale(1); }
+}
+
+img.tile-building:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 9999;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
 }
