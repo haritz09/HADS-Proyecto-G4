@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import '../../styles/components/AIActionsSummary.css';
+import { useGame } from '../../contexts/GameContext';
 
 interface AIAction {
   action: string;
@@ -24,7 +25,31 @@ const AIActionsSummary: React.FC<AIActionsSummaryProps> = ({
   isVisible,
   onClose
 }) => {
+  const { aiResponseReceived } = useGame();
+  
+  // Acceder al contexto para notificar de cambios
+  useEffect(() => {
+    // Al montar con isVisible=true, asegurar que AIThinking se desactiva
+    if (isVisible && aiResponseReceived) {
+      console.log("AIActionsSummary: Se muestra resumen y se recibió respuesta de IA - deberíamos desactivar el indicador");
+    }
+    
+    // Limpiar al desmontar
+    return () => {
+      if (isVisible) {
+        console.log("AIActionsSummary: Componente desmontado mientras estaba visible");
+      }
+    };
+  }, [isVisible, aiResponseReceived]);
+  
   if (!isVisible) return null;
+
+  // Cerrar el resumen notificando al contexto para manejar correctamente todos los estados
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+    }
+  };
 
   // Función para obtener un icono basado en el tipo de acción
   const getActionIcon = (actionType: string): string => {
@@ -125,7 +150,7 @@ const AIActionsSummary: React.FC<AIActionsSummaryProps> = ({
     <div className="ai-actions-summary">
       <div className="ai-summary-header">
         <h2>Resumen de Acciones de la IA</h2>
-        <button className="close-button" onClick={onClose}>×</button>
+        <button className="close-button" onClick={handleClose}>×</button>
       </div>
 
       {strategicInfo && (

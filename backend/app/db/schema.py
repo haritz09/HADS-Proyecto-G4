@@ -139,14 +139,16 @@ class GameMap(BaseModel):
     fog_of_war: Optional[List[bool]] = None
     explored: Optional[List[Any]] = None
     visible_objects: Optional[List[Union[ResourceMine, Artifact]]] = None
-    # visible_objects ahora puede contener ResourceMine y otros objetos
+    permanently_revealed: bool = False  # New field for persistent map revealing
 
 class GameState(BaseModel):
     turn: int
+    current_player: str
     player: Entity
     ai: Entity
     map: GameMap
-    current_player: str
+    cities: Optional[List[City]] = None
+    status: Optional[str] = 'ongoing'  # Add status field with default value
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,

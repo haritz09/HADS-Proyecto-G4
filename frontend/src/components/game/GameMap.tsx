@@ -3,6 +3,11 @@ import { GameState, Hero, Position, MapTile, Building, ArtifactObject, VisibleOb
 import { useGame } from '../../contexts/GameContext';
 import { findPath, calculatePathCost } from '../../services/gameEngine';
 import '../../styles/components/GameMap.css';
+import { TileVisibility } from '../../constants/gameConstants';
+
+export interface GameMapRef {
+  animateHeroMovement: (heroId: string, path: Position[]) => Promise<void>;
+}
 
 interface GameMapProps {
   gameState: GameState;
@@ -16,17 +21,18 @@ interface GameMapProps {
   isAIView?: boolean;    // Nueva prop para indicar vista de IA
 }
 
-const GameMap: React.FC<GameMapProps> = ({
-  gameState,
-  selectedHeroId,
-  onHeroClick,
-  onCityClick,
-  onTileClick,
-  onBuildingClick,
-  isPlayerTurn,
-  isReadOnly = false,
-  isAIView = false
-}) => {
+const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(props, ref) {
+  const {
+    gameState,
+    selectedHeroId,
+    onHeroClick,
+    onCityClick,
+    onTileClick,
+    onBuildingClick,
+    isPlayerTurn,
+    isReadOnly = false,
+    isAIView = false
+  } = props;
   const mapRef = useRef<HTMLDivElement>(null);
   const [viewportPosition, setViewportPosition] = useState({ x: 0, y: 0 });
   // Remove zoom state and set fixed zoom of 1
@@ -47,8 +53,8 @@ const GameMap: React.FC<GameMapProps> = ({
     step: number;
   } | null>(null);
   const [forceUpdate, setForceUpdate] = useState({});
-
   const { currentPath } = useGame();
+  const [animationPath, setAnimationPath] = useState<Position[]>([]);
 
   useEffect(() => {
     if (animatingHero && animatingHero.step < animatingHero.path.length) {
@@ -180,6 +186,12 @@ const GameMap: React.FC<GameMapProps> = ({
     if (isReadOnly) return;
     
     if (!selectedHeroId) return;
+
+    // Check that position is defined and has x/y properties
+    if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') {
+      console.error('Invalid position object in handleTileClick:', position);
+      return;
+    }
     
     const currentTime = new Date().getTime();
     const timeSinceLastClick = currentTime - lastClickTime;
@@ -217,26 +229,53 @@ const GameMap: React.FC<GameMapProps> = ({
   const getHeroCurrentPosition = (heroId: string, forAnimation = false) => {
     // Si es para animación y hay un héroe animándose, usar su posición visual
     if (forAnimation && animatingHero && heroId === animatingHero.heroId) {
-      return { ...animatingHero.currentPosition };
+      return { ...animatingHero.currentPosition,
+        isAnimating: true // Add flag to indicate this hero is moving
+       };
     }
     
     // Para cálculos de interacción o cuando no hay animación, usar la posición del estado
     const hero = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => h.id === heroId);
-    return hero?.position ? { ...hero.position } : undefined;
+    // Always include isAnimating property, set to false when not animating
+    return hero?.position ? { ...hero.position, isAnimating: false } : undefined;
   };
 
-  const handleHeroMovement = (heroId: string, path: Position[]) => {
+  const handleHeroMovement = (heroId: string, path: Position[]): Promise<void> => {
     const startPosition = getHeroCurrentPosition(heroId);
-    if (!startPosition || path.length < 2) return;
+    if (!startPosition || path.length < 2) return Promise.resolve();
 
-    // Now animation will only be triggered after backend confirms successful movement
-    setAnimatingHero({
-      heroId,
-      currentPosition: startPosition,
-      path, // Use the path parameter instead of the undefined adjustedPath
-      step: 0
+     console.log(`GameMap: Animating hero ${heroId} movement with ${path.length} steps`);
+
+     // Set the animation path for path indicators
+    setAnimationPath(path);
+
+     // Calculate total animation time based on path length
+    const totalAnimationTime = path.length * 200; // 200ms per step
+
+     return new Promise<void>((resolve) => {
+      // Set the animating state
+      setAnimatingHero({
+        heroId,
+        currentPosition: { x: startPosition.x, y: startPosition.y }, // Ensure only Position properties
+        path,
+        step: 0
+      });
+
+      // Instead of using an interval check which can have closure issues,
+      // resolve the promise after the expected animation duration
+      setTimeout(() => {
+        console.log(`GameMap: Animation completed for hero ${heroId}`);
+        // Clear the path after animation completes
+        setAnimationPath([]);
+        resolve();
+      }, totalAnimationTime + 100); // Add a small buffer for safety
     });
   };
+
+  // Expose the handleHeroMovement function via forwardRef
+  React.useImperativeHandle(ref, () => ({
+    animateHeroMovement: handleHeroMovement
+  }));
 
   const checkHeroOnBuilding = (hero: Hero | undefined | null, building: Building): string | null => {
     if (!hero) return null;
@@ -288,16 +327,14 @@ const GameMap: React.FC<GameMapProps> = ({
     let artifact: VisibleObject | null = null;
     
     if (tile?.object_type === 'artifact' && tile?.object_id) {
-      const foundArtifact = gameState.map.visible_objects?.find(
-        obj => obj.id === tile.object_id && obj.type === 'artifact'
-      );
+      const foundArtifact = gameState.map.visible_objects?.find((obj: VisibleObject) => obj.id === tile.object_id);
       if (foundArtifact) {
         artifact = foundArtifact;
       }
     }
     
     if (!artifact && gameState.map.visible_objects) {
-      const foundArtifact = gameState.map.visible_objects.find(obj => {
+      const foundArtifact = gameState.map.visible_objects.find((obj: VisibleObject) => {
         const isArtifact = obj.type === 'artifact' || 'subtype' in obj;
         const isAtPosition = obj.position && obj.position.x === x && obj.position.y === y;
         return isArtifact && isAtPosition;
@@ -346,7 +383,7 @@ const GameMap: React.FC<GameMapProps> = ({
     return { name, subtype };
   };
 
-  const renderBuilding = (building: Building, cityId: string) => {
+  const renderBuildingOverlay = (building: Building, cityId: string) => {
     const heroes = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])];
 
     const isHeroNearby = heroes.some(hero => {
@@ -498,7 +535,7 @@ const GameMap: React.FC<GameMapProps> = ({
   const waterImagePath = '/assets/images/tiles/grass/water.png'; // Añadido para river
 
   // Enhanced renderMine function with better logging
-  const renderMine = (mine: VisibleObject) => {
+  const renderMine = (mine: VisibleObject & { exploredOnly?: boolean }) => {
     if (!mine.position) {
       console.warn('Trying to render mine without position:', mine);
       return null;
@@ -515,6 +552,14 @@ const GameMap: React.FC<GameMapProps> = ({
     const symbol = 'symbol' in mine ? (mine as any).symbol : undefined;
     const ownerClass = owner === 'player' ? 'player-owned' : owner === 'ai' ? 'ai-owned' : 'neutral';
     
+     const cssClasses = [
+      'resource-mine',
+      mineType,
+      ownerClass,
+      mine.justCaptured ? 'just-captured' : '',
+      (mine.exploredOnly ? 'explored-only' : '') // Add this class for explored-only mines
+    ].filter(Boolean).join(' ');
+
     const getTooltip = (): string => {
       const resourceName = resourceType.charAt(0).toUpperCase() + resourceType.slice(1);
       let tooltip = `Mina de ${resourceName}: +${resourcePerTurn} por turno`;
@@ -696,12 +741,28 @@ const GameMap: React.FC<GameMapProps> = ({
   const renderTile = (x: number, y: number) => {
     const index = y * gameState.map.size.width + x;
     const tile = gameState.map.tiles[index];
+    const visibility = getTileVisibility(x, y);
 
-    // Buscar todos los objetos relevantes en este tile
-    const heroForRendering = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
-      const visualPos = getHeroCurrentPosition(h.id, true);
-      return visualPos && visualPos.x === x && visualPos.y === y;
-    });
+     // Para tiles completamente sin explorar, renderizar un tile negro simple
+    if (visibility === TileVisibility.UNEXPLORED) {
+      return (
+        <div
+          className="map-tile unexplored-tile"
+          onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
+        ></div>
+      );
+    }
+
+    // Para tiles explorados pero no visibles actualmente
+    const isExploredOnly = visibility === TileVisibility.EXPLORED;
+
+    
+    // Solo mostrar objetos y personajes en tiles actualmente visibles
+    const heroForRendering = !isExploredOnly ? 
+      [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
+        const visualPos = getHeroCurrentPosition(h.id, true);
+        return visualPos && visualPos.x === x && visualPos.y === y;
+      }) : null;
 
     const heroAtThisPosition = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])].find(h => {
       return h.position.x === x && h.position.y === y;
@@ -720,10 +781,11 @@ const GameMap: React.FC<GameMapProps> = ({
        ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
     ) as ResourceMine | undefined;
 
-    const artifact = findArtifactAtPosition(x, y, tile);
+    // Solo buscar artefactos en áreas actualmente visibles
+    const artifact = !isExploredOnly ? findArtifactAtPosition(x, y, tile) : null;
     const { name: artifactName, subtype: artifactSubtype } = getArtifactProperties(artifact);
 
-    const selectedHero = gameState.player.heroes.find(h => h.id === selectedHeroId) || null;
+    const selectedHero = gameState.player.heroes.find((h: Hero) => h.id === selectedHeroId) || null;
     
     const isCastleBuilding = building && (building.is_castle || (building.position.x === 48 && building.position.y === 48));
     let isNearCastle = false;
@@ -824,14 +886,15 @@ const GameMap: React.FC<GameMapProps> = ({
     // Modificar onClick para respetar isReadOnly
     return (
       <div
-        className={updatedTileClasses}
+        className={tileClasses}
         onClick={isReadOnly ? undefined : () => handleTileClick({ x, y })}
-        title={mineAtPosition ? 
-          `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
-          (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : tooltipMessage || undefined)}
+        title={isExploredOnly ? 'Territorio explorado (no visible actualmente)' : 
+              (mineAtPosition ? 
+                `Mina de ${mineAtPosition.resource_type}: +${mineAtPosition.resource_per_turn} por turno` : 
+                (artifact ? `Artefacto: ${artifactName || artifactSubtype || 'Desconocido'}` : undefined))}
       >
          {/* Mostrar grass, forest o mountain SIEMPRE como fondo */}
-        {(isGrass || isForest) && (
+        {!isExploredOnly && (isGrass || isForest) && (
           <img
             src={grassImagePath}
             alt="grass"
@@ -851,7 +914,7 @@ const GameMap: React.FC<GameMapProps> = ({
             }}
           />
         )}
-        {isRiver && (
+        {!isExploredOnly && isRiver && (
           <img
             src={waterImagePath}
             alt="river"
@@ -871,7 +934,7 @@ const GameMap: React.FC<GameMapProps> = ({
             }}
           />
         )}
-        {isMountain && (
+        {!isExploredOnly && isMountain && (
           <>
             {/* Fondo grass debajo */}
             <img
@@ -915,7 +978,7 @@ const GameMap: React.FC<GameMapProps> = ({
           </>
         )}
         {/* Solo mostrar árbol si no hay objeto de mayor prioridad */}
-        {renderTree && (
+        {!isExploredOnly && renderTree && (
           <img
             src={treeImagePath}
             alt="tree"
@@ -937,7 +1000,7 @@ const GameMap: React.FC<GameMapProps> = ({
           />
         )}
         {/* Solo mostrar imagen de building si no hay héroe */}
-        {renderBuildingImg && (
+        {!isExploredOnly && renderBuildingImg && (
           <img
             src={
               building && building.building_type === 'castle'
@@ -987,9 +1050,9 @@ const GameMap: React.FC<GameMapProps> = ({
           />
         )}
         {/* Solo mostrar mina si no hay héroe ni edificio */}
-        {shouldRenderMine && renderMine(mineAtPosition!)}
+        {!isExploredOnly && shouldRenderMine && renderMine(mineAtPosition!)}
         {/* Solo mostrar artefacto si no hay héroe, edificio ni mina */}
-        {renderArtifact && (
+        {!isExploredOnly && renderArtifact && (
           <div 
             className={`artifact-sprite artifact-${artifactSubtype || 'unknown'}`}
             onClick={(e) => {
@@ -1018,7 +1081,7 @@ const GameMap: React.FC<GameMapProps> = ({
           </div>
         )}
         {/* Solo mostrar héroe si está en este tile */}
-        {renderHero && (
+        {!isExploredOnly && renderHero && (
           <img
             src={getHeroImage(heroForRendering!)}
             alt="hero"
@@ -1046,9 +1109,93 @@ const GameMap: React.FC<GameMapProps> = ({
           />
         )}
         {/* Renderizar cualquier overlay de building (iconos, etc) solo si building es el objeto principal */}
-        {renderBuildingImg && building && renderBuilding(building, city?.id || '')}
+        {renderBuildingImg && building && renderBuildingOverlay(building, city?.id || '')}
       </div>
     );
+  };
+
+  // Actualizar renderBuilding para manejar áreas exploradas
+  const renderBuilding = (building: Building, cityId: string, isExploredOnly = false) => {
+    const heroes = [...(gameState.player?.heroes || []), ...(gameState.ai?.heroes || [])];
+
+    const isHeroNearby = heroes.some(hero => {
+      const dx = Math.abs(hero.position.x - building.position.x);
+      const dy = Math.abs(hero.position.y - building.position.y);
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance <= 2;
+    });
+
+     const isCastle = building.is_castle || 
+                   (building.position.x === 48 && building.position.y === 48);
+    
+    const isPlayerOwned = building.owner === 'player';
+    
+    const isInteractive = (building.built && (isCastle || building.can_recruit) && isPlayerOwned && isHeroNearby) ||
+                         (isCastle && isHeroNearby);
+
+    const selectedHero = heroes.find(h => h.id === selectedHeroId);
+    const distance = selectedHero ? 
+      Math.sqrt(
+        Math.pow(selectedHero.position.x - building.position.x, 2) + 
+        Math.pow(selectedHero.position.y - building.position.y, 2)
+      ) : 
+      Infinity;
+    
+    const buildingClasses = [
+      'building',
+      isCastle ? 'building-castle' : '',
+      isInteractive ? 'building-interactive' : '',
+      isPlayerOwned ? 'building-player-owned' : '',
+      building.built ? 'building-built' : '',
+      building.can_recruit && building.built ? 'building-can-recruit' : '',
+      `building-${building.building_type}`,
+      isExploredOnly ? 'explored-only' : '' // Add this class for explored-only buildings
+    ].filter(Boolean).join(' ');
+
+    const handleBuildingClick = () => {
+      if (isInteractive) {
+        onBuildingClick(building, cityId);
+      }
+    };
+
+    return (
+      <div
+        key={building.id}
+        className={buildingClasses}
+        style={{
+          left: `${building.position.x * 32}px`,
+          top: `${building.position.y * 32}px`,
+          width: `32px`,
+          height: `32px`,
+        }}
+        onClick={handleBuildingClick}
+      >
+        {getBuildingIcon(building.building_type)}
+      </div>
+    );
+  };
+
+  // Determina la visibilidad de un tile específico
+  const getTileVisibility = (x: number, y: number): TileVisibility => {
+    const index = y * gameState.map.size.width + x;
+    
+    // Asegurarse de que el índice es válido
+    if (index < 0 || index >= gameState.map.fog_of_war.length) {
+      return TileVisibility.UNEXPLORED;
+    }
+    
+    // Si el tile es actualmente visible (no está en la niebla)
+    if (!gameState.map.fog_of_war[index]) {
+      return TileVisibility.VISIBLE;
+    }
+    
+    // Si el array de exploración existe y este tile ha sido explorado
+    if (gameState.map.explored && gameState.map.explored[index]) {
+      return TileVisibility.EXPLORED;
+    }
+    
+    // Por defecto, no explorado
+    return TileVisibility.UNEXPLORED;
   };
 
   const syncArtifactsWithTiles = () => {
@@ -1186,18 +1333,32 @@ const GameMap: React.FC<GameMapProps> = ({
           return null;
         })()}
         
-        {/* Renderizado explícito de todas las minas */}
-        {gameState.map.visible_objects?.filter(obj => 
-          obj.position && 
+         {/* Modify this section to render mines with proper visibility state */}
+        {gameState.map.visible_objects?.filter((obj: VisibleObject) =>
+          obj.position &&
           (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
-        ).map(mine => {
-          return renderMine(mine);
+           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
+        ).map((mine: VisibleObject) => {
+          // Check visibility of the mine's position before rendering
+          const visibility = getTileVisibility(mine.position.x, mine.position.y);
+          
+          // Only render if the position is currently visible or explored
+          if (visibility === TileVisibility.VISIBLE) {
+            return renderMine(mine);
+          } else if (visibility === TileVisibility.EXPLORED) {
+            // For explored but not visible positions, render with modified appearance
+            return renderMine({
+              ...mine,
+              exploredOnly: true // Add custom property to modify appearance
+            });
+          }
+          // Don't render in unexplored areas
+          return null;
         })}
       </div>
     </div>
   );
-};
+});
 
 const getHeroImage = (hero: Hero) => {
   // Puedes usar hero.id, hero.name, o una propiedad custom como hero.sprite

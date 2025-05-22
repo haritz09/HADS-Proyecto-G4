@@ -137,14 +137,44 @@
 /* Indicador visual del camino más claro */
 .path-indicator {
   position: absolute;
-  width: 10px;
-  height: 10px;
-  background-color: rgba(255, 255, 255, 0.7);
+  width: 12px;
+  height: 12px;
+  background-color: rgba(50, 150, 255, 0.8); /* Changed to blue for better visibility */
   border-radius: 50%;
+  box-shadow: 0 0 5px rgba(0, 100, 255, 0.8);
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 8;
+  pointer-events: none;
+  animation: pathPulse 1.5s infinite;
+}
+
+/* Animation for path indicators */
+@keyframes pathPulse {
+  0% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.8); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+  100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.8); }
+}
+
+/* Styling for explored but not currently visible tiles */
+.explored-tile {
+  position: relative;
+  filter: grayscale(70%);
+  opacity: 0.8;
+}
+
+/* Styling for structures in explored areas */
+.explored-only {
+  opacity: 0.7;
+  filter: grayscale(80%);
+  pointer-events: none; /* Prevent interaction with structures not in current view */
+}
+
+/* Unexplored tiles */
+.unexplored-tile {
+  background-color: #000;
+  cursor: not-allowed;
 }
 
 /* Estilos para casillas con héroes moviéndose */
@@ -676,6 +706,13 @@
   opacity: 1;
 }
 
+/* New style for mines in explored but not currently visible areas */
+.resource-mine.explored-only {
+  opacity: 0.5;
+  filter: grayscale(0.8);
+  pointer-events: none; /* Disallow interaction with non-visible mines */
+}
+
 /* Añadir animaciones para acciones de la IA */
 /* Animación para construcción de edificios */
 @keyframes buildingConstruction {
@@ -927,4 +964,30 @@
   animation: none !important;
   background-color: rgba(255, 165, 0, 0.9) !important;
   box-shadow: none !important;
+}
+
+/* Estilos para Fog of War */
+.unexplored-tile {
+  background-color: black !important;
+  z-index: 15; /* Asegurar que cubre otros elementos */
+}
+
+.explored-tile {
+  filter: brightness(0.7) grayscale(0.5);
+}
+
+/* Animación para revelar tiles */
+@keyframes revealTile {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.tile-revealed {
+  animation: revealTile 0.3s ease-out;
 }

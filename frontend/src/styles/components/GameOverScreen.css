@@ -1,0 +1,109 @@
+.game-over-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.game-over-content {
+  background-color: #1a1a2e;
+  border: 2px solid #e94560;
+  border-radius: 8px;
+  padding: 2rem;
+  width: 80%;
+  max-width: 800px;
+  text-align: center;
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+  animation: slideIn 0.5s ease;
+}
+
+.game-over-title {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  font-family: 'MedievalSharp', serif;
+  text-transform: uppercase;
+}
+
+.game-over-title.victory {
+  color: #4ecca3;
+  text-shadow: 0 0 10px rgba(78, 204, 163, 0.7);
+}
+
+.game-over-title.defeat {
+  color: #e94560;
+  text-shadow: 0 0 10px rgba(233, 69, 96, 0.7);
+}
+
+.game-over-title.draw {
+  color: #ffd369;
+  text-shadow: 0 0 10px rgba(255, 211, 105, 0.7);
+}
+
+.game-over-message {
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+  color: #eeeeee;
+}
+
+.game-stats {
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.game-stats h3 {
+  margin-top: 0;
+  color: #ffd369;
+  font-family: 'MedievalSharp', serif;
+  margin-bottom: 1rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.stat-item {
+  text-align: left;
+  padding: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.stat-label {
+  font-size: 0.9rem;
+  color: #aaaaaa;
+  margin-bottom: 0.3rem;
+}
+
+.stat-value {
+  font-size: 1.1rem;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.game-over-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-50px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

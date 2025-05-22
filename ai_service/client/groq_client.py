@@ -1,7 +1,8 @@
 import os
 from dotenv import load_dotenv
-import requests  # Usamos requests para manejar las solicitudes HTTP
+import requests
 import json
+import re
 from groq import Groq
 from groq import RateLimitError, APIError
 from ..exceptions.rate_limit_error import RateLimitExceededError
@@ -41,7 +42,17 @@ class GroqClient:
         self.default_model = self.available_models[self.current_model_index]
         self.actual_context = None  # Initialize context storage
         self.is_first_message = True  # Track if this is the first message
+        self.retry_callback = None  # Callback para notificar reintentos
         self._initialized = True
+        
+    def set_retry_callback(self, callback):
+        """
+        Establece una función de callback para notificar reintentos
+        
+        Args:
+            callback: Función que recibe un diccionario con información del reintento
+        """
+        self.retry_callback = callback
         
     def send_message(self, game_state, model=None):
         """
@@ -97,16 +108,27 @@ You can also build these structures in your cities with buildStructure (to build
 -"mage_tower": {"gold": 2000, "wood": 100, "stone": 100},
 -"dragons_lair": {"gold": 5000, "wood": 200, "stone": 200}
 You can also build a tavern in the castle to increase the maximum number of heroes you can have (so you don't lose when a hero dies):
--"tavern": {"gold": 1000, "wood": 200, "stone": 200} 
- Before providing your final response, wrap your thought process and 
-strategic considerations inside <strategic_planning> tags. In this section:
- 1. Summarize the current game state, including hero positions, resources, 
-and known enemy information.
- 2. List out potential opportunities and threats.
- 3. Prioritize objectives based on the current situation.
- 4. Outline a short-term (this turn) and long-term (next few turns) strategy.
- It's OK for this section to be quite long, as thorough planning is crucial 
-for success in the game.
+-"tavern": {"gold": 1000, "wood": 200, "stone": 200}
+
+ IMPORTANT: First, think through your strategic planning. After you've thought through your strategy, 
+ you'll provide your response in PURE JSON format. Do not include any XML tags inside the JSON values!
+ The fields like "summary", "reasoning", etc. should contain plain text without any XML tags.
+ 
+ CRITICAL JSON FORMATTING REQUIREMENTS:
+ 1. Your response MUST be valid, parseable JSON
+ 2. Pay EXTREMELY careful attention to commas in your JSON:
+    - Every item in an array or object MUST be followed by a comma, EXCEPT the last item
+    - Example correct format: {"x": 10, "y": 20}
+    - Example INCORRECT format: {"x": 10 "y": 20} or {"x": 10, "y": 20,}
+ 3. All property names must be enclosed in double quotes
+ 4. All string values must be enclosed in double quotes
+ 5. Nested objects must have proper structure and closing braces
+ 6. For position objects like coordinates, always follow this exact format:
+    {"x": 10, "y": 20} - with the comma between x and y values!
+ 7. Double-check all property values - numbers must not have quotes, strings must have quotes
+ 8. DO NOT use XML tags inside ANY string values - just use plain text
+ 9. Before submitting your response, scan it entirely to make sure it's properly closed with all brackets matched
+
  Your final response should be in the following JSON format:
 {
   "actions": [
@@ -141,7 +163,7 @@ for success in the game.
   "reasoning": "Explicación general de la estrategia y decisiones tomadas.",
   "analysis": "Breve análisis del estado del juego y la posición del oponente."
 }
- Here's an example of the action format:
+ Here's an example of the action format with CORRECT JSON SYNTAX:
 {
   "actions": [
     {
@@ -162,8 +184,8 @@ for success in the game.
     {
       "type": "buildStructure",
       "details": {
-      "cityId": "city1",
-      "structureType": "barracks"
+        "cityId": "city1",
+        "structureType": "barracks"
       }
     },
     {
@@ -192,7 +214,12 @@ for success in the game.
   "analysis": "Brief game state analysis and implications for future."
 }
 
-Only output this JSON object. Do not wrap it in any tags or add additional explanation.
+Your response must be a valid JSON object. Do not include XML tags or text markers like <strategic_planning> 
+inside your JSON values. Only output this JSON object without any additional text.
+
+FINAL CHECK: Before submitting, visually verify that all objects have matching braces, all arrays have 
+matching brackets, all string values have matching quotes, and every item in objects and arrays 
+(except the last one) is followed by a comma.
 """
 
 
@@ -238,8 +265,11 @@ This is the strategic planning and context from the current game. Use this to in
                 # Extract strategic_planning from response if available
                 try:
                     content = response.choices[0].message.content
+                    # Limpiar etiquetas XML que puedan estar dentro de los valores JSON
+                    cleaned_content = self._clean_xml_tags_from_json(content)
+                    
                     # Try to parse content as JSON
-                    json_data = json.loads(content)
+                    json_data = json.loads(cleaned_content)
                     if "strategic_planning" in json_data:
                         self.actual_context = json_data["strategic_planning"]
                         print("Updated strategic planning context")
@@ -247,11 +277,26 @@ This is the strategic planning and context from the current game. Use this to in
                     # If not valid JSON or missing the expected structure, ignore
                     pass
                 
-                # Return the original response
+                # Clean the content before returning the response
+                if hasattr(response.choices[0].message, 'content'):
+                    cleaned_content = self._clean_xml_tags_from_json(response.choices[0].message.content)
+                    response.choices[0].message.content = cleaned_content
+                
+                # Return the original response with cleaned content
                 return response
             except RateLimitError as e:
                 # Handle Groq specific rate limit error
                 remaining_models -= 1
+                
+                # Notify about retry if callback is registered
+                if self.retry_callback:
+                    retry_info = {
+                        "retry_count": len(self.available_models) - remaining_models,
+                        "retry_after": getattr(e, 'retry_after', 22),  # Default to 22s if not available
+                        "original_model": self.available_models[self.current_model_index - 1 if self.current_model_index > 0 else len(self.available_models) - 1],
+                        "new_model": self.default_model
+                    }
+                    self.retry_callback(retry_info)
             
                 # Si no quedan modelos, lanzamos un error
                 if remaining_models <= 0:
@@ -272,8 +317,16 @@ This is the strategic planning and context from the current game. Use this to in
             except requests.exceptions.HTTPError as e:
                 # Si es un error HTTP 429, analizamos el contenido
                 if e.response.status_code == 429:
-                    # No mostrar el mensaje de error detallado, solo el mensaje simplificado
-                    
+                    # Notify about retry if callback is registered
+                    if self.retry_callback:
+                        retry_info = {
+                            "retry_count": len(self.available_models) - remaining_models + 1,
+                            "retry_after": e.response.headers.get('Retry-After', 22),
+                            "original_model": self.default_model,
+                            "new_model": self.available_models[(self.current_model_index + 1) % len(self.available_models)]
+                        }
+                        self.retry_callback(retry_info)
+                        
                     # Decrease remaining attempts
                     remaining_models -= 1
                 
@@ -299,7 +352,15 @@ This is the strategic planning and context from the current game. Use this to in
             except APIError as e:
                 # Check if this is a rate limit error (status code 429)
                 if getattr(e, 'status_code', 0) == 429 or "rate limit" in str(e).lower():
-                    # No mostrar el mensaje de error detallado, solo el mensaje simplificado
+                    # Notify about retry if callback is registered
+                    if self.retry_callback:
+                        retry_info = {
+                            "retry_count": len(self.available_models) - remaining_models + 1,
+                            "retry_after": getattr(e, 'retry_after', 22),
+                            "original_model": self.default_model,
+                            "new_model": self.available_models[(self.current_model_index + 1) % len(self.available_models)]
+                        }
+                        self.retry_callback(retry_info)
                     
                     # Decrease remaining attempts
                     remaining_models -= 1
@@ -323,6 +384,39 @@ This is the strategic planning and context from the current game. Use this to in
                 else:
                     # Re-raise other API errors
                     raise
+    
+    def _clean_xml_tags_from_json(self, content):
+        """
+        Remove XML tags that might be embedded within JSON string values.
+        This prevents parsing errors when the model incorrectly includes tags.
+        """
+        if not content:
+            return content
+            
+        try:
+            # Pattern to match XML tags inside JSON string values
+            # This looks for <tag>...</tag> patterns inside quoted strings
+            pattern = r'(\"[^\"]*?)(<[\w_]+>)(.*?)(</[\w_]+>)([^\"]*?\")'
+            
+            # Function to process each match
+            def replace_xml_tags(match):
+                prefix = match.group(1)
+                content = match.group(3)
+                suffix = match.group(5)
+                return f'{prefix}{content}{suffix}'
+            
+            # Replace XML tags inside string values
+            cleaned = re.sub(pattern, replace_xml_tags, content)
+            
+            # Try again with another pattern for cases where the opening tag might be
+            # at the very beginning of a string value
+            pattern2 = r'(\")([\s]*<[\w_]+>)(.*?)(</[\w_]+>[\s]*)(\")' 
+            cleaned = re.sub(pattern2, lambda m: f'"{m.group(3)}"', cleaned)
+            
+            return cleaned
+        except Exception as e:
+            print(f"Error cleaning XML tags from JSON: {e}")
+            return content
     
     def get_actual_context(self):
         """

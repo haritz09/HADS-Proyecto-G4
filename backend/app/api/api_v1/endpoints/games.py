@@ -12,7 +12,7 @@ from backend.app.db.crud import (
     get_db_client
 )
 from bson import ObjectId
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 import logging
 import json
 
@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 from ai_service.client.groq_client import GroqClient
 
 router = APIRouter()
+
+# Estado global para rastrear solicitudes en curso de la IA
+ai_requests_status = {}  # game_id -> status info
 
 def ensure_buildings_have_building_type(game_state):
     """Ensure all buildings have a building_type field to avoid validation errors."""
@@ -392,6 +395,47 @@ def get_game_internal(game_id: str):
     
     return sanitized_game
 
+@router.put("/{game_id}", response_model=GameRead)
+async def save_game_state(
+    game_id: str,
+    game_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Guarda el estado actual de una partida."""
+    game = get_game_internal(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    
+    # Verificar que el usuario es dueño de la partida
+    if str(game["user_id"]) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="No autorizado para guardar esta partida")
+    
+    # Actualizar solo el estado del juego, mantener otros campos
+    if "game_state" in game_data:
+        game["game_state"] = game_data["game_state"]
+        game["last_saved"] = datetime.now(UTC)
+        
+        try:
+            # Sanitizar y asegurar que los datos son válidos
+            game["game_state"] = ensure_buildings_have_building_type(game["game_state"])
+            sanitized_game = sanitize_game_data(game)
+            
+            # Guardar en la base de datos
+            updated_game = update_game(game_id, sanitized_game)
+            if updated_game:
+                logger.info(f"Game {game_id} saved successfully")
+                return updated_game
+            else:
+                raise HTTPException(
+                    status_code=500, 
+                    detail="Error al guardar la partida en la base de datos"
+                )
+        except Exception as e:
+            logger.error(f"Error saving game: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error al guardar la partida: {str(e)}")
+    else:
+        raise HTTPException(status_code=400, detail="Datos de juego no proporcionados")
+
 @router.post("/{game_id}/action")
 async def process_action(
     game_id: str,
@@ -457,7 +501,24 @@ async def process_action(
             elif action_type == "transfer": # Transerir tropas entre heroe-castillo
                 result = transfer_troops_between_hero_and_castle(game_state, action)
             elif action_type == "endTurn":
+                # Log hero movement points BEFORE end turn processing
+                if game_state.current_player == "player":
+                    for hero in game_state.player.heroes:
+                        logger.info(f"Before endTurn: Player hero {hero.id} has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
+                else:
+                    for hero in game_state.ai.heroes:
+                        logger.info(f"Before endTurn: AI hero {hero.id} has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
+                
                 result = process_end_turn(game_state)
+                
+                # Log hero movement points AFTER end turn processing
+                next_player = game_state.current_player  # Now should be switched
+                if next_player == "player":
+                    for hero in game_state.player.heroes:
+                        logger.info(f"After endTurn: Player hero {hero.id} now has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
+                else:
+                    for hero in game_state.ai.heroes:
+                        logger.info(f"After endTurn: AI hero {hero.id} now has {hero.stats.movement_points_left}/{hero.stats.movement_points} movement points")
             else:
                 raise HTTPException(status_code=400, detail=f"Tipo de acción no válido: {action_type}")
             
@@ -465,7 +526,15 @@ async def process_action(
             # Asegurarnos de hacer un model_dump() completo del game_state
             game_state_dump = game_state.model_dump()
             game["game_state"] = game_state_dump
-            
+
+            # Validate hero movement points before saving
+            if game_state.current_player == "player":
+                for hero in game["game_state"]["player"]["heroes"]:
+                    if hero["stats"]["movement_points_left"] < hero["stats"]["movement_points"]:
+                        logger.warning(f"Player hero {hero['id']} has incorrect movement points before save: {hero['stats']['movement_points_left']}/{hero['stats']['movement_points']}")
+                        hero["stats"]["movement_points_left"] = hero["stats"]["movement_points"]
+                        logger.info(f"Fixed player hero {hero['id']} movement points to {hero['stats']['movement_points_left']}")
+
             # Log para movimiento de héroe - verificar coordenadas antes de guardar en BD
             if action_type == "moveHero" and "hero_id" in action.get("details", {}):
                 hero_id = action["details"]["hero_id"]
@@ -545,11 +614,53 @@ async def aplicar_cheat(
         raise HTTPException(status_code=400, detail=str(e))
     
 
+@router.get("/{game_id}/ai/status")
+async def get_ai_status(
+    game_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Obtiene el estado actual de la solicitud de IA para una partida específica.
+    """
+    game = get_game(game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Partida no encontrada")
+    if str(game["user_id"]) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="No autorizado para esta partida")
+    
+    # Si no hay estado registrado o el estado es muy antiguo (más de 5 minutos), devolver estado inactivo
+    if game_id not in ai_requests_status:
+        return {
+            "status": "idle",
+            "message": "No hay solicitud en curso",
+            "retrying": False,
+            "retry_count": 0,
+            "retry_wait_time": 0,
+            "current_model": None,
+            "started_at": None,
+            "updated_at": None
+        }
+    
+    # Si hay un estado, devolverlo
+    status = ai_requests_status[game_id]
+    
+    # Si el estado indica 'completado' o 'error' y es antiguo (más de 2 minutos), limpiar para liberar memoria
+    if status.get("status") in ["completed", "error"]:
+        updated_at = status.get("updated_at")
+        if updated_at:
+            updated_time = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+            if (datetime.now(UTC) - updated_time) > timedelta(minutes=2):
+                # Limpiar estado antiguo pero devolver una copia antes de eliminar
+                result = status.copy()
+                del ai_requests_status[game_id]
+                return result
+    
+    return status
 
 @router.post("/{game_id}/ai")
 async def communicate_with_ai(
     game_id: str,
-    execute_actions: bool = False,  # Nuevo parámetro para decidir si ejecutar acciones automáticamente
+    execute_actions: bool = False,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -565,19 +676,65 @@ async def communicate_with_ai(
     if not game_state:
         raise HTTPException(status_code=400, detail="La partida no tiene estado de juego válido")
     
+    # Inicializar o actualizar el estado de la solicitud
+    ai_requests_status[game_id] = {
+        "status": "processing",
+        "message": "Procesando solicitud de IA",
+        "retrying": False,
+        "retry_count": 0,
+        "retry_wait_time": 0,
+        "current_model": None,
+        "started_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat()
+    }
+    
     # Obtener instancia singleton de GroqClient
     groq_client = GroqClient()
+    ai_requests_status[game_id]["current_model"] = groq_client.default_model
+    
+    # Definir función callback para rastrear reintentos
+    def on_retry_callback(retry_info):
+        # Actualizar el estado con información de reintento
+        ai_requests_status[game_id]["retrying"] = True
+        ai_requests_status[game_id]["retry_count"] = retry_info.get("retry_count", 0)
+        ai_requests_status[game_id]["retry_wait_time"] = retry_info.get("retry_after", 0)
+        ai_requests_status[game_id]["current_model"] = retry_info.get("new_model", groq_client.default_model)
+        ai_requests_status[game_id]["message"] = f"Reintentando en {retry_info.get('retry_after', 0)} segundos con modelo {retry_info.get('new_model', groq_client.default_model)}"
+        ai_requests_status[game_id]["updated_at"] = datetime.now(UTC).isoformat()
+        
+    # Registrar el callback
+    groq_client.set_retry_callback(on_retry_callback)
+    
     try:
         # Verificar que es el turno de la IA
         if game_state.get("current_player") != "ai":
+            # Actualizar estado antes de lanzar la excepción
+            ai_requests_status[game_id].update({
+                "status": "error",
+                "message": "No es el turno de la IA",
+                "updated_at": datetime.now(UTC).isoformat()
+            })
             raise HTTPException(status_code=400, detail="No es el turno de la IA")
         
+        # Actualizar estado para indicar que estamos enviando a Groq
+        ai_requests_status[game_id].update({
+            "message": f"Enviando solicitud a Groq (modelo: {groq_client.default_model})",
+            "updated_at": datetime.now(UTC).isoformat()
+        })
+        
         # Obtener respuesta de la IA
-        #ai_response = groq_client.send_message(game_state)
         from ai_service.strategy.decision_maker import create_strategic_summary
         strategic_summary = create_strategic_summary(game_state)
         ai_response = groq_client.send_message(strategic_summary)
         response_content = ai_response.choices[0].message.content
+        
+        # Actualizar estado a completado
+        ai_requests_status[game_id].update({
+            "status": "completed",
+            "message": "Respuesta de IA recibida correctamente",
+            "retrying": False,
+            "updated_at": datetime.now(UTC).isoformat()
+        })
         
         print(f"Promt de la IA recibido: {response_content}")
  
@@ -589,6 +746,13 @@ async def communicate_with_ai(
         return await process_ai_actions(game_id, response_content, game, game_state)
         
     except Exception as e:
+        # Actualizar estado a error
+        ai_requests_status[game_id].update({
+            "status": "error",
+            "message": f"Error: {str(e)}",
+            "updated_at": datetime.now(UTC).isoformat()
+        })
+        
         raise HTTPException(status_code=500, detail=f"Error comunicando con la IA: {str(e)}")
 
 def normalize_ai_action(action):
@@ -652,16 +816,19 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
     Procesa la respuesta de la IA, extrae las acciones y las ejecuta secuencialmente.
     """
     try:
+        # Preprocesar la respuesta para eliminar etiquetas XML de los valores JSON
+        cleaned_content = clean_ai_response(ai_response_content)
+        
         # Intentar analizar diferentes formatos de respuesta JSON
         ai_actions = None
         try:
-            # Intento principal: respuesta completa en formato JSON
-            ai_actions = json.loads(ai_response_content)
+            # Intento principal: respuesta completa en formato JSON limpio
+            ai_actions = json.loads(cleaned_content)
             print(f"Intento principal: respuesta completa en formato JSON: {ai_actions}")
         except json.JSONDecodeError:
             # Si falla, intentar extraer solo la parte JSON usando expresiones regulares
             import re
-            json_match = re.search(r'```json\s*(.*?)\s*```', ai_response_content, re.DOTALL)
+            json_match = re.search(r'```json\s*(.*?)\s*```', cleaned_content, re.DOTALL)
             if json_match:
                 try:
                     ai_actions = json.loads(json_match.group(1))
@@ -670,7 +837,7 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
             
             # Si aún no hemos encontrado JSON válido, buscar la primera ocurrencia de { hasta la última de }
             if not ai_actions:
-                json_match = re.search(r'(\{.*\})', ai_response_content, re.DOTALL)
+                json_match = re.search(r'(\{.*\})', cleaned_content, re.DOTALL)
                 if json_match:
                     try:
                         ai_actions = json.loads(json_match.group(1))
@@ -679,7 +846,7 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
         
         # Si después de todos los intentos no tenemos un objeto JSON, mostrar error
         if not ai_actions:
-            raise ValueError(f"No se pudo parsear la respuesta de la IA: {ai_response_content[:100]}...")
+            raise ValueError(f"No se pudo parsear la respuesta de la IA: {cleaned_content[:100]}...")
         
         # Verificar que la respuesta tiene el formato esperado
         if not isinstance(ai_actions, dict):
@@ -758,9 +925,9 @@ async def process_ai_actions(game_id: str, ai_response_content: str, game: dict,
                         logger.warning(f"Partial movement performed: Hero moved to ({result['new_position']['x']}, {result['new_position']['y']}) instead of ({result['original_destination']['x']}, {result['original_destination']['y']})")
                         
                         last_partial_movement = {
-                            'hero_id': normalized_action.get('details', {}).get('hero_id') or normalized_action.get('details', {}).get('heroId'),
-                            'new_position': result.get('new_position')
-                        }
+                'hero_id': normalized_action.get('details', {}).get('hero_id') or normalized_action.get('details', {}).get('heroId', None),
+                'new_position': result.get('new_position')
+            }
                 elif action_type_normalized in ['buildstructure', 'build_structure', 'build']:
                     result = process_build_structure(game_state_obj, normalized_action)
                 elif action_type_normalized in ['recruitunits', 'recruit_units', 'recruit']:
@@ -865,3 +1032,41 @@ async def initialize_new_game(
     
     # Crear la partida usando el CRUD existente
     return create_game(game_data)
+
+def clean_ai_response(content: str) -> str:
+    """
+    Limpia la respuesta de la IA de etiquetas XML que pueden estar dentro de valores JSON
+    """
+    if not content:
+        return content
+        
+    try:
+        # Patrón para encontrar etiquetas XML dentro de valores de cadena JSON
+        # Busca patrones <tag>...</tag> dentro de cadenas entrecomilladas
+        import re
+        
+        # Eliminar etiquetas XML que rodean toda la respuesta
+        content = re.sub(r'^<[\w_]+>(.*)</[\w_]+>$', r'\1', content.strip(), flags=re.DOTALL)
+        
+        # Patrón para etiquetas dentro de valores de string JSON
+        pattern = r'(\"[^\"]*?)(<[\w_]+>)(.*?)(</[\w_]+>)([^\"]*?\")'
+        
+        # Función para procesar cada coincidencia
+        def replace_xml_tags(match):
+            prefix = match.group(1)  # Texto antes de la etiqueta de apertura
+            content = match.group(3)  # Contenido entre etiquetas
+            suffix = match.group(5)  # Texto después de la etiqueta de cierre
+            return f'{prefix}{content}{suffix}'
+        
+        # Reemplazar etiquetas XML dentro de valores string
+        cleaned = re.sub(pattern, replace_xml_tags, content)
+        
+        # Intentar de nuevo con otro patrón para casos donde la etiqueta de apertura 
+        # podría estar al principio de un valor de cadena
+        pattern2 = r'(\")([\s]*<[\w_]+>)(.*?)(</[\w_]+>[\s]*)(\")' 
+        cleaned = re.sub(pattern2, lambda m: f'"{m.group(3)}"', cleaned)
+        
+        return cleaned
+    except Exception as e:
+        logger.error(f"Error al limpiar etiquetas XML de la respuesta JSON: {e}")
+        return content

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Hero } from '../../types/game';
+import { Hero, GameState } from '../../types/game';
 import Button from '../ui/Button';
 import '../../styles/components/CombatModal.css';
 
@@ -14,25 +14,25 @@ interface CombatModalProps {
     };
     attacker_side: string;
     defender_side: string;
+    battle_steps?: Array<{
+      description: string;
+      damage?: number;
+      side: string;
+      attacker_unit?: string;
+      defender_unit?: string;
+      casualties?: {
+        unit_type: string;
+        count: number;
+        side: string;
+      };
+    }>;
   };
   playerHero: Hero;
   enemyHero: Hero;
+  gameState: GameState;
+  onGameOver: (status: 'victory' | 'defeat' | 'draw') => void;
 }
 
-interface BattleStep {
-  description: string;
-  attackerUnit?: string;
-  defenderUnit?: string;
-  damage: number;
-  side: 'player' | 'ai';
-  casualties?: {
-    unitType: string;
-    count: number;
-    side: 'player' | 'ai';
-  };
-}
-
-// Unit health values for casualty calculation
 const UNIT_HEALTH = {
   "Soldado": 10,
   "Guerrero": 10,
@@ -43,7 +43,6 @@ const UNIT_HEALTH = {
   "default": 10
 };
 
-// Real unit stats from backend data
 const UNIT_STATS = {
   "Guerrero": { attack: 4, defense: 4, speed: 3 },
   "Arquero": { attack: 5, defense: 3, speed: 4 },
@@ -59,9 +58,18 @@ const CombatModal: React.FC<CombatModalProps> = ({
   onClose,
   combatResult,
   playerHero,
-  enemyHero
+  enemyHero,
+  gameState,
+  onGameOver
 }) => {
-  const [battleSteps, setBattleSteps] = useState<BattleStep[]>([]);
+  console.log('CombatModal: Component rendering with props:', {
+    isOpen,
+    combatResult: combatResult ? 'present' : 'missing',
+    playerHero: playerHero ? playerHero.id : 'missing',
+    enemyHero: enemyHero ? enemyHero.id : 'missing'
+  });
+
+  const [battleSteps, setBattleSteps] = useState<any[]>([]);
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [battleStarted, setBattleStarted] = useState<boolean>(false);
   const [battleFinished, setBattleFinished] = useState<boolean>(false);
@@ -87,7 +95,8 @@ const CombatModal: React.FC<CombatModalProps> = ({
         playerDamage: combatResult.damage_dealt.player,
         aiDamage: combatResult.damage_dealt.ai,
         attacker: combatResult.attacker_side,
-        defender: combatResult.defender_side
+        defender: combatResult.defender_side,
+        battleSteps: combatResult.battle_steps?.length || 0
       });
     }
     
@@ -112,7 +121,13 @@ const CombatModal: React.FC<CombatModalProps> = ({
     });
     
     if (isOpen && playerHero && enemyHero && combatResult) {
-      generateBattleSequence();
+      if (combatResult.battle_steps && combatResult.battle_steps.length > 0) {
+        console.log('CombatModal: Using battle steps from backend');
+        setBattleSteps(combatResult.battle_steps);
+      } else {
+        console.log('CombatModal: No battle steps from backend, generating locally');
+        generateBattleSequence();
+      }
     }
   }, [isOpen, combatResult, playerHero, enemyHero]);
 
@@ -225,7 +240,7 @@ const CombatModal: React.FC<CombatModalProps> = ({
       ai: initialAiTroops
     });
     
-    const steps: BattleStep[] = [];
+    const steps: any[] = [];
     
     steps.push({
       description: `¡Comienza el combate entre ${playerHero.name} y ${enemyHero.name}!`,
@@ -508,23 +523,43 @@ const CombatModal: React.FC<CombatModalProps> = ({
       
       const step = battleSteps[nextStep];
       
-      if (step.side === 'player') {
-        setCumulativeDamage(prev => ({...prev, player: prev.player + step.damage}));
-      } else {
-        setCumulativeDamage(prev => ({...prev, ai: prev.ai + step.damage}));
+      const stepSide = step.side === 'attacker' 
+        ? combatResult.attacker_side === 'player' ? 'player' : 'ai'
+        : step.side === 'defender'
+          ? combatResult.defender_side === 'player' ? 'player' : 'ai'
+          : step.side;
+      
+      if (stepSide === 'player') {
+        setCumulativeDamage(prev => ({...prev, player: prev.player + (step.damage || 0)}));
+      } else if (stepSide === 'ai') {
+        setCumulativeDamage(prev => ({...prev, ai: prev.ai + (step.damage || 0)}));
       }
       
       if (step.casualties) {
         setRemainingTroops(prev => {
-          const side = step.casualties!.side;
-          const unitType = step.casualties!.unitType;
+          let casualtiesSide: 'player' | 'ai';
+          
+          if (step.casualties!.side === 'attacker') {
+            casualtiesSide = combatResult.attacker_side === 'player' ? 'player' : 'ai';
+          } else if (step.casualties!.side === 'defender') {
+            casualtiesSide = combatResult.defender_side === 'player' ? 'player' : 'ai';
+          } else if (step.casualties!.side === 'player') {
+            casualtiesSide = 'player';
+          } else if (step.casualties!.side === 'ai') {
+            casualtiesSide = 'ai';
+          } else {
+            console.warn('Invalid casualty side:', step.casualties!.side);
+            casualtiesSide = 'player';
+          }
+          
+          const unitType = step.casualties!.unit_type;
           const casualties = step.casualties!.count;
           
           const updatedTroops = {...prev};
-          updatedTroops[side] = {...prev[side]};
+          updatedTroops[casualtiesSide] = {...prev[casualtiesSide]};
           
-          if (updatedTroops[side][unitType] !== undefined) {
-            updatedTroops[side][unitType] = Math.max(0, updatedTroops[side][unitType] - casualties);
+          if (updatedTroops[casualtiesSide][unitType] !== undefined) {
+            updatedTroops[casualtiesSide][unitType] = Math.max(0, updatedTroops[casualtiesSide][unitType] - casualties);
           }
           
           return updatedTroops;
@@ -540,6 +575,13 @@ const CombatModal: React.FC<CombatModalProps> = ({
     setBattleFinished(false);
     setCurrentStep(0);
     setCumulativeDamage({player: 0, ai: 0});
+    
+    console.log('DEBUG CombatModal: handleClose called');
+    
+    // Ya no necesitamos verificar condiciones de game over aquí
+    // porque lo hará GamePage al procesar el resultado
+    
+    console.log('CombatModal: Llamando a onClose()');
     onClose();
   };
 
@@ -655,19 +697,34 @@ const CombatModal: React.FC<CombatModalProps> = ({
                 <p className="battle-description">{battleSteps[currentStep].description}</p>
                 
                 {battleSteps[currentStep].damage > 0 && (
-                  <div className={`damage-indicator ${battleSteps[currentStep].side === 'player' ? 'player-damage' : 'enemy-damage'}`}>
-                    {battleSteps[currentStep].side === 'player' ? 'Daño causado: ' : 'Daño recibido: '} 
+                  <div className={`damage-indicator ${
+                    (battleSteps[currentStep].side === 'player' || 
+                     (battleSteps[currentStep].side === 'attacker' && combatResult.attacker_side === 'player') ||
+                     (battleSteps[currentStep].side === 'defender' && combatResult.defender_side === 'player'))
+                     ? 'player-damage' : 'enemy-damage'}`}>
+                    {(battleSteps[currentStep].side === 'player' || 
+                      (battleSteps[currentStep].side === 'attacker' && combatResult.attacker_side === 'player') ||
+                      (battleSteps[currentStep].side === 'defender' && combatResult.defender_side === 'player'))
+                      ? 'Daño causado: ' : 'Daño recibido: '} 
                     <span className="damage-amount">{battleSteps[currentStep].damage}</span>
                   </div>
                 )}
                 
                 {(() => {
                   const casualties = battleSteps[currentStep].casualties;
+                  if (!casualties) return null;
+                  
+                  const casualtiesSide = casualties.side === 'attacker' 
+                    ? combatResult.attacker_side 
+                    : casualties.side === 'defender'
+                      ? combatResult.defender_side
+                      : casualties.side;
+                  
                   return casualties && casualties.count > 0 ? (
                     <div className="casualties-report">
-                      <span className={casualties.side === 'player' ? 'player-casualties' : 'enemy-casualties'}>
-                        {casualties.count} {casualties.unitType}
-                        {casualties.count !== 1 ? 's' : ''} {casualties.side === 'player' ? 'perdidos' : 'eliminados'}
+                      <span className={casualtiesSide === 'player' ? 'player-casualties' : 'enemy-casualties'}>
+                        {casualties.count} {casualties.unit_type}
+                        {casualties.count !== 1 ? 's' : ''} {casualtiesSide === 'player' ? 'perdidos' : 'eliminados'}
                       </span>
                     </div>
                   ) : null;

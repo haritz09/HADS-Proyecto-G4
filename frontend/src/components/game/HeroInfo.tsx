@@ -42,21 +42,33 @@ const HeroInfo: React.FC<HeroInfoProps> = ({ hero, onClose }) => {
   };
 
   // Actualizar la sección de artefactos para mostrarlos correctamente
-  const getArtifactIcon = (subtype: string): string => {
+  const getArtifactIcon = (subtype: string | undefined): string => {
+    if (!subtype) return '🧩'; // Default icon for undefined subtype
+    
     switch (subtype) {
-      case 'totemDeGuerra': return '⚔️';
-      case 'totemVelocidad': return '⚡';
-      case 'totemReclutamiento': return '💰';
-      default: return '🏆';
+      case 'totemDeGuerra':
+        return '⚔️';
+      case 'totemVelocidad':
+        return '🏃';
+      case 'totemReclutamiento':
+        return '👥';
+      default:
+        return '🧩';
     }
   };
 
-  const getArtifactDescription = (subtype: string): string => {
+  const getArtifactDescription = (subtype: string | undefined): string => {
+    if (!subtype) return 'Artefacto misterioso'; // Default description for undefined subtype
+    
     switch (subtype) {
-      case 'totemDeGuerra': return 'Aumenta el ataque, defensa y salud de tus tropas en un 20%';
-      case 'totemVelocidad': return 'Incrementa los puntos de movimiento en un 30%';
-      case 'totemReclutamiento': return 'Reduce el costo de reclutamiento en un 30%';
-      default: return 'Artefacto mágico';
+      case 'totemDeGuerra':
+        return '+20% de ataque para tus tropas';
+      case 'totemVelocidad':
+        return '+30% de puntos de movimiento';
+      case 'totemReclutamiento':
+        return '-30% coste de reclutamiento';
+      default:
+        return 'Artefacto misterioso';
     }
   };
 

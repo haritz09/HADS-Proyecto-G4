@@ -17,6 +17,17 @@ const determineTerrainType = (): 'grass' | 'forest' | 'mountain' | 'water' | 'de
   else return 'desert';
 };
 
+// Update hero stats to include power and knowledge
+const generateHeroStats = () => ({
+  attack: Math.floor(Math.random() * 5) + 1,
+  defense: Math.floor(Math.random() * 5) + 1,
+  speed: Math.floor(Math.random() * 5) + 1,
+  power: Math.floor(Math.random() * 5) + 1, // Add missing power property
+  knowledge: Math.floor(Math.random() * 5) + 1, // Add missing knowledge property
+  movement_points: 20,
+  movement_points_left: 20
+});
+
 // Crear un mapa de muestra
 export const createSampleMap = (width: number, height: number): MapTile[] => {
   const tiles: MapTile[] = [];
@@ -37,13 +48,7 @@ export const createSampleMap = (width: number, height: number): MapTile[] => {
 export const createSampleHero = (playerId: string, name: string, position: Position): Hero => ({
   id: `${playerId}-hero-${Date.now()}`,
   name,
-  stats: {
-    attack: Math.floor(Math.random() * 5) + 1,
-    defense: Math.floor(Math.random() * 5) + 1,
-    speed: Math.floor(Math.random() * 5) + 1,
-    movement_points: 20,
-    movement_points_left: 20
-  },
+  stats: generateHeroStats(),
   position,
   army: [],
   artifacts: []
@@ -104,7 +109,7 @@ export const sampleGameState: GameState = {
     },
     tiles: createSampleMap(20, 20),
     fog_of_war: Array(400).fill(false),
-    explored: [],
+    explored: Array(400).fill(false), // Initialize with appropriate size
     visible_objects: [
       {
         id: 'mine1',

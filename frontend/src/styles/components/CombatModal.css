@@ -39,6 +39,18 @@
   font-size: 2rem;
 }
 
+/* Hide the close button in combat modal */
+.combat-modal-header .close-button {
+  display: none; /* Completely hide the button */
+}
+
+/* Alternatively, if you want to keep it visible but not clickable: 
+.combat-modal-header .close-button {
+  pointer-events: none;
+  opacity: 0.5;
+  cursor: default;
+} */
+
 .close-button {
   background: none;
   border: none;

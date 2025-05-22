@@ -24,6 +24,8 @@ EXPERIENCE_PER_COMBAT = 100
 LEVELS_THRESHOLDS = [100, 300, 600, 1000, 1500]  # Experiencia necesaria para cada nivel
 STAT_POINTS_PER_LEVEL = 2
 MOVEMENT_POINTS_BASE = 10
+HERO_VISION_RADIUS = 3  # Radio de visión estándar para héroes
+MAX_TURNS = 10  # Número máximo de turnos antes de un empate
 
 def calculate_distance(pos1: Position, pos2: Position) -> float:
     """Calcula la distancia entre dos posiciones."""
@@ -107,13 +109,22 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 npos = Position(x=nx, y=ny)
                 if check_terrain_passable(npos, game_map):
                     yield npos
+                    
+    # Add a counter to avoid comparing Position objects directly
+    counter = 0
     open_set = []
-    heapq.heappush(open_set, (0, start))
+    # Add counter as a third element in the tuple to make each entry unique
+    heapq.heappush(open_set, (0, counter, start))
+    counter += 1
+    
     came_from = {}
     g_score = { (start.x, start.y): 0 }
     f_score = { (start.x, start.y): abs(end.x - start.x) + abs(end.y - start.y) }
+    
     while open_set:
-        _, current = heapq.heappop(open_set)
+        # Unpack the counter but we don't need to use it
+        _, _, current = heapq.heappop(open_set)
+        
         if current.x == end.x and current.y == end.y:
             # Reconstruir path
             path = [current]
@@ -121,6 +132,7 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 current = came_from[(current.x, current.y)]
                 path.append(current)
             return list(reversed(path))
+            
         for neighbor in neighbors(current):
             tentative_g = g_score[(current.x, current.y)] + 1
             if (neighbor.x, neighbor.y) not in g_score or tentative_g < g_score[(neighbor.x, neighbor.y)]:
@@ -128,8 +140,57 @@ def find_path_a_star(start: Position, end: Position, game_map: Any) -> List[Posi
                 g_score[(neighbor.x, neighbor.y)] = tentative_g
                 f = tentative_g + abs(end.x - neighbor.x) + abs(end.y - neighbor.y)
                 f_score[(neighbor.x, neighbor.y)] = f
-                heapq.heappush(open_set, (f, neighbor))
+                # Include counter in the heap entry to avoid Position comparisons
+                heapq.heappush(open_set, (f, counter, neighbor))
+                counter += 1
+                
     return []  # No path found
+
+def update_fog_of_war(game_state: GameState, hero_position: Position, vision_radius: int = HERO_VISION_RADIUS):
+    """
+    Actualiza la niebla de guerra y las casillas exploradas basándose en la posición del héroe.
+    
+    Args:
+        game_state: Estado del juego
+        hero_position: Posición del héroe
+        vision_radius: Radio de visión del héroe (por defecto HERO_VISION_RADIUS)
+    """
+    if not game_state.map or not hasattr(game_state.map, 'fog_of_war'):
+        print("ERROR: No se puede actualizar fog_of_war, estructura del mapa incorrecta")
+        return
+    
+    # Check if the map is permanently revealed (skip normal visibility calculations)
+    if getattr(game_state.map, 'permanently_revealed', False):
+        # If map is permanently revealed, ensure all tiles are visible and explored
+        game_state.map.fog_of_war = [False] * (game_state.map.size.width * game_state.map.size.height)
+        if hasattr(game_state.map, 'explored'):
+            game_state.map.explored = [True] * (game_state.map.size.width * game_state.map.size.height)
+        return
+    
+    map_width = game_state.map.size.width
+    map_height = game_state.map.size.height
+    
+    # Inicializar explored si aún no existe
+    if not hasattr(game_state.map, 'explored') or not game_state.map.explored:
+        game_state.map.explored = [False] * (map_width * map_height)
+    
+    # Iteramos por todas las casillas dentro del radio de visión
+    for y in range(max(0, hero_position.y - vision_radius), min(map_height, hero_position.y + vision_radius + 1)):
+        for x in range(max(0, hero_position.x - vision_radius), min(map_width, hero_position.x + vision_radius + 1)):
+            # Calcular distancia
+            distance = math.sqrt((x - hero_position.x) ** 2 + (y - hero_position.y) ** 2)
+            
+            # Si está dentro del radio de visión
+            if distance <= vision_radius:
+                idx = y * map_width + x
+                
+                # Marcar como visible (quitar niebla)
+                if 0 <= idx < len(game_state.map.fog_of_war):
+                    game_state.map.fog_of_war[idx] = False
+                
+                # Marcar como explorado permanentemente
+                if 0 <= idx < len(game_state.map.explored):
+                    game_state.map.explored[idx] = True
 
 def process_hero_movement(game_state: GameState, action: dict) -> dict:
     try:
@@ -160,64 +221,99 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
         if target_x < 0 or target_x >= game_state.map.size.width or target_y < 0 or target_y >= game_state.map.size.height:
             raise ValueError(f"Target position ({target_x}, {target_y}) is outside map boundaries")
         
-        # Store original destination
+        # Store original destination for return value
         original_destination = Position(x=target_x, y=target_y)
-        movement_cost = calculate_movement_cost(hero.position, original_destination)
         
-        # Flag to track if we're doing partial movement
+        # Calculate full path from current position to destination using A*
+        start_position = Position(x=hero.position.x, y=hero.position.y)
+        target_position = Position(x=target_x, y=target_y)
+        
+        print(f"DEBUG: Calculating path from ({start_position.x},{start_position.y}) to ({target_position.x},{target_position.y})")
+        full_path = find_path_a_star(start_position, target_position, game_state.map)
+        
+        if not full_path or len(full_path) < 2:
+            print(f"DEBUG: No valid path found to destination ({target_x},{target_y})")
+            return {
+                "success": False,
+                "error": f"No valid path to destination ({target_x},{target_y})"
+            }
+        
+        print(f"DEBUG: Found path with {len(full_path)} steps")
+        
+        # Track remaining movement points and walk through the path
+        remaining_points = hero.stats.movement_points_left
+        current_position = start_position
+        final_position = None
         partial_movement = False
         
-        # Si el destino está fuera de alcance, calcular destino parcial
-        if movement_cost > hero.stats.movement_points_left:
-            partial_movement = True
-            print(f"DEBUG: Partial movement needed. Target: ({target_x},{target_y}), Cost: {movement_cost}, Available: {hero.stats.movement_points_left}")
-            
-            # Calcular el punto más cercano alcanzable hacia el destino deseado
-            direction_x = target_x - hero.position.x
-            direction_y = target_y - hero.position.y
-            
-            # Normalizar el vector de dirección
-            magnitude = math.sqrt(direction_x**2 + direction_y**2)
-            normalized_x = direction_x / magnitude
-            normalized_y = direction_y / magnitude
-            
-            # Multiplicar por la distancia máxima que podemos recorrer
-            max_distance = hero.stats.movement_points_left
-            
-            # Calcular las nuevas coordenadas de destino
-            new_target_x = int(hero.position.x + (normalized_x * max_distance))
-            new_target_y = int(hero.position.y + (normalized_y * max_distance))
-            
-            # Ajustar la posición para que esté dentro de los límites del mapa
-            new_target_x = max(0, min(new_target_x, game_state.map.size.width - 1))
-            new_target_y = max(0, min(new_target_y, game_state.map.size.height - 1))
-            
-            print(f"DEBUG: Partial movement calculated. New target: ({new_target_x},{new_target_y})")
-            
-            # Actualizar destino y recalcular movimiento
-            target_x = new_target_x
-            target_y = new_target_y
-            movement_cost = calculate_movement_cost(hero.position, Position(x=target_x, y=target_y))
-            
-            print(f"DEBUG: New movement cost: {movement_cost}, Available: {hero.stats.movement_points_left}")
+        # Log the hero's starting position and movement points
+        print(f"DEBUG: Hero starting at ({current_position.x},{current_position.y}) with {remaining_points} movement points")
         
-        # Ensure position values are integers
+        # Get the hero's vision radius before starting movement
+        vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+        
+        # Update fog of war at the starting position
+        update_fog_of_war(game_state, current_position, vision_radius)
+        
+        # Walk through the path until we reach the end or run out of movement points
+        for i in range(1, len(full_path)):
+            next_position = full_path[i]
+            
+            # Calculate cost for this path segment
+            segment_cost = calculate_movement_cost(current_position, next_position)
+            print(f"DEBUG: Step {i}: Moving to ({next_position.x},{next_position.y}), cost: {segment_cost}, remaining: {remaining_points}")
+            
+            # Check if we can afford this segment
+            if remaining_points >= segment_cost:
+                # Move to this position
+                current_position = next_position
+                remaining_points -= segment_cost
+                final_position = current_position
+                print(f"DEBUG: Moved to ({current_position.x},{current_position.y}), remaining points: {remaining_points}")
+                
+                # Update fog of war at this position in the path
+                update_fog_of_war(game_state, current_position, vision_radius)
+            else:
+                # Can't move further along the path
+                partial_movement = True
+                print(f"DEBUG: Insufficient movement points to continue. Stopping at ({current_position.x},{current_position.y})")
+                break
+        
+        # If we reached the end of the path, use the target position
+        if not partial_movement:
+            final_position = target_position
+        
+        # If no movement was possible at all, return error
+        if final_position is None:
+            return {
+                "success": False,
+                "error": "Insufficient movement points for any movement"
+            }
+        
+        # Update hero position to the furthest reachable point
         original_x, original_y = hero.position.x, hero.position.y
+        hero.position.x = final_position.x
+        hero.position.y = final_position.y
+        hero.stats.movement_points_left = remaining_points
         
-        # Update position
-        hero.position.x = target_x
-        hero.position.y = target_y
-        hero.stats.movement_points_left -= movement_cost
+        # We already updated fog of war at each step, so we don't need to do it again here
+        # Just log that we've been updating fog of war along the path
+        print(f"DEBUG: Updated fog of war along the path with vision radius {vision_radius}")
         
-        print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({target_x}, {target_y})")
-        print(f"DEBUG: Hero position after update: ({hero.position.x}, {hero.position.y})")
+        print(f"DEBUG: Hero moved from ({original_x}, {original_y}) to ({hero.position.x}, {hero.position.y})")
+        print(f"DEBUG: Hero has {hero.stats.movement_points_left} movement points left")
         
-        # NEW: Check for enemy heroes at the same position BEFORE calling process_tile_interaction
+        # Improved enemy hero detection - ensure positions are compared as integers
         enemy_hero = None
         for e_hero in enemy_heroes:
-            if e_hero.position.x == target_x and e_hero.position.y == target_y:
+            # Convert positions to integers to ensure accurate comparison
+            hero_x, hero_y = int(hero.position.x), int(hero.position.y)
+            e_hero_x, e_hero_y = int(e_hero.position.x), int(e_hero.position.y)
+            
+            print(f"DEBUG: Checking if hero at ({hero_x}, {hero_y}) is on same position as enemy at ({e_hero_x}, {e_hero_y})")
+            if e_hero_x == hero_x and e_hero_y == hero_y:
                 enemy_hero = e_hero
-                print(f"DEBUG: Enemy hero detected at position ({target_x}, {target_y}): {enemy_hero.id}")
+                print(f"DEBUG: Enemy hero detected at position ({hero_x}, {hero_y}): {enemy_hero.id}")
                 break
                 
         # If an enemy hero was found, trigger combat
@@ -232,7 +328,7 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
                 attacker_side = "ai"
                 defender_side = "player"
                 
-            # Format the result for frontend
+            # Format the result for frontend with battle steps included
             formatted_combat_result = {
                 "winner": combat_result["winner"],
                 "damage_dealt": {
@@ -240,41 +336,44 @@ def process_hero_movement(game_state: GameState, action: dict) -> dict:
                     "ai": combat_result["damage_dealt"]["attacker"] if attacker_side == "ai" else combat_result["damage_dealt"]["defender"],
                 },
                 "attacker_side": attacker_side,
-                "defender_side": defender_side
+                "defender_side": defender_side,
+                "battle_steps": combat_result.get("battle_steps", [])  # Include battle steps
             }
             
             # Return combat result information directly
             return {
                 "success": True,
                 "hero_id": hero_id,
-                "new_position": {"x": target_x, "y": target_y},
+                "new_position": {"x": hero.position.x, "y": hero.position.y},
                 "movement_points_left": hero.stats.movement_points_left,
                 "interaction": "combat",  # Indicate this is a combat interaction
-                "combat_result": formatted_combat_result,  # Include formatted combat results
+                "combat_result": formatted_combat_result,  # Include formatted combat results with battle steps
                 "enemy_hero": enemy_hero.id,  # Include the enemy hero ID
                 "partial_movement": partial_movement,
-                "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None
+                "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None,
+                "path": [{"x": pos.x, "y": pos.y} for pos in full_path[:i+1]]  # Include the actual path followed
             }
         
         # Check for interactions at the new position (artifacts, resources, etc.)
         try:
-            print(f"DEBUG: Checking interactions at position ({target_x}, {target_y}) for hero {hero_id}")
-            interaction_result = process_tile_interaction(hero, Position(x=target_x, y=target_y), game_state)
+            print(f"DEBUG: Checking interactions at position ({hero.position.x}, {hero.position.y}) for hero {hero_id}")
+            interaction_result = process_tile_interaction(hero, Position(x=hero.position.x, y=hero.position.y), game_state)
             print(f"DEBUG: Interaction result: {interaction_result}")
         except Exception as e:
             print(f"ERROR in interaction processing: {str(e)}")
             # Continue execution even if interaction processing fails
             interaction_result = {"interaction": "error", "error_message": str(e)}
         
-        # Return extra information for partial movement
+        # Return information about the movement, including path information
         return {
             "success": True,
             "hero_id": hero_id,
-            "new_position": {"x": target_x, "y": target_y},
+            "new_position": {"x": hero.position.x, "y": hero.position.y},
             "movement_points_left": hero.stats.movement_points_left,
             "interaction": interaction_result,  # Include the interaction result in the response
             "partial_movement": partial_movement,
-            "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None
+            "original_destination": {"x": original_destination.x, "y": original_destination.y} if partial_movement else None,
+            "path": [{"x": pos.x, "y": pos.y} for pos in full_path[:i+1]]  # Include the actual path followed
         }
     except Exception as e:
         print(f"ERROR in process_hero_movement: {str(e)}")
@@ -309,6 +408,10 @@ def process_hero_attack(game_state: GameState, action: Dict[str, Any]) -> Dict[s
     # Otorgar experiencia al ganador
     if combat_result["winner"] == "player":
         grant_experience(attacker, EXPERIENCE_PER_COMBAT)
+    
+    # Asegurar que battle_steps esté presente en el resultado
+    if "battle_steps" not in combat_result:
+        combat_result["battle_steps"] = []
     
     return combat_result
 
@@ -411,9 +514,31 @@ def add_units_to_hero_or_city(city: City, unit_type: str, amount: int, game_stat
         # Si no hay héroe, podrías implementar una guarnición de ciudad aquí
         pass  # Implementación opcional
 
+def get_available_creatures(building_type: str) -> list:
+    """Devuelve las criaturas disponibles para un tipo de edificio."""
+    if building_type == "castle":
+        return [
+            {
+                "type": "Milicia",
+                "count": 15,
+                "growth_per_week": 5,
+                "stats": {
+                    "attack": 3,
+                    "defense": 3,
+                    "speed": 3,
+                    "movement_points": 5,
+                    "movement_points_left": 5
+                },
+                "recruit_cost": {"gold": 100}
+            }
+        ]
+    # Add more building types here if needed
+    return []
+
 def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     """Procesa el final del turno"""
     current_player = game_state.current_player
+    print(f"DEBUG: End turn processing. Current player: {current_player}")
     
     # Recolectar recursos de las minas para el jugador actual
     if current_player == "player":
@@ -421,26 +546,101 @@ def process_end_turn(game_state: GameState) -> Dict[str, Any]:
     else:
         collect_resource_income(game_state.ai, game_state.map, "ai")
     
-    # Restaurar puntos de movimiento
-    for hero in game_state.player.heroes:
-        hero.stats.movement_points_left = hero.stats.movement_points
-    
     # Cambiar el jugador actual
-    game_state.current_player = "ai" if current_player == "player" else "player"
+    next_player = "ai" if current_player == "player" else "player"
+    game_state.current_player = next_player
+    print(f"DEBUG: Switching player turn from {current_player} to {next_player}")
+    
+    # Check if the map is permanently revealed (from cheat)
+    map_permanently_revealed = getattr(game_state.map, 'permanently_revealed', False)
+    
+    # Only reset fog of war if the map is not permanently revealed
+    if not map_permanently_revealed:
+        # Resetear fog of war (todo oculto de nuevo)
+        map_width = game_state.map.size.width
+        map_height = game_state.map.size.height
+        game_state.map.fog_of_war = [True] * (map_width * map_height)
+        
+        # Recalcular visibilidad para el nuevo jugador actual
+        if next_player == "player":
+            for hero in game_state.player.heroes:
+                vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+                update_fog_of_war(game_state, hero.position, vision_radius)
+        else:
+            for hero in game_state.ai.heroes:
+                vision_radius = getattr(hero.stats, 'vision_radius', HERO_VISION_RADIUS)
+                update_fog_of_war(game_state, hero.position, vision_radius)
+    
+    # Log hero movement points BEFORE restoration
+    if next_player == "player":
+        print(f"DEBUG: Player heroes movement points BEFORE restoration:")
+        for hero in game_state.player.heroes:
+            print(f"DEBUG: Hero {hero.id}: {hero.stats.movement_points_left}/{hero.stats.movement_points}")
+    else:
+        print(f"DEBUG: AI heroes movement points BEFORE restoration:")
+        for hero in game_state.ai.heroes:
+            print(f"DEBUG: Hero {hero.id}: {hero.stats.movement_points_left}/{hero.stats.movement_points}")
+    
+    # Restaurar puntos de movimiento para el PRÓXIMO jugador (que ahora es current_player después del cambio)
+    if next_player == "player":
+        for hero in game_state.player.heroes:
+            hero.stats.movement_points_left = hero.stats.movement_points
+            print(f"DEBUG: Restored player hero {hero.id} movement points to {hero.stats.movement_points_left}")
+    else:
+        for hero in game_state.ai.heroes:
+            hero.stats.movement_points_left = hero.stats.movement_points
+            print(f"DEBUG: Restored AI hero {hero.id} movement points to {hero.stats.movement_points_left}")
     
     # Si es un nuevo día
     if current_player == "ai":  # El turno de la IA es el último del día
         game_state.turn += 1
+        print(f"DEBUG: Incrementing turn to {game_state.turn}")
 
         # Procesar crecimiento semanal si estamos en múltiplo de 7
         if game_state.turn % 7 == 0:
             process_weekly_growth_both(game_state)
+            print(f"DEBUG: Processed weekly growth at turn {game_state.turn}")
+    
+    # Verificar condiciones de fin de juego después de procesar el turno
+    game_status = check_game_over_conditions(game_state)
+    if not hasattr(game_state, 'status'):
+        game_state.status = 'ongoing'
+    
+    # Actualizar el estado de la partida si ha cambiado
+    if game_status != 'ongoing':
+        print(f"DEBUG: Game over condition detected: {game_status}")
+        game_state.status = game_status
     
     return {
         "next_player": game_state.current_player,
         "turn": game_state.turn,
-        "resources_collected": True
+        "resources_collected": True,
+        "game_status": game_status
     }
+
+def check_game_over_conditions(game_state: GameState) -> str:
+    """
+    Verifica si la partida ha terminado y determina el resultado.
+    
+    Returns:
+        str: 'ongoing', 'victory', 'defeat', o 'draw'
+    """
+    # Verificar condición de empate por número de turnos
+    if game_state.turn > MAX_TURNS:
+        return 'draw'
+    
+    # Verificar condición de derrota (sin héroes del jugador)
+    player_defeated = (len(game_state.player.heroes) == 0)
+    if player_defeated:
+        return 'defeat'
+    
+    # Verificar condición de victoria (sin héroes de la IA)
+    ai_defeated = (len(game_state.ai.heroes) == 0)
+    if ai_defeated:
+        return 'victory'
+    
+    # La partida continúa
+    return 'ongoing'
 
 def process_build_structure(game_state: GameState, action: Dict[str, Any]) -> Dict[str, Any]:
     try:
@@ -959,27 +1159,178 @@ def process_tile_interaction(hero: Heroe, position: Position, game_state: GameSt
         return {"interaction": "error", "error_message": str(e)}
 
 def resolve_combat(attacker: Heroe, defender: Heroe) -> Dict[str, Any]:
-    """Resuelve un combate entre dos héroes"""
+    """Resuelve un combate entre dos héroes con pasos detallados para visualización"""
     # Sistema de combate por turnos basado en velocidad
     units = []
     for army, side in [(attacker.army, 'attacker'), (defender.army, 'defender')]:
         for unit in army:
             units.append({
                 "unit": unit,
-                "speed": unit.stats.speed,
-                "side": side
+                "speed": unit.stats.speed if hasattr(unit, 'stats') and hasattr(unit.stats, 'speed') else 3,
+                "side": side,
+                "name": unit.type,
+                "count": unit.count
             })
+    
+    # Ordenar unidades por velocidad
     units.sort(key=lambda x: x["speed"], reverse=True)
+    
     damage_dealt = {"attacker": 0, "defender": 0}
-    for unit in units:
-        # Moral y suerte (simplificado)
-        if check_morale_bonus():
-            damage = calculate_damage(unit["unit"], unit["side"])
-            if check_luck_bonus():
-                damage *= 2
-            damage_dealt[unit["side"]] += damage
-    winner = "player" if damage_dealt["attacker"] > damage_dealt["defender"] else "ai"
-    return {"winner": winner, "damage_dealt": damage_dealt}
+    battle_steps = []
+    
+    # Agregar paso inicial describiendo el combate
+    battle_steps.append({
+        "description": f"¡Comienza el combate entre {attacker.name} y {defender.name}!",
+        "damage": 0,
+        "side": "none"
+    })
+    
+    # Crear una copia de las tropas para no modificar las originales durante el combate
+    remaining_troops = {
+        "attacker": {unit["name"]: unit["count"] for unit in units if unit["side"] == "attacker"},
+        "defender": {unit["name"]: unit["count"] for unit in units if unit["side"] == "defender"}
+    }
+    
+    # Continuar el combate hasta que un lado no tenga tropas (con límite de seguridad)
+    max_rounds = 30  # Límite para evitar bucles infinitos
+    round_num = 0
+    battle_ongoing = True
+    
+    while battle_ongoing and round_num < max_rounds:
+        round_num += 1
+        
+        # Comprobar si algún bando ya no tiene tropas
+        attacker_has_troops = sum(remaining_troops["attacker"].values()) > 0
+        defender_has_troops = sum(remaining_troops["defender"].values()) > 0
+        
+        if not attacker_has_troops or not defender_has_troops:
+            break
+            
+        # Agregar marcador de nueva ronda si no es la primera
+        if round_num > 1:
+            battle_steps.append({
+                "description": f"Ronda {round_num} de combate",
+                "damage": 0,
+                "side": "none"
+            })
+        
+        # Cada unidad ataca según su orden (basado en velocidad)
+        for unit_info in units:
+            # Saltarse unidades que ya no tienen tropas disponibles
+            current_count = remaining_troops[unit_info["side"]].get(unit_info["name"], 0)
+            if current_count <= 0:
+                continue
+                
+            # Obtener stats de la unidad
+            unit_stats = getattr(unit_info["unit"], 'stats', None)
+            attack_value = getattr(unit_stats, 'attack', 5) if unit_stats else 5
+            
+            # Calcular daño básico (ataque * cantidad actual)
+            base_damage = attack_value * current_count
+            
+            # Aplicar modificadores (simplificado)
+            damage_multiplier = 1.0
+            
+            # Moral y suerte (simplificado)
+            if random.random() < 0.2:  # 20% chance of morale bonus
+                damage_multiplier *= 1.2
+                battle_steps.append({
+                    "description": f"¡Los {unit_info['name']} de {attacker.name if unit_info['side'] == 'attacker' else defender.name} atacan con alta moral!",
+                    "type": "morale_bonus",
+                    "unit": unit_info["name"],
+                    "side": unit_info["side"]
+                })
+            
+            if random.random() < 0.1:  # 10% chance of critical hit
+                damage_multiplier *= 1.5
+                battle_steps.append({
+                    "description": f"¡Golpe crítico de los {unit_info['name']} de {attacker.name if unit_info['side'] == 'attacker' else defender.name}!",
+                    "type": "critical_hit",
+                    "unit": unit_info["name"],
+                    "side": unit_info["side"]
+                })
+            
+            # Calcular daño final
+            final_damage = int(base_damage * damage_multiplier)
+            
+            # Target side is the opposite of the attacker
+            target_side = "defender" if unit_info["side"] == "attacker" else "attacker"
+            target_name = defender.name if unit_info["side"] == "attacker" else attacker.name
+            
+            # Encontrar la unidad objetivo más débil con tropas restantes
+            target_units = [(name, count) for name, count in remaining_troops[target_side].items() if count > 0]
+            if not target_units:  # No quedan objetivos
+                break
+                
+            # Ordenar por defensa más baja (simulado - en un juego real tendríamos stats por tipo)
+            target_unit_name = target_units[0][0]  # Por ahora simplemente tomamos el primero disponible
+            
+            # Registrar el paso de ataque
+            battle_step = {
+                "description": f"Los {unit_info['name']} de {attacker.name if unit_info['side'] == 'attacker' else defender.name} atacan a los {target_unit_name} de {target_name}.",
+                "damage": final_damage,
+                "attacker_unit": unit_info["name"],
+                "defender_unit": target_unit_name,
+                "side": unit_info["side"]
+            }
+            
+            # Calcular bajas (simplificado)
+            target_hp = 10  # HP base para todas las unidades
+            casualties = min(max(1, int(final_damage / target_hp)), remaining_troops[target_side][target_unit_name])
+            
+            if casualties > 0:
+                # IMPORTANTE: Actualizar las tropas restantes del objetivo
+                remaining_troops[target_side][target_unit_name] -= casualties
+                
+                battle_step["casualties"] = {
+                    "unit_type": target_unit_name,
+                    "count": casualties,
+                    "side": target_side
+                }
+                
+                # Si se eliminan todas las tropas de este tipo, comprobar si el bando objetivo ya no tiene tropas
+                if remaining_troops[target_side][target_unit_name] <= 0:
+                    if sum(remaining_troops[target_side].values()) <= 0:
+                        battle_ongoing = False
+            
+            battle_steps.append(battle_step)
+            
+            # Acumular el daño total
+            damage_dealt[unit_info["side"]] += final_damage
+            
+            # Verificar si el defensor se ha quedado sin tropas después de este ataque
+            if sum(remaining_troops[target_side].values()) <= 0:
+                break
+    
+    # Determinar el ganador basado en tropas restantes
+    attacker_troops_left = sum(remaining_troops["attacker"].values())
+    defender_troops_left = sum(remaining_troops["defender"].values())
+    
+    if attacker_troops_left > 0 and defender_troops_left <= 0:
+        winner = "player"  # El atacante (player) ganó
+    elif defender_troops_left > 0 and attacker_troops_left <= 0:
+        winner = "ai"      # El defensor (ai) ganó
+    else:
+        # En caso de que ambos tengan tropas (límite de rondas) o ninguno tenga (empate extraño),
+        # decidir por daño total como fallback
+        winner = "player" if damage_dealt["attacker"] > damage_dealt["defender"] else "ai"
+    
+    # Agregar paso final con el resultado
+    battle_steps.append({
+        "description": f"¡La batalla ha terminado! {attacker.name if winner == 'player' else defender.name} ha vencido.",
+        "damage": 0,
+        "side": "attacker" if winner == "player" else "defender",
+        "attacker_troops_left": attacker_troops_left,
+        "defender_troops_left": defender_troops_left
+    })
+    
+    return {
+        "winner": winner, 
+        "damage_dealt": damage_dealt,
+        "battle_steps": battle_steps,
+        "attacker_troops_left": attacker_troops_left,
+        "defender_troops_left": defender_troops_left
+    }
 
 def grant_experience(hero: Heroe, amount: int) -> None:
     """Otorga experiencia a un héroe y maneja la subida de nivel"""
@@ -1174,8 +1525,17 @@ def transfer_troops_between_hero_and_castle(game_state: GameState, action: Dict[
             castle.garrison = []  # lista de ArmyUnit
 
         # Procesar transferencias
+        transfers = details.get("transfers", [])
+        if not transfers:
+            # Si no hay lista de transferencias, crear una con los datos directos
+            transfers = [{
+                "unitType": unit_type,
+                "to_castle": details.get("to_castle", 0),
+                "to_hero": details.get("to_hero", 0)
+            }]
+
         for t in transfers:
-            unit_type = t['unitType']
+            unit_type = t.get('unitType', unit_type)
             to_castle = t.get('to_castle', 0)
             to_hero = t.get('to_hero', 0)
 
@@ -1289,54 +1649,23 @@ def build_structure(game_state, city_id, structure_type):
         "new_resources": player_resources
     }
 
-def get_available_creatures(building_type):
+def get_available_creatures(building_type: str) -> list:
     """Devuelve las criaturas disponibles para un tipo de edificio."""
-    creatures = {
-        "barracks": [
+    if building_type == "castle":
+        return [
             {
-                "type": "Soldado",
-                "count": 10,
-                "growth_per_week": 3,
-                "stats": {"attack": 5, "defense": 5, "speed": 3, "movement_points": 5, "movement_points_left": 5},
-                "unit_cost": {"gold": 100}
-            }
-        ],
-        "archery": [
-            {
-                "type": "Arquero",
-                "count": 8,
-                "growth_per_week": 2,
-                "stats": {"attack": 6, "defense": 2, "speed": 4, "movement_points": 5, "movement_points_left": 5},
-                "unit_cost": {"gold": 150}
-            }
-        ],
-        "knights_tower": [
-            {
-                "type": "Caballero",
-                "count": 5,
-                "growth_per_week": 1,
-                "stats": {"attack": 8, "defense": 6, "speed": 6, "movement_points": 7, "movement_points_left": 7},
-                "unit_cost": {"gold": 300}
-            }
-        ],
-        "mage_tower": [
-            {
-                "type": "Mago",
-                "count": 3,
-                "growth_per_week": 1,
-                "stats": {"attack": 10, "defense": 3, "speed": 3, "movement_points": 5, "movement_points_left": 5},
-                "unit_cost": {"gold": 500}
-            }
-        ],
-        "dragons_lair": [
-            {
-                "type": "Dragón",
-                "count": 1,
-                "growth_per_week": 0.5,
-                "stats": {"attack": 15, "defense": 12, "speed": 8, "movement_points": 10, "movement_points_left": 10},
-                "unit_cost": {"gold": 2000}
+                "type": "Milicia",
+                "count": 15,
+                "growth_per_week": 5,
+                "stats": {
+                    "attack": 3,
+                    "defense": 3,
+                    "speed": 3,
+                    "movement_points": 5,
+                    "movement_points_left": 5
+                },
+                "recruit_cost": {"gold": 100}
             }
         ]
-    }
-    
-    return creatures.get(building_type, [])
+    # Add more building types here if needed
+    return []

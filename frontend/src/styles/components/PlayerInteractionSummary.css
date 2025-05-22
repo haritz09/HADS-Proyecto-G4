@@ -1,0 +1,111 @@
+.player-interaction-summary {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(40, 42, 58, 0.95);
+  border: 2px solid #6464bd;
+  border-radius: 8px;
+  color: white;
+  width: 400px;
+  max-width: 90vw;
+  z-index: 1000;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.3s ease-out;
+}
+
+.interaction-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #4a4a8c;
+}
+
+.interaction-summary-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #ffd700;
+}
+
+.interaction-summary-header .close-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.interaction-summary-header .close-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.interaction-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.interaction-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.interaction-description {
+  margin: 0 0 15px;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+.resource-income {
+  margin-top: 10px;
+  font-size: 1.2rem;
+  color: #7fff7f;
+  font-weight: bold;
+  animation: pulse 2s infinite;
+}
+
+/* Animation to make the summary appear */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* Artifact-specific styling */
+.interaction-summary-artifact .interaction-icon {
+  color: #ffd700;
+}
+
+/* Resource-specific styling */
+.interaction-summary-resource .interaction-icon {
+  color: #7fff7f;
+}
+
+/* Add pulse effect to the resource income */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}

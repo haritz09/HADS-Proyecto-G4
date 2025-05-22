@@ -6,16 +6,13 @@
 * - Funciones para acciones comunes (movimiento, combate, etc.)
 */
 
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { GameState, Hero, Position, Resources, MapTile } from '../types/game';
 import { gameService } from '../services/api';
 import { createMoveHeroAction, createEndTurnAction, executeAction } from '../services/actionService';
 import { syncArtifactsWithTiles } from '../utils/gameMapUtils';
 import AIThinkingIndicator from '../components/ui/AIThinkingIndicator';
 import AIActionsSummary from '../components/game/AIActionsSummary';
-import AIPlaybackControls from '../components/game/AIPlaybackControls';
-import AIViewToggle, { AIViewMode } from '../components/game/AIViewToggle';
-import SplitViewContainer from '../components/game/SplitViewContainer';
 
 interface GameContextType {
   gameState: GameState | null;
@@ -31,17 +28,23 @@ interface GameContextType {
   setCurrentPath: (path: Position[]) => void;
   endTurn: () => Promise<void>;
   setGameMessage: (message: string) => void;
-  aiViewMode: AIViewMode;
-  setAiViewMode: (mode: AIViewMode) => void;
   showAiSummary: boolean;
   setShowAiSummary: (show: boolean) => void;
   aiGameState: GameState | null;
   aiThinking: boolean;
-  playbackSpeed: number;
-  setPlaybackSpeed: (speed: number) => void;
   skipAnimation: () => void;
-  aiActions: any[]; // Added missing property
-  aiStrategicInfo: Record<string, string> | undefined; // Added missing property
+  aiActions: any[]; 
+  aiStrategicInfo: Record<string, string> | undefined;
+  aiRetryInfo: {
+    retrying: boolean;
+    retryCount: number;
+    retryWaitTime: number;
+    currentModel: string | null;
+  };
+  aiStatusPolling: boolean;
+  pollingRetryCount: number;
+  aiResponseReceived: boolean;
+  handleAiSummaryClose: () => void; // Nueva función para cerrar correctamente el resumen
 }
 
 const GameContext = createContext<GameContextType>({
@@ -59,17 +62,24 @@ const GameContext = createContext<GameContextType>({
   setCurrentPath: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
   endTurn: async () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
   setGameMessage: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
-  aiViewMode: 'normal',
-  setAiViewMode: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
   showAiSummary: false,
   setShowAiSummary: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
   aiGameState: null,
   aiThinking: false,
-  playbackSpeed: 1.0,
-  setPlaybackSpeed: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
   skipAnimation: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
   aiActions: [], // Add default value
   aiStrategicInfo: undefined, // Add default value
+  aiRetryInfo: {
+    retrying: false,
+    retryCount: 0,
+    retryWaitTime: 0,
+    currentModel: null
+  },
+  aiStatusPolling: false,
+  pollingRetryCount: 0, // Inicialización del valor por defecto
+  aiResponseReceived: false,
+  // Fix: provide a simple empty function without using any state setters
+  handleAiSummaryClose: () => { /* eslint-disable-line @typescript-eslint/no-empty-function */ },
 });
 
 export const useGame = () => useContext(GameContext);
@@ -88,18 +98,41 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [aiActions, setAiActions] = useState<any[]>([]);
   const [aiStrategicInfo, setAiStrategicInfo] = useState<Record<string, string> | undefined>(undefined);
   const [showAiSummary, setShowAiSummary] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [skipAiAnimation, setSkipAiAnimation] = useState(false);
   const [aiThinkingMessage, setAiThinkingMessage] = useState("La IA está analizando el estado del juego...");
-  
-  // Nuevo estado para el modo de visualización de la IA
-  const [aiViewMode, setAiViewMode] = useState<AIViewMode>('normal');
   
   // Nuevo estado para mantener una copia del estado de juego desde la perspectiva de la IA
   const [aiGameState, setAiGameState] = useState<GameState | null>(null);
   
   // Nuevo estado para la acción actual de la IA (para mostrar descripciones)
   const [currentAiAction, setCurrentAiAction] = useState<string>('');
+  
+  // Estados para manejar el polling del estado de la IA
+  const [aiStatusPolling, setAiStatusPolling] = useState<boolean>(false);
+  const [aiPollingInterval, setAiPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [aiRetryInfo, setAiRetryInfo] = useState<{
+    retrying: boolean;
+    retryCount: number;
+    retryWaitTime: number;
+    currentModel: string | null;
+  }>({
+    retrying: false,
+    retryCount: 0,
+    retryWaitTime: 0,
+    currentModel: null
+  });
+  
+  // Contador para reintentos de polling fallidos
+  const [pollingRetryCount, setPollingRetryCount] = useState<number>(0);
+  
+  // Nuevo estado para rastrear si la respuesta de IA ya fue recibida
+  const [aiResponseReceived, setAiResponseReceived] = useState<boolean>(false);
+  
+  // Tiempo máximo que puede estar activo el indicador de AIThinking (5 minutos)
+  const AI_THINKING_MAX_DURATION = 5 * 60 * 1000;
+  
+  // Referencia para el timeout del indicador de AIThinking
+  const aiThinkingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Cargar partida
   const loadGame = async (id: string) => {
@@ -112,6 +145,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Sincronizar artefactos con tiles
       if (response.data && response.data.game_state) {
         const syncedGameState = syncArtifactsWithTiles(response.data.game_state);
+        
+        // Si la partida ha terminado, asegurarnos de que el estado se refleje
+        if (syncedGameState.status && syncedGameState.status !== 'ongoing') {
+          console.log(`Partida cargada con estado: ${syncedGameState.status}`);
+        }
+        
         setGameState(syncedGameState);
       } else {
         setGameState(response.data);
@@ -287,22 +326,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Finalizar turno
   const endTurn = async () => {
     if (!gameState || !gameId) {
-      console.log("Dentro de if (!gameState || !gameId)");
+      console.log("No hay partida activa para finalizar el turno");
       setError('No hay partida activa');
       return;
     }
     
     try {
-      console.log("Dentro de try");
+      console.log("Enviando acción de fin de turno al backend");
       setLoading(true);
       
+      // Crear la acción de finalizar turno
       const action = createEndTurnAction();
       const response = await executeAction(gameId, action);
       
+      // Actualizar el estado del juego con la respuesta del backend
       setGameState(response.data.game_state);
       setSelectedHero(null);
       
-      // Usa la estructura correcta del estado del juego
+      // Si ahora es el turno de la IA, iniciar el proceso de turno de la IA
       if (response.data.game_state.current_player === 'ai') {
         setGameMessage('Turno finalizado. Ahora es el turno de la IA');
         
@@ -311,6 +352,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setGameMessage('Turno finalizado. Es tu turno');
       }
+      
+      // Actualizar estado y verificar si la partida ha terminado
+      if (response.data.game_state && response.data.game_state.status && response.data.game_state.status !== 'ongoing') {
+        console.log(`Partida terminada con estado: ${response.data.game_state.status}`);
+        // Mostrar mensaje apropiado
+        switch (response.data.game_state.status) {
+          case 'victory':
+            setGameMessage('¡Victoria! Has ganado la partida.');
+            break;
+          case 'defeat':
+            setGameMessage('Derrota. Has perdido la partida.');
+            break;
+          case 'draw':
+            setGameMessage('Empate. La partida ha terminado en tablas.');
+            break;
+        }
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al finalizar el turno');
     } finally {
@@ -318,25 +376,76 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
   
-  // Nueva función para procesar el turno de la IA con mejor feedback visual y manejo de errores
+  // Asegurar que el indicador AIThinking se desactive después de un tiempo máximo
+  useEffect(() => {
+    if (aiThinking) {
+      // Limpiar cualquier timeout anterior
+      if (aiThinkingTimeoutRef.current) {
+        clearTimeout(aiThinkingTimeoutRef.current);
+      }
+      
+      // Establecer un nuevo timeout para desactivar el indicador después del tiempo máximo
+      aiThinkingTimeoutRef.current = setTimeout(() => {
+        console.log(`AIThinking indicador desactivado automáticamente después de ${AI_THINKING_MAX_DURATION/1000} segundos`);
+        setAiThinking(false);
+        stopPolling();
+      }, AI_THINKING_MAX_DURATION);
+    } else {
+      // Limpiar timeout si el indicador se desactiva
+      if (aiThinkingTimeoutRef.current) {
+        clearTimeout(aiThinkingTimeoutRef.current);
+        aiThinkingTimeoutRef.current = null;
+      }
+    }
+    
+    // Limpiar el timeout al desmontar el componente
+    return () => {
+      if (aiThinkingTimeoutRef.current) {
+        clearTimeout(aiThinkingTimeoutRef.current);
+      }
+    };
+  }, [aiThinking]);
+  
+  // Desactivar el indicador AIThinking cuando el resumen de acciones se muestra
+  useEffect(() => {
+    if (showAiSummary && aiResponseReceived) {
+      // Si estamos mostrando el resumen y ya recibimos la respuesta, desactivar el indicador
+      setAiThinking(false);
+      stopPolling();
+      console.log("AI thinking desactivado después de mostrar el resumen de acciones");
+    }
+  }, [showAiSummary, aiResponseReceived]);
+  
+  // Nueva función para procesar el turno de la IA con mejor manejo de errores
   const processAITurn = async () => {
     if (!gameId) {
       console.error("No hay ID de juego disponible para procesar el turno de la IA");
       return;
     }
     
+    // Resetear estados al inicio del turno de la IA
+    setAiResponseReceived(false);
+    
     try {
       // Indicar que la IA está pensando
       setAiThinking(true);
       setAiThinkingMessage("La IA está analizando el estado del juego...");
       
+      // Iniciar el polling para mantener actualizado el estado
+      startPolling(gameId);
+      
       // Llamar al endpoint con execute_actions=true para que el backend ejecute las acciones
       const response = await gameService.executeAIActions(gameId);
+      
+      // Marcar que se ha recibido la respuesta
+      setAiResponseReceived(true);
       
       // Verificar que la respuesta tiene la estructura esperada
       if (!response.data) {
         console.error("Respuesta vacía del servidor para executeAIActions");
         setGameMessage('Error al procesar el turno de la IA: Respuesta vacía');
+        setAiThinking(false);
+        stopPolling();
         return;
       }
       
@@ -356,18 +465,203 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Mostrar mensaje de finalización
       setGameMessage('La IA ha completado su turno');
       
+      // Detener el polling ya que hemos recibido la respuesta completa
+      stopPolling();
+      
       // Mostrar el resumen de acciones de la IA
       setShowAiSummary(true);
       
+      // Nota: El indicador AIThinking se desactivará automáticamente por el useEffect
+      // que observa showAiSummary y aiResponseReceived
+      
     } catch (err: any) {
       console.error("Error procesando el turno de la IA:", err);
-      setError(err.response?.data?.detail || 'Error procesando el turno de la IA');
-      setGameMessage('Error durante el turno de la IA. Es tu turno');
-    } finally {
-      // Finalizar el indicador de pensamiento de la IA
-      setAiThinking(false);
+      
+      // Analizar el tipo de error para mantener polling si es timeout
+      if (err.code === 'ECONNABORTED') {
+        // Si es timeout en la solicitud inicial, mantener el polling activo
+        setGameMessage('La solicitud a la IA está tomando más tiempo de lo esperado, pero continúa procesándose');
+        
+        // No desactivar el indicador, el polling seguirá actualizando el estado
+        // Add flag to track timeout occurred - this will be checked when polling stops
+        console.log("Timeout error occurred, continuing to poll for status updates");
+        
+        // Keep polling active, but the status endpoint will eventually turn off the indicator
+        return;
+      } else {
+        // Para otros errores, mostrar mensaje
+        setError(err.response?.data?.detail || 'Error procesando el turno de la IA');
+        setGameMessage('Error durante el turno de la IA. Es tu turno');
+        
+        // Ahora sí finalizamos el indicador y polling
+        setAiThinking(false);
+        stopPolling();
+        setAiResponseReceived(true); // Marcar como recibido para evitar estados inconsistentes
+      }
     }
   };
+  
+  // Nueva función para consultar el estado de la IA con mejor manejo de errores
+  const checkAiStatus = async (id: string) => {
+    if (!id) return;
+    
+    try {
+      const response = await gameService.checkAiStatus(id);
+      const status = response.data;
+      
+      // Resetear contador de reintentos en caso de éxito
+      if (pollingRetryCount > 0) {
+        setPollingRetryCount(0);
+      }
+      
+      // Si la IA está reintentando, actualizar el mensaje
+      if (status.retrying) {
+        setAiRetryInfo({
+          retrying: true,
+          retryCount: status.retry_count || 0,
+          retryWaitTime: status.retry_wait_time || 0,
+          currentModel: status.current_model
+        });
+        
+        const timeMessage = status.retry_wait_time > 0 
+          ? `reintentando en ${status.retry_wait_time}s` 
+          : "reintentando...";
+          
+        setAiThinkingMessage(
+          `${status.message || `La IA está ${timeMessage}`} (Intento #${status.retry_count || 1})`
+        );
+      } else if (status.status === 'processing') {
+        // Procesando normalmente
+        setAiThinkingMessage(status.message || 'La IA está procesando su turno...');
+        setAiRetryInfo({
+          retrying: false,
+          retryCount: 0, 
+          retryWaitTime: 0,
+          currentModel: status.current_model
+        });
+      } else if (status.status === 'completed') {
+        // Completado, podemos detener el polling
+        console.log("AI status indica 'completed', deteniendo polling");
+        stopPolling();
+        
+        // FIX: Turn off thinking indicator when polling is complete regardless of aiResponseReceived
+        // This ensures the indicator is removed even if the original API call timed out
+        setAiThinking(false);
+        
+        // If AI actions were received, still show the summary
+        if (aiResponseReceived) {
+          setShowAiSummary(true);
+        } else {
+          // If we never received actions but polling completed, reset game state
+          console.log("Polling completed but no AI actions were received, cleaning up states");
+          setGameMessage('La IA ha completado su turno, pero no se recibieron acciones.');
+        }
+      } else if (status.status === 'error') {
+        // Error, mostrar mensaje y detener
+        setGameMessage(`Error en el turno de la IA: ${status.message}`);
+        setAiThinking(false);
+        stopPolling();
+      }
+    } catch (err: any) {
+      console.error("Error consultando estado de la IA:", err);
+      
+      // Distinguir entre diferentes tipos de errores
+      if (err.code === 'ECONNABORTED') {
+        // Si es un timeout, MANTENER el indicador activo y continuar polling
+        console.log("Timeout en consulta de estado de IA - continuando polling");
+        setAiThinkingMessage(`La IA sigue procesando la solicitud... (puede tomar un tiempo)`);
+        
+        // Incrementar el contador de reintentos de polling
+        setPollingRetryCount(prev => prev + 1);
+      } else if (err.response?.status === 404 || err.response?.status === 403) {
+        // Errores de autorización o partida no encontrada - detener
+        console.error("Error crítico consultando estado de IA:", err.response?.status);
+        setGameMessage(`Error en la comunicación con la IA: ${err.response?.data?.detail || 'Error de autorización'}`);
+        setAiThinking(false);
+        stopPolling();
+      } else {
+        // Otros errores de red - no detener pero incrementar contador
+        setPollingRetryCount(prev => prev + 1);
+        
+        // Si hay demasiados errores consecutivos, mostrar advertencia pero mantener polling
+        if (pollingRetryCount > 3) {
+          setAiThinkingMessage("Problemas de conexión, pero la IA sigue procesando. Espera un momento...");
+        }
+      }
+    }
+  };
+  
+  // Función para iniciar el polling con backoff exponencial
+  const startPolling = (id: string) => {
+    // Detener cualquier polling existente primero
+    stopPolling();
+    
+    setAiStatusPolling(true);
+    setPollingRetryCount(0);
+    
+    // Comprobar inmediatamente el estado
+    checkAiStatus(id);
+    
+    // Función para calcular tiempo entre reintentos con backoff exponencial
+    const getPollingInterval = (retry: number) => {
+      const base = 2000; // 2 segundos base
+      const max = 15000; // máximo 15 segundos
+      
+      if (retry <= 0) return base;
+      
+      // Backoff exponencial con jitter para evitar "thundering herd"
+      const exponential = Math.min(max, base * Math.pow(1.5, Math.min(retry, 5)));
+      const jitter = Math.random() * 500; // jitter de 0-500ms
+      
+      return Math.floor(exponential + jitter);
+    };
+    
+    // Crear una función recursiva para polling adaptativo
+    const scheduleNextPoll = () => {
+      const interval = setTimeout(() => {
+        // Ejecutar consulta y programar siguiente
+        checkAiStatus(id).finally(() => {
+          // Si seguimos en polling activo, programar siguiente
+          if (aiStatusPolling) {
+            scheduleNextPoll();
+          }
+        });
+      }, getPollingInterval(pollingRetryCount));
+      
+      setAiPollingInterval(interval);
+    };
+    
+    // Iniciar el ciclo de polling
+    scheduleNextPoll();
+  };
+  
+  // Función para detener el polling
+  const stopPolling = () => {
+    if (aiPollingInterval) {
+      clearTimeout(aiPollingInterval);
+      setAiPollingInterval(null);
+    }
+    setAiStatusPolling(false);
+  };
+  
+  // Función para cuando se cierra el resumen de acciones
+  const handleAiSummaryClose = () => {
+    setShowAiSummary(false);
+    setAiThinking(false);
+    console.log("AI summary closed, cleaning up related states");
+  };
+  
+  // Limpiar el intervalo de polling al desmontar el componente
+  useEffect(() => {
+    return () => {
+      if (aiPollingInterval) {
+        clearTimeout(aiPollingInterval);
+      }
+      if (aiThinkingTimeoutRef.current) {
+        clearTimeout(aiThinkingTimeoutRef.current);
+      }
+    };
+  }, [aiPollingInterval]);
   
   // Función auxiliar para animar movimientos de héroes de la IA
   const animateAIHeroMovement = async (action: any, actionResponse: any) => {
@@ -404,240 +698,32 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const path = findPath(hero.position, destination, tiles2D);
       
       // Animar el movimiento del héroe a lo largo del camino
-      if (path.length > 1) {
+      if (path && path.length > 0) {
         for (let i = 1; i < path.length; i++) {
-          // Actualizar posición del héroe
-          hero.position = {...path[i]};
-          setGameState(actionResponse.data.game_state); // Actualizar estado con la nueva posición del héroe
+          const step = path[i];
           
-          // Esperar un momento para la animación
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-    }
-  };
-  
-  // Nueva función para visualizar el camino del héroe antes del movimiento
-  const visualizeAIHeroPath = async (action: any, actionResponse: any) => {
-    const heroId = action.details.hero_id || action.details.heroId;
-    const destination = action.details.destination;
-    
-    if (!heroId || !destination) return;
-    
-    // Encontrar el héroe y calcular el camino
-    const hero = actionResponse.data.game_state.ai.heroes.find(
-      (h: Hero) => h.id === heroId
-    );
-    
-    if (hero && destination) {
-      const { findPath } = await import('../services/gameEngine');
-      const mapWidth = actionResponse.data.game_state.map.size.width;
-      const mapHeight = actionResponse.data.game_state.map.size.height;
-      const tiles2D: MapTile[][] = [];
-      
-      // Crear mapa 2D para pathfinding
-      for (let y = 0; y < mapHeight; y++) {
-        const row: MapTile[] = [];
-        for (let x = 0; x < mapWidth; x++) {
-          const index = y * mapWidth + x;
-          if (index < actionResponse.data.game_state.map.tiles.length) {
-            row.push(actionResponse.data.game_state.map.tiles[index]);
-          }
-        }
-        tiles2D.push(row);
-      }
-      
-      // Calcular camino
-      const path = findPath(hero.position, destination, tiles2D);
-      
-      // Visualizar el camino con flechas direccionales
-      if (path.length > 1) {
-        const getArrowDirection = (current: Position, next: Position): string => {
-          if (next.x > current.x && next.y === current.y) return 'arrow-right';
-          if (next.x < current.x && next.y === current.y) return 'arrow-left';
-          if (next.x === current.x && next.y < current.y) return 'arrow-up';
-          if (next.x === current.x && next.y > current.y) return 'arrow-down';
-          return '';
-        };
-
-        setGameState(prev => {
-          if (!prev) return prev;
-          
-          // Crear copia profunda del estado
-          const newState = JSON.parse(JSON.stringify(prev));
-          
-          // Marcar cada posición en el camino con la clase correcta
-          for (let i = 0; i < path.length - 1; i++) {
-            const current = path[i];
-            const next = path[i + 1];
-            const direction = getArrowDirection(current, next);
+          // Actualizar posición del héroe en el estado
+          hero.position = {...step};
+          setGameState((prevState) => {
+            if (!prevState) return prevState;
             
-            // Almacenar el camino en una propiedad adicional temporal
-            if (!newState.visualEffects) newState.visualEffects = {};
-            if (!newState.visualEffects.paths) newState.visualEffects.paths = [];
-            
-            newState.visualEffects.paths.push({
-              position: current,
-              classes: `ai-movement-path ${direction}`
-            });
-          }
+            return {
+              ...prevState,
+              ai: {
+                ...prevState.ai,
+                heroes: prevState.ai.heroes.map((h: Hero) => (h.id === heroId ? {...hero} : h))
+              }
+            } as GameState;
+          });
           
-          return newState;
-        });
-        
-        // Esperar para que el jugador vea el camino
-        await new Promise(resolve => setTimeout(resolve, 2000 / playbackSpeed));
-        
-        // Limpiar el camino después de mostrarlo
-        setGameState(prev => {
-          if (!prev) return prev;
-          
-          const newState = JSON.parse(JSON.stringify(prev));
-          delete newState.visualEffects?.paths;
-          
-          return newState;
-        });
+          // Esperar un tiempo antes del siguiente paso
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
     }
   };
-  
-  // Función mejorada para visualizar la construcción de edificios
-  const visualizeBuildingConstruction = async (action: any, actionResponse: any) => {
-    const cityId = action.details.cityId;
-    const structureType = action.details.structureType;
-    
-    // Buscar la ciudad y el edificio
-    const city = actionResponse.data.game_state.ai.cities.find(
-      (c: any) => c.id === cityId
-    );
-    
-    if (city) {
-      // Marcar la ciudad para el efecto visual
-      setGameState(prev => {
-        if (!prev) return prev;
-        
-        const newState = JSON.parse(JSON.stringify(prev));
-        const aiCity = newState.ai.cities.find(
-          (c: any) => c.id === cityId
-        );
-        
-        if (aiCity) {
-          // Marcar la ciudad para animación
-          if (!newState.visualEffects) newState.visualEffects = {};
-          newState.visualEffects.buildingConstruction = {
-            cityId,
-            position: aiCity.position,
-            structureType
-          };
-        }
-        
-        return newState;
-      });
-      
-      // Mostrar mensaje y esperar
-      setGameMessage(`🏗️ La IA está construyendo un ${getStructureName(structureType)} en ${city.name}`);
-      await new Promise(resolve => setTimeout(resolve, 2500 / playbackSpeed));
-      
-      // Limpiar el efecto
-      setGameState(prev => {
-        if (!prev) return prev;
-        
-        const newState = JSON.parse(JSON.stringify(prev));
-        delete newState.visualEffects?.buildingConstruction;
-        
-        return newState;
-      });
-    }
-  };
-  
-  // Función para visualizar combate
-  const visualizeCombat = async (action: any, actionResponse: any) => {
-    // Implementación del efecto visual de combate
-    // ...
-    
-    setGameMessage(`⚔️ La IA está atacando a tu héroe!`);
-    await new Promise(resolve => setTimeout(resolve, 2000 / playbackSpeed));
-  };
-  
-  // Función para visualizar reclutamiento
-  const visualizeRecruitment = async (action: any, actionResponse: any) => {
-    // Implementación del efecto visual de reclutamiento
-    // ...
-    
-    const unitType = action.details.unitType || action.details.unit_type || '';
-    const amount = action.details.amount || action.details.quantity || 0;
-    
-    setGameMessage(`👥 La IA está reclutando ${amount} ${unitType}s`);
-    await new Promise(resolve => setTimeout(resolve, 2000 / playbackSpeed));
-  };
-  
-  // Handler para saltar animaciones
-  const skipAnimation = () => {
-    setSkipAiAnimation(true);
-    setGameMessage('Saltando animaciones...');
-  };
-  
-  // Función para obtener descripciones de acciones
-  const getActionDescription = (action: any): string => {
-    try {
-      const details = action.details || {};
-      
-      switch (action.type.toLowerCase()) {
-        case 'movehero':
-          return `La IA está moviendo a su héroe ${details.heroId || details.hero_id || ''} a la posición (${details.destination?.x || '?'}, ${details.destination?.y || '?'})`;
-        
-        case 'buildstructure': {
-          const structureType = details.structureType || details.structure_type || '';
-          return `La IA está construyendo un ${getStructureName(structureType)} en la ciudad ${details.cityId || details.city_id || ''}`;
-        }
-        
-        case 'recruitunits': {
-          const unitType = details.unitType || details.unit_type || '';
-          const amount = details.amount || details.quantity || 0;
-          return `La IA está reclutando ${amount} ${unitType}s`;
-        }
-        
-        case 'combat':
-        case 'attack':
-          return `La IA está atacando a tu héroe`;
-        
-        case 'transfer':
-          return `La IA está transfiriendo tropas entre su héroe y castillo`;
-        
-        case 'collectresource': {
-          const resourceType = details.resourceType || details.resource_type || '';
-          return `La IA está recolectando recursos de ${resourceType}`;
-        }
-        
-        case 'pickupartifact':
-        case 'collectartifact':
-          return `La IA está recogiendo un artefacto`;
-        
-        case 'endturn':
-          return `La IA está finalizando su turno`;
-        
-        default:
-          return `La IA está realizando una acción de tipo ${action.type}`;
-      }
-    } catch (err) {
-      return `La IA está realizando una acción`;
-    }
-  };
 
-  // Función para obtener nombres legibles de estructuras
-  const getStructureName = (structureType: string): string => {
-    const structureNames: {[key: string]: string} = {
-      'barracks': 'Cuartel',
-      'archery': 'Campo de Tiro',
-      'knights_tower': 'Torre de Caballeros',
-      'mage_tower': 'Torre de Magos',
-      'dragons_lair': 'Guarida de Dragones',
-      'tavern': 'Taberna'
-    };
-    return structureNames[structureType] || structureType;
-  };
-
-  // Crear el valor del contexto
+  // Ampliar el valor del contexto para incluir nuevas funciones y estados
   const value: GameContextType = {
     gameState,
     loading,
@@ -645,15 +731,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     selectedHero,
     gameMessage,
     currentPath,
-    aiViewMode,
-    setAiViewMode,
-    showAiSummary,
-    setShowAiSummary,
-    aiGameState,
-    aiThinking,
-    playbackSpeed,
-    setPlaybackSpeed,
-    skipAnimation,
     loadGame,
     saveGame,
     moveHero,
@@ -661,56 +738,40 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentPath,
     endTurn,
     setGameMessage,
-    aiActions, // Expose this state value
-    aiStrategicInfo, // Expose this state value
+    showAiSummary,
+    setShowAiSummary,
+    aiGameState,
+    aiThinking,
+    skipAnimation: () => setSkipAiAnimation(true),
+    aiActions,
+    aiStrategicInfo,
+    aiRetryInfo,
+    aiStatusPolling,
+    pollingRetryCount,
+    aiResponseReceived,
+    handleAiSummaryClose
   };
-  
+
+  // Make sure the component returns JSX
   return (
     <GameContext.Provider value={value}>
       {children}
       
-      {/* AI Thinking Indicator */}
+      {/* AI Thinking Indicator con mensaje de reintento mejorado */}
       <AIThinkingIndicator 
         isThinking={aiThinking} 
-        message={aiThinkingMessage} 
+        message={aiThinkingMessage}
+        retryInfo={aiRetryInfo.retrying ? aiRetryInfo : undefined}
+        networkIssues={pollingRetryCount > 3}
       />
       
-      {/* AI Actions Summary */}
+      {/* AI Actions Summary - usando el manejador correcto */}
       <AIActionsSummary 
         actions={aiActions}
         strategicInfo={aiStrategicInfo}
         isVisible={showAiSummary}
-        onClose={() => setShowAiSummary(false)}
+        onClose={handleAiSummaryClose}
       />
-      
-      {/* AI Playback Controls - visible solo durante el turno de la IA y cuando no está pensando */}
-      <AIPlaybackControls 
-        playbackSpeed={playbackSpeed}
-        onSpeedChange={setPlaybackSpeed}
-        onSkip={skipAnimation}
-        isVisible={gameState?.current_player === 'ai' && !aiThinking}
-      />
-      
-      {/* AI View Toggle - para cambiar entre modos de visualización */}
-      <AIViewToggle
-        currentMode={aiViewMode}
-        onModeChange={setAiViewMode}
-        isVisible={gameState?.current_player === 'ai' && !aiThinking}
-      />
-      
-      {/* Split View Container - solo visible en modo de vista dividida */}
-      {gameState && aiGameState && (
-        <SplitViewContainer
-          gameState={gameState}
-          aiGameState={aiGameState}
-          actionDescription={currentAiAction}
-          onTileClick={() => { /* No action needed in this context */ }}
-          onHeroClick={() => { /* No action needed in this context */ }}
-          onCityClick={() => { /* No action needed in this context */ }}
-          onBuildingClick={() => { /* No action needed in this context */ }}
-          isVisible={aiViewMode === 'splitView' && gameState.current_player === 'ai' && !aiThinking}
-        />
-      )}
     </GameContext.Provider>
   );
 };

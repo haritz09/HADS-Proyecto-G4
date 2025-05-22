@@ -4,7 +4,6 @@
 * - Gestión del estado del juego
 * - Validación de movimientos
 * - Cálculo de combates
-* - Cálculo de recursos
 */
 
 import { GameState, Hero, Position, MapTile, Resources, ArmyUnit, ResourceMine } from '../types/game';
@@ -233,40 +232,6 @@ export const simulateCombat = (attackerArmy: ArmyUnit[], defenderArmy: ArmyUnit[
   };
 };
 
-// Calcula los recursos generados al final del turno
-export const calculateEndTurnResources = (gameState: GameState): Resources => {
-  const resources: Resources = {
-    gold: 0,
-    wood: 0,
-    stone: 0
-  };
-  
-  // Procesar recursos del jugador actual
-  const entity = gameState.current_player === 'player' ? gameState.player : gameState.ai;
-  
-  // Recursos de ciudades
-  entity.cities.forEach(city => {
-    city.buildings.forEach(building => {
-      if (building.can_recruit && building.available_creatures) {
-        // Sumar recursos de producción de edificios
-        // TODO: Implementar cuando se defina la producción de recursos
-      }
-    });
-  });
-  
-  // Recursos de minas 
-  gameState.map.visible_objects
-    .filter(obj => 'resource_type' in obj && obj.owner === gameState.current_player)
-    .forEach(obj => {
-      const mine = obj as ResourceMine;
-      if (mine.resource_type in resources) {
-        resources[mine.resource_type as keyof Resources] += mine.resource_per_turn;
-      }
-    });
-  
-  return resources;
-};
-
 // Prepara el estado del juego para el siguiente turno
 export const prepareNextTurn = (gameState: GameState): GameState => {
   const newState = { ...gameState };
@@ -279,7 +244,7 @@ export const prepareNextTurn = (gameState: GameState): GameState => {
     newState.turn += 1;
   }
   
-  // Restaurar puntos de movimiento de los héroes del jugador actual
+  // Restaurar puntos de movimiento de los héroes del jugador current_player
   const currentEntity = newState.current_player === 'player' ? newState.player : newState.ai;
   currentEntity.heroes.forEach(hero => {
     hero.stats.movement_points_left = hero.stats.movement_points;
