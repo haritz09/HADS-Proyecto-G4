@@ -206,11 +206,10 @@ export const getTileVisibilityState = (
     return TileVisibility.VISIBLE;
   }
   
-  // If this tile has been explored before
+  // If the tile is explored but not currently visible
   if (gameState.map.explored && gameState.map.explored[index]) {
     return TileVisibility.EXPLORED;
   }
   
-  // By default, unexplored
   return TileVisibility.UNEXPLORED;
 };

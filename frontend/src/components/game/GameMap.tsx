@@ -196,8 +196,8 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
     const currentTime = new Date().getTime();
     const timeSinceLastClick = currentTime - lastClickTime;
     
-    // Umbral de doble clic - 300ms es bastante estándar
-    const doubleClickThreshold = 600; // milisegundos
+    // Aumentado el umbral de doble clic para dar más tiempo para el segundo clic
+    const doubleClickThreshold = 1000; // milisegundos (aumentado de 600ms a 1000ms)
     
     if (timeSinceLastClick < doubleClickThreshold) {
       // Es un doble clic, ejecutar la acción de movimiento
@@ -477,7 +477,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
                         ? 'dragons_lair'
                       : 'building'
           }
-          className="tile-building"
+          className={`tile-building ${isCastle && isHeroNearby ? 'castle-near-hero' : ''} ${isInteractive ? 'interactive-building' : ''}`}
           style={{
             position: 'absolute',
             top: 0,
@@ -486,7 +486,14 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
             height: '100%',
             objectFit: 'contain',
             zIndex: 2,
-            pointerEvents: 'none'
+            pointerEvents: 'auto',
+            cursor: isInteractive ? 'pointer' : 'default'
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isInteractive) {
+              handleBuildingClick();
+            }
           }}
           onError={e => {
             const target = e.target as HTMLImageElement;
@@ -534,7 +541,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
   const mountainImagePath = '/assets/images/tiles/grass/mont3.png'; // Añadido para montaña
   const waterImagePath = '/assets/images/tiles/grass/water.png'; // Añadido para river
 
-  // Enhanced renderMine function with better logging
+  // Enhanced renderMine function with better logging - MODIFIED to remove absolute positioning
   const renderMine = (mine: VisibleObject & { exploredOnly?: boolean }) => {
     if (!mine.position) {
       console.warn('Trying to render mine without position:', mine);
@@ -552,7 +559,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
     const symbol = 'symbol' in mine ? (mine as any).symbol : undefined;
     const ownerClass = owner === 'player' ? 'player-owned' : owner === 'ai' ? 'ai-owned' : 'neutral';
     
-     const cssClasses = [
+    const cssClasses = [
       'resource-mine',
       mineType,
       ownerClass,
@@ -573,6 +580,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
       return tooltip;
     };
     
+    // Use the same classes but without absolute positioning
     const mineClasses = [
       'resource-mine',
       mineType,
@@ -586,14 +594,6 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
         <div
           key={`mine-${mine.id}`}
           className={mineClasses}
-          style={{
-            left: `${mine.position.x * 32}px`,
-            top: `${mine.position.y * 32}px`,
-            width: '32px',
-            height: '32px',
-            position: 'absolute',
-            zIndex: 3
-          }}
           title={getTooltip()}
           data-income={`+${resourcePerTurn}`}
         >
@@ -602,9 +602,6 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
             alt="goldmine"
             className="tile-goldmine"
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
               width: '100%',
               height: '100%',
               objectFit: 'contain',
@@ -626,14 +623,6 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
         <div
           key={`mine-${mine.id}`}
           className={mineClasses}
-          style={{
-            left: `${mine.position.x * 32}px`,
-            top: `${mine.position.y * 32}px`,
-            width: '32px',
-            height: '32px',
-            position: 'absolute',
-            zIndex: 3
-          }}
           title={getTooltip()}
           data-income={`+${resourcePerTurn}`}
         >
@@ -642,9 +631,6 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
             alt="sawmill"
             className="tile-sawmill"
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
               width: '100%',
               height: '100%',
               objectFit: 'contain',
@@ -666,14 +652,6 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
         <div
           key={`mine-${mine.id}`}
           className={mineClasses}
-          style={{
-            left: `${mine.position.x * 32}px`,
-            top: `${mine.position.y * 32}px`,
-            width: '32px',
-            height: '32px',
-            position: 'absolute',
-            zIndex: 3
-          }}
           title={getTooltip()}
           data-income={`+${resourcePerTurn}`}
         >
@@ -682,9 +660,6 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
             alt="quarry"
             className="tile-quarry"
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
               width: '100%',
               height: '100%',
               objectFit: 'contain',
@@ -700,15 +675,11 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
       );
     }
 
-    // ...existing code for other mine types...
+    // Generic mine rendering for other types
     return (
       <div
         key={`mine-${mine.id}`}
         className={mineClasses}
-        style={{
-          left: `${mine.position.x * 32}px`,
-          top: `${mine.position.y * 32}px`,
-        }}
         title={getTooltip()}
         data-income={`+${resourcePerTurn}`}
       >
@@ -1032,7 +1003,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
                           ? 'dragons_lair'
                           : 'building'
             }
-            className="tile-building"
+            className={`tile-building ${isCastleBuilding && isNearCastle ? 'castle-near-hero' : ''} ${isBuildingInteractive ? 'interactive-building' : ''}`}
             style={{
               position: 'absolute',
               top: 0,
@@ -1041,7 +1012,14 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
               height: '100%',
               objectFit: 'contain',
               zIndex: 2,
-              pointerEvents: 'none'
+              pointerEvents: 'auto', // Cambiado de 'none' a 'auto' para permitir clics
+              cursor: isBuildingInteractive ? 'pointer' : 'default' // Añadir cursor pointer cuando sea interactivo
+            }}
+            onClick={(e) => {
+              e.stopPropagation(); // Evitar que el clic se propague al tile
+              if (isBuildingInteractive && building) {
+                onBuildingClick(building, city?.id || '');
+              }
             }}
             onError={e => {
               const target = e.target as HTMLImageElement;
@@ -1050,7 +1028,11 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
           />
         )}
         {/* Solo mostrar mina si no hay héroe ni edificio */}
-        {!isExploredOnly && shouldRenderMine && renderMine(mineAtPosition!)}
+        {!isExploredOnly && shouldRenderMine && mineAtPosition && (
+          <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 3 }}>
+            {renderMine(mineAtPosition)}
+          </div>
+        )}
         {/* Solo mostrar artefacto si no hay héroe, edificio ni mina */}
         {!isExploredOnly && renderArtifact && (
           <div 
@@ -1322,39 +1304,8 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
       >
         {grid}
         
-        {/* CRITICAL DEBUG: Add logging to show how many mines we're about to render */}
-        {(() => {
-          const minesToRender = gameState.map.visible_objects?.filter(obj => 
-            obj.position && 
-            (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-             ('resource_type' in obj && ['gold', 'wood', 'stone'].includes(obj.resource_type as string)))
-          ) || [];
-          
-          return null;
-        })()}
-        
-         {/* Modify this section to render mines with proper visibility state */}
-        {gameState.map.visible_objects?.filter((obj: VisibleObject) =>
-          obj.position &&
-          (obj.type === 'goldmine' || obj.type === 'sawmill' || obj.type === 'quarry' || 
-           ('resource_type' in obj && ['gold', 'wood', 'stone'].includes((obj as ResourceMine).resource_type as string)))
-        ).map((mine: VisibleObject) => {
-          // Check visibility of the mine's position before rendering
-          const visibility = getTileVisibility(mine.position.x, mine.position.y);
-          
-          // Only render if the position is currently visible or explored
-          if (visibility === TileVisibility.VISIBLE) {
-            return renderMine(mine);
-          } else if (visibility === TileVisibility.EXPLORED) {
-            // For explored but not visible positions, render with modified appearance
-            return renderMine({
-              ...mine,
-              exploredOnly: true // Add custom property to modify appearance
-            });
-          }
-          // Don't render in unexplored areas
-          return null;
-        })}
+        {/* REMOVE the separate mines rendering section that used absolute positioning */}
+        {/* This entire section should be removed as mines are now rendered within their tiles */}
       </div>
     </div>
   );
