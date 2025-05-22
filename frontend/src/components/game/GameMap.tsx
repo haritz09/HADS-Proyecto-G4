@@ -475,7 +475,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
                       ? 'mage_tower'
                       : building.building_type === 'dragons_lair'
                         ? 'dragons_lair'
-                      : 'building'
+                        : 'building'
           }
           className={`tile-building ${isCastle && isHeroNearby ? 'castle-near-hero' : ''} ${isInteractive ? 'interactive-building' : ''}`}
           style={{
@@ -760,16 +760,23 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
     
     const isCastleBuilding = building && (building.is_castle || (building.position.x === 48 && building.position.y === 48));
     let isNearCastle = false;
+    let isNearRecruitingBuilding = false;
     
-    if (isCastleBuilding && selectedHero) {
+    if (selectedHero) {
       const heroRealPosition = selectedHero.position;
-      const distance = calculateDistance(heroRealPosition, building.position);
-      isNearCastle = distance <= 2;
       
-      if (building.position.x === 48 && building.position.y === 48) {
-        console.log(`⚡ CASTILLO CENTRAL: Héroe en (${heroRealPosition.x}, ${heroRealPosition.y}), ` +
-                   `Distancia = ${distance.toFixed(2)}, Es cercano = ${isNearCastle}, ` +
-                   `Soy interactivo = ${isNearCastle || (selectedHero.position.x === x && selectedHero.position.y === y)}`);
+      if (building) {
+        const distance = calculateDistance(heroRealPosition, building.position);
+        
+        // Comprobar si es un castillo cercano
+        if (isCastleBuilding) {
+          isNearCastle = distance <= 2;
+        }
+        
+        // Comprobar si es un edificio de reclutamiento cercano
+        if (building.built && building.can_recruit && building.owner === "player") {
+          isNearRecruitingBuilding = distance <= 2;
+        }
       }
     }
 
@@ -777,7 +784,13 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
     const isAIOwned = building && building.owner === "ai";
 
     const isHeroAtThisPosition = selectedHero && selectedHero.position.x === x && selectedHero.position.y === y;
-    const isBuildingInteractive = building && (isHeroAtThisPosition || (isCastleBuilding && isNearCastle));
+    
+    // Modificar lógica de interactividad para incluir edificios de reclutamiento cercanos
+    const isBuildingInteractive = building && (
+      isHeroAtThisPosition || 
+      (isCastleBuilding && isNearCastle) ||
+      (building.built && building.can_recruit && isPlayerOwned && isNearRecruitingBuilding)
+    );
 
     const forceCastleInteractive = isCastleBuilding && isNearCastle;
 
@@ -986,7 +999,7 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
                       ? mageTowerImagePath
                     : building && building.building_type === 'dragons_lair'
                       ? dragonsLairImagePath
-                      : buildingImagePath
+                    : buildingImagePath
             }
             alt={
               building && building.building_type === 'castle'
@@ -1003,7 +1016,10 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
                           ? 'dragons_lair'
                           : 'building'
             }
-            className={`tile-building ${isCastleBuilding && isNearCastle ? 'castle-near-hero' : ''} ${isBuildingInteractive ? 'interactive-building' : ''}`}
+            className={`tile-building 
+              ${isCastleBuilding && isNearCastle ? 'castle-near-hero' : ''} 
+              ${isBuildingInteractive ? 'interactive-building' : ''} 
+              ${building && isBuildingInteractive ? `${building.building_type}-interactive` : ''}`}
             style={{
               position: 'absolute',
               top: 0,
@@ -1012,12 +1028,13 @@ const GameMap = React.forwardRef<GameMapRef, GameMapProps>(function GameMap(prop
               height: '100%',
               objectFit: 'contain',
               zIndex: 2,
-              pointerEvents: 'auto', // Cambiado de 'none' a 'auto' para permitir clics
-              cursor: isBuildingInteractive ? 'pointer' : 'default' // Añadir cursor pointer cuando sea interactivo
+              pointerEvents: isBuildingInteractive ? 'auto' : 'none', // Permitir clics solo si es interactivo
+              cursor: isBuildingInteractive ? 'pointer' : 'default'
             }}
             onClick={(e) => {
-              e.stopPropagation(); // Evitar que el clic se propague al tile
               if (isBuildingInteractive && building) {
+                e.stopPropagation(); // Evitar que el clic se propague al tile
+                console.log(`Clic en edificio de tipo ${building.building_type}, interactive=${isBuildingInteractive}, isNearRecruitingBuilding=${isNearRecruitingBuilding}`);
                 onBuildingClick(building, city?.id || '');
               }
             }}
