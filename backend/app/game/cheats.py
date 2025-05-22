@@ -51,11 +51,100 @@ def cheat_construir_todos_edificios(game_state: GameState, target: Dict[str, Any
     city = find_city(game_state, target.get('id'))
     if not city:
         raise ValueError('Ciudad no encontrada')
+    # Set the city owner to player
+    city.owner = "player"
+    
+    # Define available creatures by building type
+    building_creatures = {
+        "barracks": [
+            {
+                "type": "Guerrero",
+                "count": 10,
+                "growth_per_week": 4,
+                "stats": {"attack": 4, "defense": 4, "speed": 3, "movement_points": 5, "movement_points_left": 5},
+                "recruit_cost": {"gold": 100}
+            }
+        ],
+        "archery": [
+            {
+                "type": "Arquero",
+                "count": 8,
+                "growth_per_week": 3,
+                "stats": {"attack": 5, "defense": 3, "speed": 4, "movement_points": 5, "movement_points_left": 5},
+                "recruit_cost": {"gold": 150}
+            }
+        ],
+        "knights_tower": [
+            {
+                "type": "Caballero",
+                "count": 5,
+                "growth_per_week": 2,
+                "stats": {"attack": 6, "defense": 5, "speed": 5, "movement_points": 7, "movement_points_left": 7},
+                "recruit_cost": {"gold": 300}
+            }
+        ],
+        "mage_tower": [
+            {
+                "type": "Mago",
+                "count": 3,
+                "growth_per_week": 1,
+                "stats": {"attack": 7, "defense": 2, "speed": 4, "movement_points": 5, "movement_points_left": 5},
+                "recruit_cost": {"gold": 350}
+            }
+        ],
+        "dragons_lair": [
+            {
+                "type": "Dragón",
+                "count": 1,
+                "growth_per_week": 1,
+                "stats": {"attack": 10, "defense": 8, "speed": 8, "movement_points": 10, "movement_points_left": 10},
+                "recruit_cost": {"gold": 1000}
+            }
+        ],
+        "castle": [
+            {
+                "type": "Milicia",
+                "count": 15,
+                "growth_per_week": 5,
+                "stats": {"attack": 3, "defense": 3, "speed": 3, "movement_points": 5, "movement_points_left": 5},
+                "recruit_cost": {"gold": 50}
+            }
+        ]
+    }
+    
     for building in city.buildings:
         building.built = True
+        building.owner = "player"
+        building.can_recruit = True
+        
+        # Add available creatures based on building type
+        building_type = getattr(building, 'building_type', None)
+        if building_type in building_creatures:
+            # Create a properly formatted creatures list
+            from types import SimpleNamespace
+            
+            creatures = []
+            for creature_data in building_creatures[building_type]:
+                # Convert dictionary to object with attributes
+                stats = SimpleNamespace(**creature_data["stats"])
+                
+                # Create the creature object
+                creature = SimpleNamespace(
+                    type=creature_data["type"],
+                    count=creature_data["count"],
+                    growth_per_week=creature_data["growth_per_week"],
+                    stats=stats,
+                    recruit_cost=creature_data["recruit_cost"],
+                    unit_cost=creature_data["recruit_cost"]  # Also set as unit_cost for compatibility
+                )
+                creatures.append(creature)
+                
+            # Assign creatures to the building
+            building.available_creatures = creatures
+            
     return {
         'success': True,
-        'message': 'Todos los edificios han sido construidos',
+        'message': 'Todos los edificios han sido construidos y están listos para reclutar tropas',
         'affected_entity': {'type': 'city', 'id': city.id}
     }
 
